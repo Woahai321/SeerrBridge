@@ -19,7 +19,7 @@ import urllib.parse
 import re
 import inflect
 import requests
-from selenium import webdriver
+import undetected_chromedriver as uc
 from selenium.webdriver.common.by import By
 from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.chrome.service import Service as ChromeService
@@ -57,7 +57,15 @@ OVERSEERR_API_BASE_URL = f"{OVERSEERR_BASE}/api/v1"
 OVERSEERR_API_KEY = os.getenv('OVERSEERR_API_KEY')
 TRAKT_API_KEY = os.getenv('TRAKT_API_KEY')
 HEADLESS_MODE = os.getenv("HEADLESS_MODE", "true").lower() == "true"
+ENABLE_AUTOMATIC_BACKGROUND_TASK = os.getenv("ENABLE_AUTOMATIC_BACKGROUND_TASK", "false").lower() == "true"
 TORRENT_FILTER_REGEX = os.getenv("TORRENT_FILTER_REGEX")
+
+# Confirm the interval is a valid number.
+try:
+    REFRESH_INTERVAL_MINUTES = float(os.getenv("REFRESH_INTERVAL_MINUTES"))
+except (TypeError, ValueError):
+    logger.error("REFRESH_INTERVAL_MINUTES environment variable is not a valid number.")
+    exit(1)
 
 if not OVERSEERR_API_BASE_URL:
     logger.error("OVERSEERR_API_BASE_URL environment variable is not set.")
@@ -258,11 +266,11 @@ async def initialize_browser():
             options.add_argument('--headless')  # Run browser in headless mode
         options.add_argument('--disable-gpu')  # Disable GPU to save resources
         options.add_argument('--no-sandbox')  # Required for running Chrome in Docker
-        options.add_argument('--disable-dev-shm-usage')  # Overcome limited /dev/shm size in containers
+        options.add_argument('--disable-dev-shm-usage')  # Overcome limited /dev/shm size in containers        chromedriver_path = os.getenv('CHROMEDRIVER_PATH')
         
         chromedriver_path = os.getenv('CHROMEDRIVER_PATH')
         service = ChromeService(executable_path=chromedriver_path)
-        driver = webdriver.Chrome(service=service, options=options)
+        driver = uc.Chrome(service=service, options=options)
         driver.execute_cdp_cmd("Page.addScriptToEvaluateOnNewDocument", {
             "source": """
             Object.defineProperty(navigator, 'webdriver', {
@@ -292,17 +300,11 @@ async def initialize_browser():
 
             logger.info("Attempting to click the '⚙️ Settings' link.")
             settings_link = WebDriverWait(driver, 10).until(
-                EC.element_to_be_clickable((By.XPATH, "//a[contains(text(),'⚙️ Settings')]"))
+                EC.element_to_be_clickable((By.XPATH, "//span[contains(text(),'⚙️ Settings')]"))
             )
             settings_link.click()
             logger.info("Clicked on '⚙️ Settings' link.")
-            # Wait for the settings popup to appear
-            WebDriverWait(driver, 10).until(
 
-                EC.presence_of_element_located((By.XPATH, "//h2[contains(text(),'⚙️ Settings')]"))
-            )
-
-            logger.info("Settings popup appeared.")
             # Locate the "Default torrents filter" input box and insert the regex
             logger.info("Attempting to insert regex into 'Default torrents filter' box.")
             default_filter_input = WebDriverWait(driver, 10).until(
@@ -316,17 +318,13 @@ async def initialize_browser():
 
             logger.info(f"Inserted regex into 'Default torrents filter' input box: {TORRENT_FILTER_REGEX}")
 
-            # Confirm the changes by clicking the 'OK' button on the popup
-            save_button = WebDriverWait(driver, 10).until(
-
-                EC.element_to_be_clickable((By.XPATH, "//button[@class='swal2-confirm !bg-blue-600 !px-6 haptic swal2-styled']"))
-            )
-            save_button.click()
-            logger.success("Clicked 'Save' to save settings.")
+            settings_link.click()
+            logger.success("Closed 'Settings' to save settings.")
 
         except (TimeoutException, NoSuchElementException) as ex:
+            logger.error(f"Error while interacting with the settings: {ex}")
+            logger.error(f"Continuing without TORRENT_FILTER_REGEX")
 
-            logger.error(f"Error while interacting with the settings popup: {ex}")
 
         # Navigate to the library section
         logger.info("Navigating to the library section.")
@@ -1102,8 +1100,8 @@ async def get_user_input():
     try:
         # Check if running in a Docker container or non-interactive environment
         if os.getenv("RUNNING_IN_DOCKER", "false").lower() == "true":
-            print("Running in Docker, automatically selecting 'n' for recurring Overseerr check.")
-            return 'n'  # Automatically return 'yes' when running in Docker
+            print("Running in Docker, automatically selecting 'y' for recurring Overseerr check.")
+            return 'y'  # Automatically return 'yes' when running in Docker
 
         # Simulate asynchronous input with a timeout for interactive environments
         user_input = await asyncio.wait_for(
@@ -1196,8 +1194,11 @@ async def startup_event():
     schedule_token_refresh()
     scheduler.start()
     # Ask user if they want to proceed with the initial check and recurring task
-    user_input = await get_user_input()
-
+    if ENABLE_AUTOMATIC_BACKGROUND_TASK:
+        user_input = 'y'
+    else: 
+        user_input = await get_user_input()
+    
     if user_input == 'y':
         try:
             # Run the initial check immediately
@@ -1206,7 +1207,6 @@ async def startup_event():
 
             # Schedule the rechecking of movie requests every 2 hours
             schedule_recheck_movie_requests()
-            logger.info("Scheduled rechecking movie requests every 2 hours.")
         except Exception as e:
             logger.error(f"Error while processing movie requests: {e}")
 
@@ -1219,9 +1219,9 @@ async def startup_event():
 
 
 def schedule_recheck_movie_requests():
-    # Correctly schedule the job with an interval of 2 hours
-    scheduler.add_job(process_movie_requests, 'interval', hours=2)
-    logger.info("Scheduled rechecking movie requests every 2 hours.")
+    # Correctly schedule the job with the REFRESH_INTERVAL_MINUTES configured interval.
+    scheduler.add_job(process_movie_requests, 'interval', minutes=REFRESH_INTERVAL_MINUTES)
+    logger.info(f"Scheduled rechecking movie requests every {REFRESH_INTERVAL_MINUTES} minute(s).")
 
 
 

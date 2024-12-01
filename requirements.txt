@@ -10,3 +10,5 @@ requests==2.32.3
 APScheduler==3.10.4
 uvicorn==0.32.0
 python-Levenshtein==0.26.1
+undetected-chromedriver==3.5.5
+setuptools==75.6.0
