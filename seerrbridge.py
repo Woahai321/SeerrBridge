@@ -1,5 +1,5 @@
 # =============================================================================
-# Soluify.com  |  Your #1 IT Problem Solver  |  {SeerrBridge v0.4.4}
+# Soluify.com  |  Your #1 IT Problem Solver  |  {SeerrBridge v0.4.5} DEV
 # =============================================================================
 #  __         _
 # (_  _ |   .(_
@@ -22,15 +22,12 @@ import re
 import inflect
 import requests
 import platform
-from selenium import webdriver
+import undetected_chromedriver as uc
 from selenium.webdriver.common.by import By
-from selenium.webdriver.chrome.options import Options
-from selenium.webdriver.chrome.service import Service
-from webdriver_manager.chrome import ChromeDriverManager
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
-from dotenv import load_dotenv
 from selenium.common.exceptions import StaleElementReferenceException, NoSuchElementException, TimeoutException
+from dotenv import load_dotenv
 from asyncio import Queue
 from datetime import datetime, timedelta
 from deep_translator import GoogleTranslator
@@ -258,7 +255,7 @@ async def initialize_browser():
         current_os = platform.system().lower()  # Returns 'windows', 'linux', or 'darwin' (macOS)
         logger.info(f"Detected operating system: {current_os}")
 
-        options = Options()
+        options = uc.ChromeOptions()
 
         ### Handle Docker/Linux-specific configurations
         if current_os == "linux" and os.getenv("RUNNING_IN_DOCKER", "false").lower() == "true":
@@ -290,16 +287,15 @@ async def initialize_browser():
         # WebDriver options to suppress infobars and disable automation detection
         options.add_argument("--disable-blink-features=AutomationControlled")
         options.add_argument("--disable-infobars")
-        options.add_experimental_option("excludeSwitches", ["enable-automation"])
-        options.add_experimental_option("useAutomationExtension", False)
         options.add_argument("user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/117.0.0.0 Safari/537.36")
 
         # Log initialization method
-        logger.info("Using WebDriver Manager for dynamic ChromeDriver downloads.")
+        logger.info("Using undetected-chromedriver for dynamic ChromeDriver downloads.")
+
+        # Use undetected-chromedriver to initialize the browser
+        driver = uc.Chrome(options=options)
 
         try:
-            # Use webdriver-manager to install the appropriate ChromeDriver version
-            driver = webdriver.Chrome(service=Service(ChromeDriverManager().install()), options=options)
 
             # Suppress 'webdriver' detection
             driver.execute_cdp_cmd("Page.addScriptToEvaluateOnNewDocument", {
