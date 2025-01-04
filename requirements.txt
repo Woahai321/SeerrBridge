@@ -1,4 +1,4 @@
-selenium==4.19.0
+selenium==4.27.1
 python-dotenv==0.19.2
 inflect==7.4.0
 deep-translator==1.11.4
@@ -10,5 +10,5 @@ requests==2.32.3
 APScheduler==3.10.4
 uvicorn==0.32.0
 python-Levenshtein==0.26.1
-webdriver-manager==4.0.2
 httpx==0.28.1
+undetected-chromedriver==3.5.5
