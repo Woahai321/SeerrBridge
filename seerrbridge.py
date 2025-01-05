@@ -27,7 +27,7 @@ from selenium.webdriver.common.by import By
 from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.chrome.service import Service
 from webdriver_manager.chrome import ChromeDriverManager
-from selenium.webdriver.support.ui import WebDriverWait
+from selenium.webdriver.support.ui import WebDriverWait, Select
 from selenium.webdriver.support import expected_conditions as EC
 from dotenv import load_dotenv
 from selenium.common.exceptions import StaleElementReferenceException, NoSuchElementException, TimeoutException
@@ -62,6 +62,8 @@ TRAKT_API_KEY = os.getenv('TRAKT_API_KEY')
 HEADLESS_MODE = os.getenv("HEADLESS_MODE", "true").lower() == "true"
 ENABLE_AUTOMATIC_BACKGROUND_TASK = os.getenv("ENABLE_AUTOMATIC_BACKGROUND_TASK", "false").lower() == "true"
 TORRENT_FILTER_REGEX = os.getenv("TORRENT_FILTER_REGEX")
+MAX_MOVIE_SIZE = os.getenv("MAX_MOVIE_SIZE")
+MAX_EPISODE_SIZE = os.getenv("MAX_EPISODE_SIZE")
 
 # Confirm the interval is a valid number.
 try:
@@ -338,6 +340,35 @@ async def initialize_browser():
             )
             settings_link.click()
             logger.info("Clicked on '⚙️ Settings' link.")
+
+            #####################################    
+            # 05.01.2025 - shivamsnaik@icloud.com
+            # MAX MOVIE SIZE: Locate the maximum movie size select element
+            logger.info("Locating maximum movie size select element in '⚙️ Settings'.")
+            max_movie_select_elem = WebDriverWait(driver, 10).until(
+                EC.visibility_of_element_located((By.ID, "dmm-movie-max-size"))
+            )
+
+            # Initialize Select class with the <select> WebElement
+            select_obj = Select(max_movie_select_elem)
+
+            # Select size specified in the .env file
+            select_obj.select_by_value(MAX_MOVIE_SIZE)
+            logger.info("Biggest Movie Size Selected as {} GB.".format(MAX_MOVIE_SIZE))
+
+            # MAX EPISODE SIZE: Locate the maximum series size select element
+            logger.info("Locating maximum series size select element in '⚙️ Settings'.")
+            max_episode_select_elem = WebDriverWait(driver, 10).until(
+                EC.visibility_of_element_located((By.ID, "dmm-episode-max-size"))
+            )
+
+            # Initialize Select class with the <select> WebElement
+            select_obj = Select(max_episode_select_elem)
+
+            # Select size specified in the .env file
+            select_obj.select_by_value(MAX_EPISODE_SIZE)
+            logger.info("Biggest Episode Size Selected as {} GB.".format(MAX_EPISODE_SIZE))
+            ########################################
 
             # Locate the "Default torrents filter" input box and insert the regex
             logger.info("Attempting to insert regex into 'Default torrents filter' box.")
@@ -1600,6 +1631,10 @@ async def get_env_vars():
         "REFRESH_INTERVAL_MINUTES": REFRESH_INTERVAL_MINUTES if REFRESH_INTERVAL_MINUTES else "❌ Not Set",
         # URL check
         "OVERSEERR_BASE": "✅ Valid" if overseerr_base_status else "❌ Invalid",
+        # Max Movie Size
+        "MAX_MOVIE_SIZE": MAX_MOVIE_SIZE if MAX_MOVIE_SIZE else "5",
+        # Max Episode Size
+        "MAX_EPISODE_SIZE": MAX_EPISODE_SIZE if MAX_EPISODE_SIZE else "1",
     }
 
 # Main entry point for running the FastAPI server
