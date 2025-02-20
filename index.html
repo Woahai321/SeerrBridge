@@ -202,6 +202,14 @@
                 <span class="value" id="torrent-filter-regex"></span>
             </div>
             <div class="env-var">
+                <label>MAX_MOVIE_SIZE:</label>
+                <span class="value" id="max-movie-size"></span>
+            </div>
+            <div class="env-var">
+                <label>MAX_EPISODE_SIZE:</label>
+                <span class="value" id="max-episode-size"></span>
+            </div>
+            <div class="env-var">
                 <label>REFRESH_INTERVAL_MINUTES:</label>
                 <span class="value" id="refresh-interval-minutes"></span>
             </div>
@@ -230,6 +238,11 @@
             document.getElementById('refresh-interval-minutes').textContent = data.REFRESH_INTERVAL_MINUTES;
             // URL check
             document.getElementById('overseerr-base').textContent = data.OVERSEERR_BASE;
+            // Max Movie Size
+            document.getElementById('max-movie-size').textContent = data.MAX_MOVIE_SIZE;
+            // Max Episode Size
+            document.getElementById('max-episode-size').textContent = data.MAX_EPISODE_SIZE;
+            
         }
         fetchEnvVars();
     </script>
