@@ -615,18 +615,26 @@ def get_media_details_from_trakt(tmdb_id: str, media_type: str) -> Optional[dict
         logger.error(f"Error fetching {trakt_type} details from Trakt API: {e}")
         return None
 
+from datetime import datetime, timezone
+import time
+import requests
+from typing import Optional
+
 def get_season_details_from_trakt(trakt_show_id: str, season_number: int) -> Optional[dict]:
     """
     Fetch season details from Trakt API using a Trakt show ID and season number.
+    Also checks if the next episode has already aired and updates aired_episodes accordingly.
     
     Args:
-        trakt_show_id (str): The Trakt ID of the show, obtained from get_media_details_from_trakt
+        trakt_show_id (str): The Trakt ID of the show
         season_number (int): The season number to fetch details for
     
     Returns:
         Optional[dict]: Season details if successful, None if failed
     """
     global trakt_api_calls, last_reset_time
+
+    logger.debug(f"Starting get_season_details_from_trakt with trakt_show_id={trakt_show_id}, season_number={season_number}")
 
     # Validate input parameters
     if not trakt_show_id or not isinstance(trakt_show_id, str):
@@ -637,15 +645,20 @@ def get_season_details_from_trakt(trakt_show_id: str, season_number: int) -> Opt
         return None
 
     current_time = time.time()
+    logger.debug(f"Current time: {current_time}, Last reset time: {last_reset_time}")
+
     if current_time - last_reset_time >= TRAKT_RATE_LIMIT_PERIOD:
+        logger.debug("Rate limit period expired. Resetting API call counter.")
         trakt_api_calls = 0
         last_reset_time = current_time
 
     if trakt_api_calls >= TRAKT_RATE_LIMIT:
-        logger.warning("Trakt API rate limit reached. Waiting for the next period.")
-        time.sleep(TRAKT_RATE_LIMIT_PERIOD - (current_time - last_reset_time))
+        wait_time = TRAKT_RATE_LIMIT_PERIOD - (current_time - last_reset_time)
+        logger.warning(f"Trakt API rate limit reached. Sleeping for {wait_time} seconds.")
+        time.sleep(wait_time)
         trakt_api_calls = 0
         last_reset_time = time.time()
+        logger.debug("Woke up from sleep. Reset API call counter.")
 
     url = f"https://api.trakt.tv/shows/{trakt_show_id}/seasons/{season_number}/info?extended=full"
     headers = {
@@ -654,22 +667,65 @@ def get_season_details_from_trakt(trakt_show_id: str, season_number: int) -> Opt
         "trakt-api-version": "2"
     }
 
+    logger.debug(f"Sending GET request to {url} with headers {headers}")
+
     try:
         logger.info(f"Fetching season details for show ID {trakt_show_id}, season {season_number}")
         response = requests.get(url, headers=headers, timeout=10)
         trakt_api_calls += 1
+        logger.debug(f"Received response with status code {response.status_code}")
 
         if response.status_code == 200:
             data = response.json()
+            logger.debug(f"Season data received: {data}")
             logger.info(f"Successfully fetched season {season_number} details for show ID {trakt_show_id}")
+
+            aired_episodes = data.get('aired_episodes')
+            logger.debug(f"Aired episodes from API: {aired_episodes}")
+
+            if aired_episodes is not None and isinstance(aired_episodes, int):
+                next_episode_number = aired_episodes + 1
+                episode_url = f"https://api.trakt.tv/shows/{trakt_show_id}/seasons/{season_number}/episodes/{next_episode_number}?extended=full"
+                logger.debug(f"Sending GET request to {episode_url} to check next episode airing status.")
+
+                episode_response = requests.get(episode_url, headers=headers, timeout=10)
+                trakt_api_calls += 1
+                logger.debug(f"Received episode response with status code {episode_response.status_code}")
+
+                if episode_response.status_code == 200:
+                    episode_data = episode_response.json()
+                    logger.debug(f"Next episode data: {episode_data}")
+
+                    first_aired = episode_data.get('first_aired')
+                    logger.debug(f"Next episode first_aired: {first_aired}")
+
+                    if first_aired:
+                        first_aired_datetime = datetime.fromisoformat(first_aired.replace('Z', '+00:00'))
+                        current_utc_time = datetime.now(timezone.utc)
+                        logger.debug(f"Parsed first_aired_datetime: {first_aired_datetime}, current_utc_time: {current_utc_time}")
+
+                        if current_utc_time >= first_aired_datetime:
+                            logger.info(f"Episode {next_episode_number} has aired. Updating aired_episodes to {aired_episodes + 1}")
+                            data['aired_episodes'] = aired_episodes + 1
+                        else:
+                            logger.info(f"Episode {next_episode_number} has not aired yet. Keeping aired_episodes at {aired_episodes}")
+                    else:
+                        logger.warning(f"Episode {next_episode_number} missing 'first_aired' field. Keeping aired_episodes at {aired_episodes}")
+                else:
+                    logger.warning(f"Failed to fetch next episode details: Status code {episode_response.status_code}. Keeping aired_episodes at {aired_episodes}")
+
+            else:
+                logger.debug("No valid aired_episodes field found. Skipping next episode check.")
+
             return data
+
         else:
             logger.error(f"Trakt API season request failed with status code {response.status_code}")
             return None
+
     except requests.exceptions.RequestException as e:
         logger.error(f"Error fetching season details from Trakt API for show ID {trakt_show_id}, season {season_number}: {e}")
         return None
-
 ### Process the fetched messages (newest to oldest)
 async def process_movie_requests():
     """
