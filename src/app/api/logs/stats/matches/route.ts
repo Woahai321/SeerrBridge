@@ -45,7 +45,7 @@ async function loadLogConfig() {
 // Read log entries from the file system
 async function readLogEntries() {
   try {
-    const ROOT_LOG_FILE_PATH = path.join(process.cwd(), "seerbridge.log");
+    const ROOT_LOG_FILE_PATH = path.join(process.cwd(), "logs", "seerrbridge.log");
     
     // Check if log file exists in root directory
     if (!fs.existsSync(ROOT_LOG_FILE_PATH)) {

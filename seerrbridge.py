@@ -42,7 +42,7 @@ from apscheduler.schedulers.asyncio import AsyncIOScheduler
 
 # Configure loguru
 logger.remove()  # Remove default handler
-logger.add("seerbridge.log", rotation="500 MB", encoding='utf-8')  # Use utf-8 encoding for log file
+logger.add("seerrbridge.log", rotation="500 MB", encoding='utf-8')  # Use utf-8 encoding for log file
 logger.add(sys.stdout, colorize=True)  # Ensure stdout can handle Unicode
 logger.level("WARNING", color="<cyan>")
 

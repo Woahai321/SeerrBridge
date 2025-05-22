@@ -23,12 +23,12 @@ export async function GET(request: NextRequest) {
   try {
     const appRoot = process.cwd();
     const logsDir = path.join(appRoot, 'logs');
-    const seerrbridgeLogPath = path.join(logsDir, 'seerbridge.log');
+    const seerrbridgeLogPath = path.join(logsDir, 'seerrbridge.log');
     
     // Check if the file exists
     if (!fs.existsSync(seerrbridgeLogPath)) {
       return NextResponse.json({
-        error: "seerbridge.log file not found",
+        error: "seerrbridge.log file not found",
         logDir: logsDir,
         files: fs.existsSync(logsDir) ? fs.readdirSync(logsDir) : []
       }, { status: 404 });
