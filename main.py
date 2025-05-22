@@ -324,16 +324,195 @@ async def jellyseer_webhook(request: Request, background_tasks: BackgroundTasks)
 @app.post("/reload-env")
 async def reload_environment():
     """
-    Reload environment variables
+    Reload environment variables from the .env file.
+    This endpoint can be called when environment variables have been changed externally.
     """
-    try:
-        if load_config(override=True):
-            return {"status": "success", "message": "Environment variables reloaded"}
-        else:
-            raise HTTPException(status_code=500, detail="Failed to reload environment variables")
-    except Exception as e:
-        logger.error(f"Error reloading environment: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+    logger.info("Environment reload triggered via API endpoint")
+    
+    # Store original values for comparison
+    from seerr.config import (
+        RD_ACCESS_TOKEN, RD_REFRESH_TOKEN, RD_CLIENT_ID, RD_CLIENT_SECRET,
+        OVERSEERR_BASE, OVERSEERR_API_BASE_URL, OVERSEERR_API_KEY, TRAKT_API_KEY,
+        HEADLESS_MODE, ENABLE_AUTOMATIC_BACKGROUND_TASK, ENABLE_SHOW_SUBSCRIPTION_TASK,
+        TORRENT_FILTER_REGEX, MAX_MOVIE_SIZE, MAX_EPISODE_SIZE, REFRESH_INTERVAL_MINUTES
+    )
+    
+    original_values = {
+        "RD_ACCESS_TOKEN": RD_ACCESS_TOKEN,
+        "RD_REFRESH_TOKEN": RD_REFRESH_TOKEN,
+        "RD_CLIENT_ID": RD_CLIENT_ID,
+        "RD_CLIENT_SECRET": RD_CLIENT_SECRET,
+        "OVERSEERR_BASE": OVERSEERR_BASE,
+        "OVERSEERR_API_KEY": OVERSEERR_API_KEY,
+        "TRAKT_API_KEY": TRAKT_API_KEY,
+        "HEADLESS_MODE": HEADLESS_MODE,
+        "ENABLE_AUTOMATIC_BACKGROUND_TASK": ENABLE_AUTOMATIC_BACKGROUND_TASK,
+        "ENABLE_SHOW_SUBSCRIPTION_TASK": ENABLE_SHOW_SUBSCRIPTION_TASK,
+        "TORRENT_FILTER_REGEX": TORRENT_FILTER_REGEX,
+        "MAX_MOVIE_SIZE": MAX_MOVIE_SIZE,
+        "MAX_EPISODE_SIZE": MAX_EPISODE_SIZE,
+        "REFRESH_INTERVAL_MINUTES": REFRESH_INTERVAL_MINUTES
+    }
+    
+    # Reload configuration
+    from seerr.config import load_config
+    if not load_config(override=True):
+        raise HTTPException(status_code=500, detail="Failed to reload environment variables")
+    
+    # Get updated values after reload
+    from seerr.config import (
+        RD_ACCESS_TOKEN, RD_REFRESH_TOKEN, RD_CLIENT_ID, RD_CLIENT_SECRET,
+        OVERSEERR_BASE, OVERSEERR_API_BASE_URL, OVERSEERR_API_KEY, TRAKT_API_KEY,
+        HEADLESS_MODE, ENABLE_AUTOMATIC_BACKGROUND_TASK, ENABLE_SHOW_SUBSCRIPTION_TASK,
+        TORRENT_FILTER_REGEX, MAX_MOVIE_SIZE, MAX_EPISODE_SIZE, REFRESH_INTERVAL_MINUTES
+    )
+    
+    # Detect which values have changed
+    changes = {}
+    for key, old_value in original_values.items():
+        new_value = locals()[key]  # Get the new value from the reloaded config
+        if new_value != old_value:
+            changes[key] = {"old": old_value, "new": new_value}
+    
+    if changes:
+        logger.info(f"Environment variables changed: {list(changes.keys())}")
+        
+        # Apply changes to browser if needed
+        from seerr.browser import driver
+        
+        # Update RD credentials in browser if changed
+        if driver and any(key in changes for key in ["RD_ACCESS_TOKEN", "RD_REFRESH_TOKEN", "RD_CLIENT_ID", "RD_CLIENT_SECRET"]):
+            logger.info("Updating Real-Debrid credentials in browser session")
+            try:
+                driver.execute_script(f"""
+                    localStorage.setItem('rd:accessToken', '{RD_ACCESS_TOKEN}');
+                    localStorage.setItem('rd:clientId', '"{RD_CLIENT_ID}"');
+                    localStorage.setItem('rd:clientSecret', '"{RD_CLIENT_SECRET}"');
+                    localStorage.setItem('rd:refreshToken', '"{RD_REFRESH_TOKEN}"');          
+                """)
+                driver.refresh()
+                logger.info("Browser session updated with new credentials")
+            except Exception as e:
+                logger.error(f"Error updating browser session: {e}")
+        
+        # Apply filter changes if needed
+        if driver and "TORRENT_FILTER_REGEX" in changes:
+            logger.info("Updating torrent filter regex in browser")
+            try:
+                from selenium.webdriver.common.by import By
+                from selenium.webdriver.support.ui import WebDriverWait
+                from selenium.webdriver.support import expected_conditions as EC
+                
+                # Navigate to settings
+                driver.get("https://debridmediamanager.com")
+                settings_link = WebDriverWait(driver, 10).until(
+                    EC.element_to_be_clickable((By.XPATH, "//span[contains(text(),'⚙️ Settings')]"))
+                )
+                settings_link.click()
+                
+                # Update filter
+                default_filter_input = WebDriverWait(driver, 10).until(
+                    EC.presence_of_element_located((By.ID, "dmm-default-torrents-filter"))
+                )
+                default_filter_input.clear()
+                default_filter_input.send_keys(TORRENT_FILTER_REGEX)
+                
+                # Close settings
+                settings_link.click()
+                logger.info(f"Updated torrent filter regex to: {TORRENT_FILTER_REGEX}")
+            except Exception as e:
+                logger.error(f"Error updating torrent filter regex: {e}")
+        
+        # Apply size settings if needed
+        if driver and ("MAX_MOVIE_SIZE" in changes or "MAX_EPISODE_SIZE" in changes):
+            logger.info("Updating size settings in browser")
+            try:
+                from selenium.webdriver.common.by import By
+                from selenium.webdriver.support.ui import WebDriverWait, Select
+                from selenium.webdriver.support import expected_conditions as EC
+                
+                # Navigate to settings
+                driver.get("https://debridmediamanager.com")
+                settings_link = WebDriverWait(driver, 10).until(
+                    EC.element_to_be_clickable((By.XPATH, "//span[contains(text(),'⚙️ Settings')]"))
+                )
+                settings_link.click()
+                
+                # Update movie size if changed
+                if "MAX_MOVIE_SIZE" in changes:
+                    max_movie_select = WebDriverWait(driver, 10).until(
+                        EC.visibility_of_element_located((By.ID, "dmm-movie-max-size"))
+                    )
+                    select_obj = Select(max_movie_select)
+                    select_obj.select_by_value(MAX_MOVIE_SIZE)
+                    logger.info(f"Updated max movie size to: {MAX_MOVIE_SIZE}")
+                
+                # Update episode size if changed
+                if "MAX_EPISODE_SIZE" in changes:
+                    max_episode_select = WebDriverWait(driver, 10).until(
+                        EC.visibility_of_element_located((By.ID, "dmm-episode-max-size"))
+                    )
+                    select_obj = Select(max_episode_select)
+                    select_obj.select_by_value(MAX_EPISODE_SIZE)
+                    logger.info(f"Updated max episode size to: {MAX_EPISODE_SIZE}")
+                
+                # Close settings
+                settings_link.click()
+            except Exception as e:
+                logger.error(f"Error updating size settings: {e}")
+        
+        # Update scheduler if refresh interval changed
+        if "REFRESH_INTERVAL_MINUTES" in changes:
+            from seerr.background_tasks import scheduler, process_movie_requests, check_show_subscriptions
+            
+            if scheduler and scheduler.running:
+                logger.info(f"Updating scheduler intervals to {REFRESH_INTERVAL_MINUTES} minutes")
+                min_interval = 1.0  # Minimum interval in minutes
+                if REFRESH_INTERVAL_MINUTES < min_interval:
+                    logger.warning(f"REFRESH_INTERVAL_MINUTES ({REFRESH_INTERVAL_MINUTES}) is too small. Using minimum interval of {min_interval} minutes.")
+                    interval = min_interval
+                else:
+                    interval = REFRESH_INTERVAL_MINUTES
+            
+                try:
+                    # Remove all existing jobs for both tasks
+                    for job in scheduler.get_jobs():
+                        if job.id in ["check_show_subscriptions", "process_movie_requests"]:
+                            scheduler.remove_job(job.id)
+                            logger.info(f"Removed existing job with ID: {job.id}")
+            
+                    # Re-add jobs with new interval
+                    if ENABLE_AUTOMATIC_BACKGROUND_TASK:
+                        scheduler.add_job(
+                            process_movie_requests,
+                            'interval',
+                            minutes=interval,
+                            id="process_movie_requests",
+                            replace_existing=True,
+                            max_instances=1
+                        )
+                        logger.info(f"Rescheduled movie requests check every {interval} minute(s)")
+            
+                    if ENABLE_SHOW_SUBSCRIPTION_TASK:
+                        scheduler.add_job(
+                            check_show_subscriptions,
+                            'interval',
+                            minutes=interval,
+                            id="check_show_subscriptions",
+                            replace_existing=True,
+                            max_instances=1
+                        )
+                        logger.info(f"Rescheduled show subscription check every {interval} minute(s)")
+                except Exception as e:
+                    logger.error(f"Error updating scheduler: {e}")
+    else:
+        logger.info("No environment variable changes detected")
+    
+    return {
+        "status": "success", 
+        "message": "Environment variables reloaded successfully",
+        "changes": list(changes.keys())
+    }
 
 if __name__ == "__main__":
     import uvicorn
