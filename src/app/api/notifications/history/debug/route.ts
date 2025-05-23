@@ -31,7 +31,7 @@ export async function GET(request: NextRequest) {
         return acc;
       }, {} as Record<string, number>),
       historyFilePath: process.env.NODE_ENV === 'development' ? 
-        'notification-history.json at project root' : 
+        'logs/notification-history.json' : 
         '(file path hidden in production)'
     });
   } catch (error) {

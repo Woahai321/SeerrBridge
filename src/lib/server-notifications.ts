@@ -20,14 +20,14 @@ const DISCORD_RATE_LIMIT_MS = 500; // Minimum 500ms between requests
  * This is a server-side only function
  */
 export function getConfigFilePath() {
-  return path.join(process.cwd(), "notifications.json");
+  return path.join(process.cwd(), "logs", "notifications.json");
 }
 
 /**
  * Get the notification history file path
  */
 export function getNotificationHistoryFilePath() {
-  return path.join(process.cwd(), "notification-history.json");
+  return path.join(process.cwd(), "logs", "notification-history.json");
 }
 
 /**

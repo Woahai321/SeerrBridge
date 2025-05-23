@@ -326,7 +326,6 @@ services:
     env_file:
       - ./.env
     volumes:
-      - ./config:/app/config
       - shared_logs:/app
       - ./.env:/app/.env
     restart: unless-stopped
