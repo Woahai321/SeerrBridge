@@ -1,19 +1,27 @@
 """
 SeerrBridge - A bridge between Overseerr and Real-Debrid via Debrid Media Manager
 """
-from fastapi import FastAPI, HTTPException, BackgroundTasks, Request
-from fastapi.responses import HTMLResponse
+from typing import Dict, Any, List, Optional
+from datetime import datetime
 from contextlib import asynccontextmanager
 import asyncio
-import json
 import os
+import json
+import time
+
+from fastapi import FastAPI, Request, HTTPException, BackgroundTasks
+from fastapi.staticfiles import StaticFiles
+from fastapi.templating import Jinja2Templates
+from fastapi.responses import HTMLResponse
+from pydantic import BaseModel
 from loguru import logger
+import uvicorn
 
 from seerr import __version__
-from seerr.config import load_config, ENABLE_AUTOMATIC_BACKGROUND_TASK, ENABLE_SHOW_SUBSCRIPTION_TASK, REFRESH_INTERVAL_MINUTES
+from seerr.config import load_config, REFRESH_INTERVAL_MINUTES
 from seerr.models import WebhookPayload
 from seerr.realdebrid import check_and_refresh_access_token
-from seerr.trakt import get_media_details_from_trakt
+from seerr.trakt import get_media_details_from_trakt, get_season_details_from_trakt, check_next_episode_aired
 from seerr.utils import parse_requested_seasons, START_TIME
 
 # Import modules first
@@ -21,22 +29,29 @@ import seerr.browser
 import seerr.background_tasks
 import seerr.search
 
-# Initialize queue
-request_queue = asyncio.Queue(maxsize=500)
-# Share our queue with the background_tasks module
-seerr.background_tasks.request_queue = request_queue
-
 # Now import specific functions
-from seerr.browser import initialize_browser, shutdown_browser
-from seerr.background_tasks import process_requests, process_movie_requests, add_request_to_queue, check_show_subscriptions, scheduler
-
-processing_task = None  # To track the current processing task
+from seerr.browser import initialize_browser, shutdown_browser, refresh_library_stats
+from seerr.background_tasks import (
+    initialize_background_tasks, 
+    populate_queues_from_overseerr, 
+    add_movie_to_queue, 
+    add_tv_to_queue,
+    get_queue_status,
+    get_detailed_queue_status,
+    check_show_subscriptions, 
+    scheduler,
+    is_safe_to_refresh_library_stats,
+    last_queue_activity_time
+)
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """
     Setup and teardown operations for the FastAPI application
     """
+    # Import config variables fresh to ensure we have current values
+    from seerr.config import ENABLE_AUTOMATIC_BACKGROUND_TASK, ENABLE_SHOW_SUBSCRIPTION_TASK
+    
     # Startup operations
     logger.info(f"Starting SeerrBridge v{__version__}")
     
@@ -52,58 +67,35 @@ async def lifespan(app: FastAPI):
     await initialize_browser()
     logger.info(f"Browser initialized: {seerr.browser.driver is not None}")
     
-    # Start the scheduler
-    scheduler.start()
-    
-    # Start the background processing task
-    global processing_task
-    processing_task = asyncio.create_task(process_requests())
-    logger.info("Started request processing task.")
+    # Initialize background tasks (this starts the queue processor and scheduler)
+    await initialize_background_tasks()
+    logger.info("Background tasks initialized")
     
     # Schedule automatic background tasks if enabled
     if ENABLE_AUTOMATIC_BACKGROUND_TASK:
         logger.info("Automatic background task enabled. Starting initial check.")
         # Run initial check after a short delay to ensure browser is ready
-        asyncio.create_task(delayed_process_movie_requests())
-        
-        # Schedule recurring task
-        scheduler.add_job(
-            process_movie_requests,
-            'interval',
-            minutes=REFRESH_INTERVAL_MINUTES,
-            id="process_movie_requests",
-            replace_existing=True
-        )
-        logger.info(f"Scheduled movie request checks every {REFRESH_INTERVAL_MINUTES} minute(s).")
+        asyncio.create_task(delayed_populate_queues())
     
-    # Schedule show subscription check if enabled
-    if ENABLE_SHOW_SUBSCRIPTION_TASK:
-        logger.info("Show subscription task enabled. Starting initial check.")
-        # Delay the show subscription check to avoid concurrent browser access
-        asyncio.create_task(delayed_check_show_subscriptions())
-        
-        # Schedule recurring task
-        scheduler.add_job(
-            check_show_subscriptions,
-            'interval',
-            minutes=REFRESH_INTERVAL_MINUTES,
-            id="check_show_subscriptions",
-            replace_existing=True
-        )
-        logger.info(f"Scheduled show subscription checks every {REFRESH_INTERVAL_MINUTES} minute(s).")
+    # Schedule library stats refresh every 30 minutes
+    logger.info("Scheduling library stats refresh.")
+    
+    async def delayed_refresh_library_stats():
+        """Run refresh_library_stats after a delay to avoid browser conflicts"""
+        await asyncio.sleep(300)  # Wait 300 seconds before first refresh
+        refresh_library_stats()
+    
+    # Initial refresh
+    asyncio.create_task(delayed_refresh_library_stats())
+    
+    # Note: Library stats refresh will now be triggered automatically 
+    # 30 seconds after queue processing completes, instead of on a schedule
+    logger.info("Library stats refresh will be triggered after queue completion.")
     
     yield
     
     # Shutdown operations
     logger.info("Shutting down SeerrBridge")
-    
-    # Cancel background task
-    if processing_task:
-        processing_task.cancel()
-        try:
-            await processing_task
-        except asyncio.CancelledError:
-            pass
     
     # Stop the scheduler
     scheduler.shutdown()
@@ -112,15 +104,10 @@ async def lifespan(app: FastAPI):
     await shutdown_browser()
 
 # Add helper functions for delayed task execution
-async def delayed_process_movie_requests():
-    """Run process_movie_requests after a short delay"""
+async def delayed_populate_queues():
+    """Run populate_queues_from_overseerr after a short delay"""
     await asyncio.sleep(2)  # Wait 2 seconds before starting
-    await process_movie_requests()
-
-async def delayed_check_show_subscriptions():
-    """Run check_show_subscriptions after a longer delay to not conflict with movie requests"""
-    await asyncio.sleep(30)  # Wait 30 seconds before starting show subscriptions check
-    await check_show_subscriptions()
+    await populate_queues_from_overseerr()
 
 app = FastAPI(lifespan=lifespan)
 
@@ -130,6 +117,10 @@ async def get_status():
     Get the status of the SeerrBridge service
     """
     from datetime import datetime
+    # Import config variables fresh each time to get updated values after reload
+    from seerr.config import ENABLE_AUTOMATIC_BACKGROUND_TASK, ENABLE_SHOW_SUBSCRIPTION_TASK, REFRESH_INTERVAL_MINUTES
+    from seerr.background_tasks import is_safe_to_refresh_library_stats, last_queue_activity_time
+    
     uptime_seconds = (datetime.now() - START_TIME).total_seconds()
     
     # Calculate days, hours, minutes, seconds
@@ -150,6 +141,22 @@ async def get_status():
     # Check browser status
     browser_status = "initialized" if seerr.browser.driver is not None else "not initialized"
     
+    # Get library stats from browser module
+    library_stats = getattr(seerr.browser, 'library_stats', {
+        "torrents_count": 0,
+        "total_size_tb": 0.0,
+        "last_updated": None
+    })
+    
+    # Get queue status
+    queue_status = get_queue_status()
+    
+    # Calculate time since last queue activity
+    time_since_last_activity = time.time() - last_queue_activity_time
+    
+    # Check library refresh status for current cycle
+    from seerr.background_tasks import library_refreshed_for_current_cycle
+    
     return {
         "status": "running",
         "version": __version__,
@@ -157,10 +164,17 @@ async def get_status():
         "uptime": uptime_str,
         "start_time": START_TIME.isoformat(),
         "current_time": datetime.now().isoformat(),
-        "queue_size": request_queue.qsize(),
+        "queue_status": queue_status,
         "browser_status": browser_status,
         "automatic_processing": ENABLE_AUTOMATIC_BACKGROUND_TASK,
-        "show_subscription": ENABLE_SHOW_SUBSCRIPTION_TASK
+        "show_subscription": ENABLE_SHOW_SUBSCRIPTION_TASK,
+        "refresh_interval_minutes": REFRESH_INTERVAL_MINUTES,
+        "library_stats": library_stats,
+        "queue_activity": {
+            "time_since_last_activity_seconds": round(time_since_last_activity, 1),
+            "safe_to_refresh_library": is_safe_to_refresh_library_stats(),
+            "library_refreshed_for_current_cycle": library_refreshed_for_current_cycle
+        }
     }
 
 @app.post("/jellyseer-webhook/")
@@ -264,7 +278,6 @@ async def jellyseer_webhook(request: Request, background_tasks: BackgroundTasks)
                         continue
                     
                     # Fetch season details
-                    from seerr.trakt import get_season_details_from_trakt, check_next_episode_aired
                     season_details = get_season_details_from_trakt(str(trakt_show_id), season_number)
                     
                     if season_details:
@@ -317,8 +330,29 @@ async def jellyseer_webhook(request: Request, background_tasks: BackgroundTasks)
                         else:
                             logger.info(f"Webhook: No episode count discrepancy for {media_title} Season {season_number}.")
         
-        # Directly add to queue instead of using background task
-        await add_request_to_queue(imdb_id, media_title, media_type, payload.extra)
+        # Get the actual media_id from the request_id
+        from seerr.overseerr import get_media_id_from_request_id
+        request_id = int(payload.request.request_id)
+        media_id = get_media_id_from_request_id(request_id)
+        
+        if media_id is None:
+            logger.error(f"Failed to get media_id for request_id {request_id}")
+            raise HTTPException(status_code=500, detail=f"Failed to get media_id for request_id {request_id}")
+        
+        # Add to appropriate queue based on media type
+        if media_type == 'movie':
+            success = await add_movie_to_queue(
+                imdb_id, media_title, media_type, payload.extra, 
+                media_id, payload.media.tmdbId
+            )
+        else:  # TV show
+            success = await add_tv_to_queue(
+                imdb_id, media_title, media_type, payload.extra,
+                media_id, payload.media.tmdbId
+            )
+        
+        if not success:
+            raise HTTPException(status_code=500, detail="Failed to add request to queue - queue is full")
         
         return {
             "status": "success", 
@@ -476,7 +510,7 @@ async def reload_environment():
         
         # Update scheduler if refresh interval changed
         if "REFRESH_INTERVAL_MINUTES" in changes:
-            from seerr.background_tasks import scheduler, process_movie_requests, check_show_subscriptions
+            from seerr.background_tasks import scheduler, populate_queues_from_overseerr
             
             if scheduler and scheduler.running:
                 logger.info(f"Updating scheduler intervals to {REFRESH_INTERVAL_MINUTES} minutes")
@@ -490,14 +524,15 @@ async def reload_environment():
                 try:
                     # Remove all existing jobs for both tasks
                     for job in scheduler.get_jobs():
-                        if job.id in ["check_show_subscriptions", "process_movie_requests"]:
+                        if job.id in ["process_movie_requests"]:
                             scheduler.remove_job(job.id)
                             logger.info(f"Removed existing job with ID: {job.id}")
             
-                    # Re-add jobs with new interval
+                    # Re-add jobs with new interval using current config values
                     if ENABLE_AUTOMATIC_BACKGROUND_TASK:
+                        from seerr.background_tasks import scheduled_task_wrapper
                         scheduler.add_job(
-                            process_movie_requests,
+                            scheduled_task_wrapper,
                             'interval',
                             minutes=interval,
                             id="process_movie_requests",
@@ -505,19 +540,35 @@ async def reload_environment():
                             max_instances=1
                         )
                         logger.info(f"Rescheduled movie requests check every {interval} minute(s)")
-            
-                    if ENABLE_SHOW_SUBSCRIPTION_TASK:
-                        scheduler.add_job(
-                            check_show_subscriptions,
-                            'interval',
-                            minutes=interval,
-                            id="check_show_subscriptions",
-                            replace_existing=True,
-                            max_instances=1
-                        )
-                        logger.info(f"Rescheduled show subscription check every {interval} minute(s)")
                 except Exception as e:
                     logger.error(f"Error updating scheduler: {e}")
+        
+        # Handle changes to task enablement flags
+        if "ENABLE_AUTOMATIC_BACKGROUND_TASK" in changes:
+            from seerr.background_tasks import scheduler, scheduled_task_wrapper
+            
+            if scheduler and scheduler.running:
+                logger.info("Updating scheduler based on task enablement changes")
+                
+                # Handle automatic background task changes
+                if ENABLE_AUTOMATIC_BACKGROUND_TASK:
+                    # Task was enabled - add the job
+                    scheduler.add_job(
+                        scheduled_task_wrapper,
+                        'interval',
+                        minutes=REFRESH_INTERVAL_MINUTES,
+                        id="process_movie_requests",
+                        replace_existing=True,
+                        max_instances=1
+                    )
+                    logger.info(f"Enabled automatic movie requests check every {REFRESH_INTERVAL_MINUTES} minute(s)")
+                else:
+                    # Task was disabled - remove the job
+                    try:
+                        scheduler.remove_job("process_movie_requests")
+                        logger.info("Disabled automatic movie requests check")
+                    except Exception as e:
+                        logger.debug(f"Job 'process_movie_requests' was already removed or didn't exist: {e}")
     else:
         logger.info("No environment variable changes detected")
     
@@ -527,6 +578,47 @@ async def reload_environment():
         "changes": list(changes.keys())
     }
 
+@app.post("/refresh-library-stats")
+async def refresh_library_stats_endpoint():
+    """
+    Manually refresh library statistics from the browser
+    """
+    try:
+        logger.info("Manual library stats refresh triggered via API endpoint")
+        
+        # Check if it's safe to refresh first (only for manual triggers)
+        from seerr.background_tasks import get_queue_status
+        if not is_safe_to_refresh_library_stats():
+            queue_status = get_queue_status()
+            logger.info("Manual library stats refresh skipped - queues are active or recently active")
+            return {
+                "status": "skipped",
+                "message": "Library stats refresh skipped - queues are active or recently active. Please wait for queues to be idle for at least 60 seconds.",
+                "queue_status": queue_status
+            }
+        
+        # For manual refresh, call refresh_library_stats directly
+        success = refresh_library_stats()
+        
+        if success:
+            # Get updated stats
+            library_stats = getattr(seerr.browser, 'library_stats', {
+                "torrents_count": 0,
+                "total_size_tb": 0.0,
+                "last_updated": None
+            })
+            
+            return {
+                "status": "success",
+                "message": "Library statistics refreshed successfully",
+                "library_stats": library_stats
+            }
+        else:
+            raise HTTPException(status_code=500, detail="Failed to refresh library statistics")
+            
+    except Exception as e:
+        logger.error(f"Error refreshing library stats via API: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
 if __name__ == "__main__":
-    import uvicorn
     uvicorn.run("main:app", host="0.0.0.0", port=8777) 
