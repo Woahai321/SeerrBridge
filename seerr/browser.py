@@ -8,6 +8,9 @@ import os
 import requests
 import zipfile
 import io
+import tempfile
+import uuid
+import shutil
 from loguru import logger
 from selenium import webdriver
 from selenium.webdriver.common.by import By
@@ -32,6 +35,9 @@ from seerr.config import (
 
 # Global driver variable to hold the Selenium WebDriver
 driver = None
+
+# Global user data directory for cleanup
+user_data_dir = None
 
 # Global library stats
 library_stats = {
@@ -111,7 +117,7 @@ def get_latest_chrome_driver():
 
 async def initialize_browser():
     """Initialize the Selenium WebDriver and set up the browser."""
-    global driver
+    global driver, user_data_dir
     if driver is None:
         logger.info("Starting persistent browser session.")
 
@@ -120,6 +126,19 @@ async def initialize_browser():
         logger.info(f"Detected operating system: {current_os}")
 
         options = Options()
+
+        # Create a unique user data directory to avoid conflicts in Kubernetes
+        try:
+            # Create a unique temporary directory for user data
+            temp_base_dir = os.path.join(tempfile.gettempdir(), "chrome_user_data")
+            os.makedirs(temp_base_dir, exist_ok=True)
+            user_data_dir = os.path.join(temp_base_dir, f"chrome_profile_{uuid.uuid4().hex[:8]}")
+            os.makedirs(user_data_dir, exist_ok=True)
+            options.add_argument(f"--user-data-dir={user_data_dir}")
+            logger.info(f"Created unique user data directory: {user_data_dir}")
+        except Exception as e:
+            logger.warning(f"Failed to create user data directory: {e}. Continuing without custom user data dir.")
+            user_data_dir = None
 
         ### Handle Docker/Linux-specific configurations
         if current_os == "linux" and os.getenv("RUNNING_IN_DOCKER", "false").lower() == "true":
@@ -134,6 +153,24 @@ async def initialize_browser():
             options.add_argument("--disable-dev-shm-usage")  # Handle shared memory limitations
             options.add_argument("--disable-gpu")  # Disable GPU rendering for headless environments
             options.add_argument("--disable-setuid-sandbox")  # Bypass setuid sandbox
+            
+            # Additional Kubernetes-specific arguments
+            options.add_argument("--disable-background-timer-throttling")  # Prevent throttling
+            options.add_argument("--disable-backgrounding-occluded-windows")  # Prevent backgrounding
+            options.add_argument("--disable-renderer-backgrounding")  # Keep renderer active
+            options.add_argument("--disable-features=TranslateUI")  # Disable translate UI
+            options.add_argument("--disable-web-security")  # Disable web security for isolated environments
+            options.add_argument("--ignore-certificate-errors")  # Ignore cert errors
+            options.add_argument("--ignore-ssl-errors")  # Ignore SSL errors
+            options.add_argument("--allow-running-insecure-content")  # Allow insecure content
+            options.add_argument("--disable-extensions")  # Disable extensions
+            options.add_argument("--disable-plugins")  # Disable plugins
+            options.add_argument("--disable-images")  # Disable images for faster loading
+            options.add_argument("--mute-audio")  # Mute audio
+            options.add_argument("--disable-default-apps")  # Disable default apps
+            options.add_argument("--no-first-run")  # Skip first run wizards
+            options.add_argument("--no-default-browser-check")  # Skip default browser check
+            options.add_argument("--single-process")  # Use single process mode
 
         ### Handle Windows-specific configurations
         elif current_os == "windows":
@@ -182,6 +219,13 @@ async def initialize_browser():
             logger.info("Navigated to Debrid Media Manager page.")
         except Exception as e:
             logger.error(f"Failed to initialize Selenium WebDriver: {e}")
+            # Clean up user data directory on failure
+            if user_data_dir and os.path.exists(user_data_dir):
+                try:
+                    shutil.rmtree(user_data_dir)
+                    logger.info(f"Cleaned up user data directory: {user_data_dir}")
+                except Exception as cleanup_error:
+                    logger.warning(f"Failed to clean up user data directory: {cleanup_error}")
             driver = None  # Ensure driver is None on failure
             raise e
 
@@ -324,11 +368,40 @@ async def initialize_browser():
 
 async def shutdown_browser():
     """Shut down the browser and clean up resources."""
-    global driver
+    global driver, user_data_dir
     if driver:
         driver.quit()
         logger.warning("Selenium WebDriver closed.")
         driver = None
+    
+    # Clean up user data directory
+    if user_data_dir and os.path.exists(user_data_dir):
+        try:
+            shutil.rmtree(user_data_dir)
+            logger.info(f"Cleaned up user data directory: {user_data_dir}")
+            user_data_dir = None
+        except Exception as cleanup_error:
+            logger.warning(f"Failed to clean up user data directory: {cleanup_error}")
+    
+    # Also clean up any remaining chrome_user_data directories
+    try:
+        temp_base_dir = os.path.join(tempfile.gettempdir(), "chrome_user_data")
+        if os.path.exists(temp_base_dir):
+            # Clean up any leftover profile directories older than 1 hour
+            import time
+            current_time = time.time()
+            for profile_dir in os.listdir(temp_base_dir):
+                profile_path = os.path.join(temp_base_dir, profile_dir)
+                if os.path.isdir(profile_path):
+                    # Check if directory is older than 1 hour (3600 seconds)
+                    if current_time - os.path.getctime(profile_path) > 3600:
+                        try:
+                            shutil.rmtree(profile_path)
+                            logger.info(f"Cleaned up old profile directory: {profile_path}")
+                        except Exception as e:
+                            logger.debug(f"Could not clean up old profile directory {profile_path}: {e}")
+    except Exception as e:
+        logger.debug(f"Error during cleanup of old profile directories: {e}")
 
 def login(driver):
     """Handle login to Debrid Media Manager."""
