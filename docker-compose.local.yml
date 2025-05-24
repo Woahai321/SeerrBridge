@@ -16,7 +16,7 @@ services:
       sh -c "
         cat /app/.env > /dev/null &&
         echo 'Starting SeerrBridge with refreshed env' &&
-        uvicorn seerrbridge:app --host 0.0.0.0 --port 8777
+        uvicorn main:app --host 0.0.0.0 --port 8777
       "
     networks:
       - seerrbridge_network
