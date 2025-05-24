@@ -31,19 +31,15 @@ services:
     env_file:
       - ./.env
     volumes:
-      - shared_logs:/seerrbridge_data
+      - shared_logs:/app/logs
       - ./.env:/app/.env
       - node_modules:/app/node_modules
       - next_build:/app/.next
     environment:
       - SEERRBRIDGE_URL=http://seerrbridge:8777
-      - SEERRBRIDGE_LOG_PATH=/seerrbridge_data/logs/seerrbridge.log
+      - SEERRBRIDGE_LOG_PATH=/logs/seerrbridge.log
     entrypoint: >
       sh -c "
-        mkdir -p /app &&
-        mkdir -p /seerrbridge_data/logs &&
-        ln -sf /seerrbridge_data/logs/seerrbridge.log /app/seerrbridge.log &&
-        ln -sf /seerrbridge_data/logs/episode_discrepancies.json /app/logs/episode_discrepancies.json &&
         npm start
       "
     restart: unless-stopped
