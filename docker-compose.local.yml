@@ -3,30 +3,60 @@ services:
     build:
       context: .
       dockerfile: Dockerfile  # Explicitly specify the Python Dockerfile
+    container_name: seerrbridge
     ports:
       - "8777:8777"
     env_file:
-      - .env
+      - ./.env
     volumes:
-      - .:/app
-    restart: always
+      - shared_logs:/app/logs
+      - ./.env:/app/.env
+    restart: unless-stopped
+    command: >
+      sh -c "
+        cat /app/.env > /dev/null &&
+        echo 'Starting SeerrBridge with refreshed env' &&
+        uvicorn seerrbridge:app --host 0.0.0.0 --port 8777
+      "
+    networks:
+      - seerrbridge_network
 
   bridgeboard:
     build:
       context: .
       dockerfile: Dockerfile.node  # Point to the Node.js Dockerfile
+    container_name: bridgeboard
     ports:
       - "3777:3777"
     env_file:
-      - .env
+      - ./.env
     volumes:
-      - .:/app
+      - shared_logs:/seerrbridge_data
+      - ./.env:/app/.env
       - node_modules:/app/node_modules
       - next_build:/app/.next
     environment:
-    - SEERRBRIDGE_URL=http://seerrbridge:8777
-    restart: always
-    
+      - SEERRBRIDGE_URL=http://seerrbridge:8777
+      - SEERRBRIDGE_LOG_PATH=/seerrbridge_data/logs/seerrbridge.log
+    entrypoint: >
+      sh -c "
+        mkdir -p /app &&
+        mkdir -p /seerrbridge_data/logs &&
+        ln -sf /seerrbridge_data/logs/seerrbridge.log /app/seerrbridge.log &&
+        ln -sf /seerrbridge_data/logs/episode_discrepancies.json /app/logs/episode_discrepancies.json &&
+        npm start
+      "
+    restart: unless-stopped
+    depends_on:
+      - seerrbridge
+    networks:
+      - seerrbridge_network
+
 volumes:
+  shared_logs:
   node_modules:
   next_build:
+
+networks:
+  seerrbridge_network:
+    driver: bridge
