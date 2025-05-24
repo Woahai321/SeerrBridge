@@ -11,9 +11,19 @@ import {
 } from "lucide-react";
 import { MediaItem } from "@/lib/utils";
 import { Pagination } from "@/components/pagination";
+import { extractContentFromLog, fetchLogTypes } from "@/lib/log-content-extractor";
 
 // Constants
 const ITEMS_PER_PAGE = 25;
+
+// Interface for log types
+interface LogType {
+  id: string;
+  name: string;
+  pattern: string;
+  description: string;
+  level: string;
+}
 
 export default function SuccessPage() {
   return (
@@ -57,10 +67,15 @@ function SuccessfulMediaList() {
   const [currentPage, setCurrentPage] = useState(1);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [logTypes, setLogTypes] = useState<LogType[]>([]);
 
   useEffect(() => {
     const fetchData = async () => {
       try {
+        // Fetch log types first
+        const types = await fetchLogTypes();
+        setLogTypes(types);
+
         const response = await fetch('/api/logs/success');
         
         if (!response.ok) {
@@ -124,41 +139,52 @@ function SuccessfulMediaList() {
           </div>
           
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {paginatedSuccesses.map((media: MediaItem, index: number) => (
-              <div key={startIndex + index} className="glass-card overflow-hidden group hover:shadow-lg transition-all duration-300">
-                <div className="p-5 border-b border-border/50 flex items-start">
-                  <div className="mr-4 mt-1">
-                    {media.type === "movie" ? (
-                      <FilmIcon size={24} className="text-success" />
-                    ) : (
-                      <TvIcon size={24} className="text-success" />
-                    )}
-                  </div>
-                  <div>
-                    <h3 className="font-medium">
-                      {media.title}
-                    </h3>
-                    <div className="text-xs text-muted-foreground mt-1 flex items-center">
-                      {media.type === "tv" && media.details?.season && (
-                        <span className="mr-3">
-                          Season {media.details.season} {media.details.episode && `Episode ${media.details.episode}`}
-                        </span>
+            {paginatedSuccesses.map((media: MediaItem, index: number) => {
+              // Extract content using log pattern
+              const extractedTitle = extractContentFromLog({
+                id: media.id || `success-${index}`,
+                title: media.title,
+                message: media.details?.message || media.message || media.title,
+                timestamp: media.timestamp || '',
+                logTypeId: media.matchedLogTypeId || media.logTypeId
+              }, logTypes);
+
+              return (
+                <div key={startIndex + index} className="glass-card overflow-hidden group hover:shadow-lg transition-all duration-300">
+                  <div className="p-5 border-b border-border/50 flex items-start">
+                    <div className="mr-4 mt-1">
+                      {media.type === "movie" ? (
+                        <FilmIcon size={24} className="text-success" />
+                      ) : (
+                        <TvIcon size={24} className="text-success" />
                       )}
-                      <span className="flex items-center">
-                        <ClockIcon size={12} className="mr-1" />
-                        {paginatedDates[index]}
-                      </span>
+                    </div>
+                    <div>
+                      <h3 className="font-medium">
+                        {extractedTitle}
+                      </h3>
+                      <div className="text-xs text-muted-foreground mt-1 flex items-center">
+                        {media.type === "tv" && media.details?.season && (
+                          <span className="mr-3">
+                            Season {media.details.season} {media.details.episode && `Episode ${media.details.episode}`}
+                          </span>
+                        )}
+                        <span className="flex items-center">
+                          <ClockIcon size={12} className="mr-1" />
+                          {paginatedDates[index]}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                  <div className="p-4 bg-success/5">
+                    <div className="flex items-center text-sm">
+                      <CheckCircle2Icon size={14} className="mr-2 text-success" />
+                      <span className="text-success">{media.details?.message || media.message || "Successfully processed"}</span>
                     </div>
                   </div>
                 </div>
-                <div className="p-4 bg-success/5">
-                  <div className="flex items-center text-sm">
-                    <CheckCircle2Icon size={14} className="mr-2 text-success" />
-                    <span className="text-success">{media.details?.message || "Successfully processed"}</span>
-                  </div>
-                </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
           
           <Pagination 

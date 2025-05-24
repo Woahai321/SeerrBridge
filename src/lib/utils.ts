@@ -21,6 +21,9 @@ export interface MediaItem {
   episode?: string;
   message?: string;
   detailedError?: string;
+  logTypeId?: string;
+  matchedLogTypeId?: string;
+  matchedLogTypeName?: string;
 }
 
 export interface TokenStatusData {

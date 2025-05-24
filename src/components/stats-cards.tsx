@@ -19,6 +19,7 @@ import { useRefresh } from "@/lib/refresh-context";
 import { format } from "date-fns";
 import { StatusIndicator } from "./status-indicator";
 import { Button } from "@/components/ui/button";
+import { extractContentFromLog, fetchLogTypes } from "@/lib/log-content-extractor";
 
 // Interface for log type patterns from the log configurator
 interface LogType {
@@ -128,10 +129,6 @@ const StatsCard = memo(function StatsCard({
               <div className="overflow-hidden flex-1">
                 <ul className="space-y-1.5">
                   {recentItems.slice(0, 5).map((item) => {
-                    // Extract the actual content by looking for patterns like media files
-                    // This will extract content like movie/TV show filenames
-                    const extractedTitle = extractMediaName(item.title);
-                    
                     return (
                       <li key={item.id} className="text-[10px]">
                         <div className="flex items-center justify-between gap-1">
@@ -149,7 +146,7 @@ const StatsCard = memo(function StatsCard({
                               }}
                             ></div>
                             <span className="truncate max-w-[100px] text-primary-foreground/90" title={item.title}>
-                              {extractedTitle}
+                              {item.title}
                             </span>
                           </div>
                           <span className="text-[9px] text-muted-foreground whitespace-nowrap">
@@ -172,50 +169,6 @@ const StatsCard = memo(function StatsCard({
     </CardComponent>
   );
 });
-
-// Function to extract media name from log message
-// This attempts to find the actual media name by removing common log patterns
-function extractMediaName(message: string): string {
-  if (!message) return "Unknown";
-  
-  // Common prefixes to remove (based on the example pattern)
-  const prefixesToRemove = [
-    /RD \(\d+%\) button detected\.\s*\d*\s*/i,
-    /successfully grabbed/i,
-    /download completed/i,
-    /download failed/i,
-    /error processing/i
-  ];
-  
-  // Common suffixes to remove
-  const suffixesToRemove = [
-    /\.\s*This entry is complete\.$/i,
-    /\.\s*Download completed\.$/i,
-    /\.\s*Processing\s+finished\.$/i
-  ];
-  
-  let extractedName = message;
-  
-  // Remove prefixes
-  for (const prefix of prefixesToRemove) {
-    extractedName = extractedName.replace(prefix, '');
-  }
-  
-  // Remove suffixes
-  for (const suffix of suffixesToRemove) {
-    extractedName = extractedName.replace(suffix, '');
-  }
-  
-  // Trim any remaining whitespace
-  extractedName = extractedName.trim();
-  
-  // If nothing meaningful is left, return the original
-  if (!extractedName || extractedName.length < 10) {
-    return message;
-  }
-  
-  return extractedName;
-}
 
 // New interface for token status data
 interface TokenStatus {
@@ -386,52 +339,6 @@ export function StatsCards() {
     }
   };
 
-  // Function to extract content from the log message using the matched log type pattern
-  const extractContentFromLog = (item: RecentItem): string => {
-    if (!item.logTypeId || !item.title) return item.title;
-    
-    // Find the matching log type
-    const logType = logTypes.find(lt => lt.id === item.logTypeId);
-    if (!logType || !logType.pattern) return item.title;
-    
-    try {
-      // Convert the configured pattern to a proper regex with capture groups
-      // The pattern is already in regex format with (.*?) for wildcards
-      const regexPattern = new RegExp(logType.pattern, 'i');
-      
-      // Execute the regex on the log message
-      const match = regexPattern.exec(item.title);
-      
-      if (!match) return item.title;
-      
-      // Extract content from capture groups - assuming the middle capture groups
-      // often contain the actual media name we want to display
-      
-      // If we have multiple capture groups, we want to find the longest one
-      // that's likely to be the media name
-      if (match.length > 1) {
-        // Filter out empty groups and get the longest one
-        const captureGroups = match.slice(1).filter(group => group && group.trim().length > 0);
-        
-        if (captureGroups.length > 0) {
-          // Choose the longest capture group that may contain a media name
-          // This heuristic assumes the longest group contains the most meaningful content
-          const potentialContent = captureGroups.reduce((longest, current) => 
-            (longest.length > current.length) ? longest : current, "");
-            
-          if (potentialContent && potentialContent.length > 5) {
-            return potentialContent.trim();
-          }
-        }
-      }
-      
-      return item.title;
-    } catch (error) {
-      console.error('Error extracting content from log:', error);
-      return item.title;
-    }
-  };
-
   useEffect(() => {
     fetchData();
     
@@ -462,7 +369,13 @@ export function StatsCards() {
           isRefreshing={isRefreshing}
           recentItems={statistics.recentSuccesses.map(item => ({
             ...item,
-            title: extractContentFromLog(item)
+            title: extractContentFromLog({
+              id: item.id,
+              title: item.title,
+              message: item.title,
+              timestamp: item.timestamp,
+              logTypeId: item.logTypeId
+            }, logTypes)
           }))}
           showRecents={true}
         />
@@ -478,7 +391,13 @@ export function StatsCards() {
           isRefreshing={isRefreshing}
           recentItems={statistics.recentFailures.map(item => ({
             ...item,
-            title: extractContentFromLog(item)
+            title: extractContentFromLog({
+              id: item.id,
+              title: item.title,
+              message: item.title,
+              timestamp: item.timestamp,
+              logTypeId: item.logTypeId
+            }, logTypes)
           }))}
           showRecents={true}
         />
@@ -543,7 +462,8 @@ export function StatsCards() {
   ), [
     statistics,
     isRefreshing,
-    extractContentFromLog
+    extractContentFromLog,
+    logTypes
   ]);
 
   // Display loading state only on initial load, not on refreshes

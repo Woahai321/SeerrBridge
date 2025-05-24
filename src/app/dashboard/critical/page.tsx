@@ -10,17 +10,41 @@ import {
   ChevronDownIcon,
   ChevronUpIcon,
   FilmIcon,
-  TvIcon
+  TvIcon,
+  InfoIcon
 } from "lucide-react";
 import CriticalErrorItem from "@/components/critical-error-item";
 import { Pagination } from "@/components/pagination";
+import { extractContentFromLog, fetchLogTypes } from "@/lib/log-content-extractor";
 
 // Constants
 const ITEMS_PER_PAGE = 25;
 
-// Extended LogEntry type to include rawLine
+// Interface for log types
+interface LogType {
+  id: string;
+  name: string;
+  pattern: string;
+  description: string;
+  level: string;
+}
+
+// Extended LogEntry type to include rawLine and matching info
 interface ExtendedLogEntry extends LogEntry {
   rawLine?: string;
+  matchedLogTypeId?: string;
+  matchedLogTypeName?: string;
+}
+
+// Interface for critical error items
+interface CriticalErrorItem {
+  id: string;
+  message: string;
+  timestamp: string;
+  title?: string;
+  detailedError?: string;
+  matchedLogTypeId?: string;
+  matchedLogTypeName?: string;
 }
 
 export default function CriticalErrorsPage() {
@@ -52,7 +76,7 @@ export default function CriticalErrorsPage() {
 
 function CriticalErrorsList() {
   const [criticalData, setCriticalData] = useState<{
-    criticalErrors: any[];
+    criticalErrors: CriticalErrorItem[];
     formattedDates: string[];
     criticalLogs: ExtendedLogEntry[];
     criticalCount: number;
@@ -65,10 +89,15 @@ function CriticalErrorsList() {
   const [currentPage, setCurrentPage] = useState(1);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [logTypes, setLogTypes] = useState<LogType[]>([]);
 
   useEffect(() => {
     const fetchData = async () => {
       try {
+        // Fetch log types first
+        const types = await fetchLogTypes();
+        setLogTypes(types);
+
         const response = await fetch('/api/logs/critical');
         
         if (!response.ok) {
@@ -131,13 +160,56 @@ function CriticalErrorsList() {
           </div>
           
           <div className="space-y-6">
-            {paginatedErrors.map((error, index) => (
-              <CriticalErrorItem 
-                key={startIndex + index} 
-                error={error} 
-                formattedDate={paginatedDates[index]}
-              />
-            ))}
+            {paginatedErrors.map((error, index) => {
+              // Extract content using log pattern
+              const extractedTitle = extractContentFromLog({
+                id: error.id,
+                title: error.title || error.message,
+                message: error.message,
+                timestamp: error.timestamp,
+                logTypeId: error.matchedLogTypeId
+              }, logTypes);
+
+              return (
+                <div key={startIndex + index} className="glass-card overflow-hidden group hover:shadow-lg transition-all duration-300">
+                  <div className="p-5 border-b border-border/50">
+                    <div className="flex items-start">
+                      <div className="mr-4 mt-1">
+                        <AlertTriangleIcon size={24} className="text-destructive" />
+                      </div>
+                      <div className="flex-1">
+                        <h3 className="font-medium mb-2 text-destructive">
+                          {extractedTitle}
+                        </h3>
+                        <div className="text-xs text-muted-foreground mt-1 flex items-center">
+                          <span className="flex items-center">
+                            <ClockIcon size={12} className="mr-1" />
+                            {paginatedDates[index]}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                  <div className="p-4 bg-destructive/5">
+                    <div className="text-sm text-destructive mb-2">
+                      {error.message}
+                    </div>
+                    {error.detailedError && error.detailedError !== error.message && (
+                      <div className="mt-3 pt-3 border-t border-destructive/20">
+                        <details className="text-xs">
+                          <summary className="cursor-pointer text-muted-foreground hover:text-foreground">
+                            Show detailed error
+                          </summary>
+                          <pre className="mt-2 text-xs whitespace-pre-wrap font-mono bg-background/50 p-2 rounded">
+                            {error.detailedError}
+                          </pre>
+                        </details>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
           </div>
           
           <Pagination 

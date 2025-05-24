@@ -68,15 +68,14 @@ export function RefreshProvider({ children }: { children: React.ReactNode }) {
       // Trigger a client-side refresh to update all data
       window.dispatchEvent(new CustomEvent("refresh-dashboard-data"));
       
-      // Update the last checked time
-      setLastChecked(new Date());
-      
       // Reset the timer
       setSecondsUntilRefresh(30);
       
       // Keep the refreshing state for a smoother animation
       // This delay ensures the animation has time to complete
       setTimeout(() => {
+        // Update the last checked time AFTER the refresh completes
+        setLastChecked(new Date());
         setIsRefreshing(false);
       }, 800); // Adjust timing for smoother transition
     }, 0);

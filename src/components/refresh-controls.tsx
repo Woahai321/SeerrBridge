@@ -46,6 +46,38 @@ function IsolatedCounter({
   return <span>Next refresh in: {counter}s</span>;
 }
 
+// An isolated component for the time since last check that updates every second
+function TimeSinceLastCheck({
+  lastChecked
+}: {
+  lastChecked: Date;
+}) {
+  const [secondsSinceCheck, setSecondsSinceCheck] = useState(0);
+  const timerRef = useRef<NodeJS.Timeout | null>(null);
+  
+  useEffect(() => {
+    // Calculate and update the time difference initially
+    const updateTimeDiff = () => {
+      const seconds = Math.floor((new Date().getTime() - lastChecked.getTime()) / 1000);
+      setSecondsSinceCheck(seconds);
+    };
+    
+    // Update immediately
+    updateTimeDiff();
+    
+    // Set up a timer to update every second
+    timerRef.current = setInterval(updateTimeDiff, 1000);
+    
+    return () => {
+      if (timerRef.current) {
+        clearInterval(timerRef.current);
+      }
+    };
+  }, [lastChecked]);
+  
+  return <span>{secondsSinceCheck}s ago</span>;
+}
+
 // Memoize the component to prevent parent re-renders when countdown changes
 export const RefreshControls = memo(function RefreshControls() {
   const { lastChecked, secondsUntilRefresh, refreshData, isRefreshing } = useRefresh();
@@ -70,7 +102,7 @@ export const RefreshControls = memo(function RefreshControls() {
     <div className="flex items-center justify-between mb-4 text-sm text-muted-foreground">
       <div>
         Last checked: {isClient ? (
-          <span suppressHydrationWarning>{formatTime(lastChecked)}</span>
+          <TimeSinceLastCheck lastChecked={lastChecked} />
         ) : (
           "Loading..."
         )}
@@ -84,7 +116,7 @@ export const RefreshControls = memo(function RefreshControls() {
       <button
         onClick={refreshData}
         disabled={isRefreshing}
-        className={`glass-button flex items-center gap-1 px-3 py-1 text-sm transition-all duration-300 ${
+        className={`glass-button flex items-center gap-1 px-3 py-2 text-sm transition-all duration-300 ${
           isRefreshing ? 'opacity-70 cursor-not-allowed' : ''
         }`}
       >

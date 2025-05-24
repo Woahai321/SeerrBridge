@@ -42,6 +42,42 @@ def get_overseerr_media_requests() -> list[dict]:
         logger.error(f"Error fetching media requests from Overseerr: {e}")
         return []
 
+def get_media_id_from_request_id(request_id: int) -> Optional[int]:
+    """
+    Get the media_id from a request_id by fetching the request details from Overseerr
+    
+    Args:
+        request_id (int): Request ID from webhook
+        
+    Returns:
+        Optional[int]: Media ID if found, None otherwise
+    """
+    url = f"{OVERSEERR_API_BASE_URL}/request/{request_id}"
+    headers = {
+        "X-Api-Key": OVERSEERR_API_KEY
+    }
+    
+    try:
+        response = requests.get(url, headers=headers)
+        
+        if response.status_code != 200:
+            logger.error(f"Failed to fetch request {request_id} from Overseerr: {response.status_code}")
+            return None
+        
+        data = response.json()
+        media_id = data.get('media', {}).get('id')
+        
+        if media_id:
+            logger.info(f"Found media_id {media_id} for request_id {request_id}")
+            return media_id
+        else:
+            logger.error(f"No media_id found in request {request_id} response")
+            return None
+            
+    except Exception as e:
+        logger.error(f"Error fetching request {request_id} from Overseerr: {e}")
+        return None
+
 def mark_completed(media_id: int, tmdb_id: int) -> bool:
     """
     Mark an item as completed in Overseerr

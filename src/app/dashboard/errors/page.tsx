@@ -9,9 +9,28 @@ import {
   InfoIcon
 } from "lucide-react";
 import { Pagination } from "@/components/pagination";
+import { extractContentFromLog, fetchLogTypes } from "@/lib/log-content-extractor";
 
 // Constants
 const ITEMS_PER_PAGE = 25;
+
+// Interface for log types
+interface LogType {
+  id: string;
+  name: string;
+  pattern: string;
+  description: string;
+  level: string;
+}
+
+// Interface for error log items
+interface ErrorLogItem {
+  id: string;
+  message: string;
+  timestamp: string;
+  matchedLogTypeId?: string;
+  matchedLogTypeName?: string;
+}
 
 export default function ErrorLogsPage() {
   return (
@@ -42,7 +61,7 @@ export default function ErrorLogsPage() {
 
 function ErrorLogsList() {
   const [errorData, setErrorData] = useState<{
-    errors: any[];
+    errors: ErrorLogItem[];
     formattedDates: string[];
     logFilePath: string;
     errorCount: number;
@@ -50,10 +69,15 @@ function ErrorLogsList() {
   const [currentPage, setCurrentPage] = useState(1);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [logTypes, setLogTypes] = useState<LogType[]>([]);
 
   useEffect(() => {
     const fetchData = async () => {
       try {
+        // Fetch log types first
+        const types = await fetchLogTypes();
+        setLogTypes(types);
+
         const response = await fetch('/api/logs/errors');
         
         if (!response.ok) {
@@ -117,31 +141,45 @@ function ErrorLogsList() {
           </div>
           
           <div className="space-y-4">
-            {paginatedErrors.map((log, index) => (
-              <div key={startIndex + index} className="glass-card overflow-hidden group hover:shadow-lg transition-all duration-300">
-                <div className="p-5 border-b border-border/50">
-                  <div className="flex items-start">
-                    <div className="mr-4 mt-1">
-                      <AlertTriangleIcon size={24} className="text-destructive" />
-                    </div>
-                    <div className="flex-1">
-                      <div className="text-xs text-muted-foreground mt-1 flex items-center">
-                        <span className="flex items-center">
-                          <ClockIcon size={12} className="mr-1" />
-                          {paginatedDates[index]}
-                        </span>
+            {paginatedErrors.map((log, index) => {
+              // Extract content using log pattern
+              const extractedTitle = extractContentFromLog({
+                id: log.id,
+                title: log.message,
+                message: log.message,
+                timestamp: log.timestamp,
+                logTypeId: log.matchedLogTypeId
+              }, logTypes);
+
+              return (
+                <div key={startIndex + index} className="glass-card overflow-hidden group hover:shadow-lg transition-all duration-300">
+                  <div className="p-5 border-b border-border/50">
+                    <div className="flex items-start">
+                      <div className="mr-4 mt-1">
+                        <AlertTriangleIcon size={24} className="text-destructive" />
+                      </div>
+                      <div className="flex-1">
+                        <h3 className="font-medium mb-2">
+                          {extractedTitle}
+                        </h3>
+                        <div className="text-xs text-muted-foreground mt-1 flex items-center">
+                          <span className="flex items-center">
+                            <ClockIcon size={12} className="mr-1" />
+                            {paginatedDates[index]}
+                          </span>
+                        </div>
                       </div>
                     </div>
                   </div>
-                </div>
-                <div className="p-4 bg-destructive/5">
-                  <div className="flex items-center text-sm">
-                    <InfoIcon size={14} className="mr-2 text-destructive" />
-                    <span className="text-destructive">{log.message}</span>
+                  <div className="p-4 bg-destructive/5">
+                    <div className="flex items-center text-sm">
+                      <InfoIcon size={14} className="mr-2 text-destructive" />
+                      <span className="text-destructive">{log.message}</span>
+                    </div>
                   </div>
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
           
           <Pagination 

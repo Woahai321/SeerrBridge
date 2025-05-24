@@ -33,6 +33,13 @@ from seerr.config import (
 # Global driver variable to hold the Selenium WebDriver
 driver = None
 
+# Global library stats
+library_stats = {
+    "torrents_count": 0,
+    "total_size_tb": 0.0,
+    "last_updated": None
+}
+
 def get_latest_chrome_driver():
     """
     Fetch the latest stable Chrome driver from Google's Chrome for Testing.
@@ -266,6 +273,43 @@ async def initialize_browser():
                 logger.info("Waiting for 2 seconds on the library page.")
                 time.sleep(2)
                 logger.info("Completed waiting on the library page.")
+                
+                # Extract library stats from the page
+                try:
+                    logger.info("Extracting library statistics from the page.")
+                    library_stats_element = WebDriverWait(driver, 10).until(
+                        EC.presence_of_element_located((By.XPATH, "//h1[contains(@class, 'text-xl') and contains(@class, 'font-bold') and contains(@class, 'text-white') and contains(text(), 'Library')]"))
+                    )
+                    library_stats_text = library_stats_element.text.strip()
+                    logger.info(f"Found library stats text: {library_stats_text}")
+                    
+                    # Parse the text to extract torrent count and size
+                    # Example: "Library 📚 3132 torrents 🙂 76.5 TB"
+                    import re
+                    from datetime import datetime
+                    
+                    # Extract torrent count
+                    torrent_match = re.search(r'(\d+)\s+torrents', library_stats_text)
+                    torrents_count = int(torrent_match.group(1)) if torrent_match else 0
+                    
+                    # Extract TB size
+                    size_match = re.search(r'([\d.]+)\s*TB', library_stats_text)
+                    total_size_tb = float(size_match.group(1)) if size_match else 0.0
+                    
+                    # Update global library stats
+                    global library_stats
+                    library_stats = {
+                        "torrents_count": torrents_count,
+                        "total_size_tb": total_size_tb,
+                        "last_updated": datetime.now().isoformat()
+                    }
+                    
+                    logger.success(f"Successfully extracted library stats: {torrents_count} torrents, {total_size_tb} TB")
+                    
+                except TimeoutException:
+                    logger.warning("Could not find library stats element on the page within timeout.")
+                except Exception as e:
+                    logger.error(f"Error extracting library stats: {e}")
                 
                 logger.success("Browser initialization completed successfully.")
             except Exception as e:
@@ -525,3 +569,57 @@ def check_red_buttons(driver, movie_title, normalized_seasons, confirmed_seasons
         logger.info("No red buttons (100% RD) detected. Proceeding with optional fallback.")
 
     return confirmation_flag, confirmed_seasons 
+
+def refresh_library_stats():
+    """
+    Refresh library statistics from the current page
+    """
+    global driver, library_stats
+    
+    if driver is None:
+        logger.warning("Browser not initialized. Cannot refresh library stats.")
+        return False
+    
+    try:
+        # Navigate to library page if we're not already there
+        current_url = driver.current_url
+        if "library" not in current_url:
+            logger.info("Navigating to library page to refresh stats.")
+            driver.get("https://debridmediamanager.com/library")
+            time.sleep(2)  # Wait for page to load
+        
+        logger.info("Refreshing library statistics.")
+        library_stats_element = WebDriverWait(driver, 10).until(
+            EC.presence_of_element_located((By.XPATH, "//h1[contains(@class, 'text-xl') and contains(@class, 'font-bold') and contains(@class, 'text-white') and contains(text(), 'Library')]"))
+        )
+        library_stats_text = library_stats_element.text.strip()
+        logger.info(f"Found library stats text: {library_stats_text}")
+        
+        # Parse the text to extract torrent count and size
+        import re
+        from datetime import datetime
+        
+        # Extract torrent count
+        torrent_match = re.search(r'(\d+)\s+torrents', library_stats_text)
+        torrents_count = int(torrent_match.group(1)) if torrent_match else 0
+        
+        # Extract TB size
+        size_match = re.search(r'([\d.]+)\s*TB', library_stats_text)
+        total_size_tb = float(size_match.group(1)) if size_match else 0.0
+        
+        # Update global library stats
+        library_stats = {
+            "torrents_count": torrents_count,
+            "total_size_tb": total_size_tb,
+            "last_updated": datetime.now().isoformat()
+        }
+        
+        logger.success(f"Successfully refreshed library stats: {torrents_count} torrents, {total_size_tb} TB")
+        return True
+        
+    except TimeoutException:
+        logger.warning("Could not find library stats element on the page within timeout.")
+        return False
+    except Exception as e:
+        logger.error(f"Error refreshing library stats: {e}")
+        return False 
