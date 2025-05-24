@@ -4,7 +4,7 @@ import path from "path";
 import { parseLogLines } from "@/lib/utils";
 
 // Define the path to the actual log file in the root directory
-const ROOT_LOG_FILE_PATH = path.join(process.cwd(), "seerbridge.log");
+const ROOT_LOG_FILE_PATH = path.join(process.cwd(), "logs", "seerrbridge.log");
 
 // Define the path to the configuration file
 const CONFIG_FILE_PATH = path.join(process.cwd(), "logs", "log_config.json");

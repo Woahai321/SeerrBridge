@@ -3,16 +3,23 @@ import { NextResponse } from "next/server";
 // This is the URL where your SeerrBridge is running
 const SEERRBRIDGE_URL = process.env.SEERRBRIDGE_URL || "http://localhost:8777";
 
+export const dynamic = 'force-dynamic'; // Ensure this route is not cached
+
 export async function GET() {
   try {
-    const response = await fetch(`${SEERRBRIDGE_URL}/status`, {
+    // Add timestamp to prevent caching
+    const timestamp = Date.now();
+    const url = `${SEERRBRIDGE_URL}/status?_=${timestamp}`;
+    console.log("Fetching SeerrBridge status from", url);
+    
+    const response = await fetch(url, {
       method: "GET",
       headers: {
         "Cache-Control": "no-cache, no-store, must-revalidate",
         Pragma: "no-cache",
         Expires: "0",
       },
-      // This is important for production environments
+      cache: "no-store",
       next: { revalidate: 0 }
     });
 
@@ -21,13 +28,25 @@ export async function GET() {
     }
 
     const data = await response.json();
+    console.log("Received SeerrBridge status data:", JSON.stringify(data, null, 2));
     
-    return NextResponse.json(data);
+    return NextResponse.json(data, {
+      headers: {
+        'Cache-Control': 'no-store, max-age=0',
+        'Pragma': 'no-cache'
+      }
+    });
   } catch (error) {
     console.error("Error fetching SeerrBridge status:", error);
     return NextResponse.json(
       { error: "Failed to connect to SeerrBridge" },
-      { status: 500 }
+      { 
+        status: 500,
+        headers: {
+          'Cache-Control': 'no-store, max-age=0',
+          'Pragma': 'no-cache'
+        }
+      }
     );
   }
 } 

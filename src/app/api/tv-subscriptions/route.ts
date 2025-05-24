@@ -8,8 +8,9 @@ export async function GET(request: NextRequest) {
     // Define possible locations for the discrepancies file using platform-independent paths
     const APP_ROOT = process.cwd();
     const possiblePaths = [
-      path.join(APP_ROOT, "episode_discrepancies.json"), // Root directory
-      path.join(APP_ROOT, "data", "episode_discrepancies.json"), // Data directory
+      path.join(APP_ROOT, "logs", "episode_discrepancies.json"), // In logs directory
+      path.join(APP_ROOT, "episode_discrepancies.json"), // Root directory (fallback)
+      path.join(APP_ROOT, "data", "episode_discrepancies.json"), // Data directory (fallback)
     ];
     
     let discrepanciesFilePath = "";

@@ -63,7 +63,8 @@ async def lifespan(app: FastAPI):
     # Schedule automatic background tasks if enabled
     if ENABLE_AUTOMATIC_BACKGROUND_TASK:
         logger.info("Automatic background task enabled. Starting initial check.")
-        asyncio.create_task(process_movie_requests())
+        # Run initial check after a short delay to ensure browser is ready
+        asyncio.create_task(delayed_process_movie_requests())
         
         # Schedule recurring task
         scheduler.add_job(
@@ -78,7 +79,8 @@ async def lifespan(app: FastAPI):
     # Schedule show subscription check if enabled
     if ENABLE_SHOW_SUBSCRIPTION_TASK:
         logger.info("Show subscription task enabled. Starting initial check.")
-        asyncio.create_task(check_show_subscriptions())
+        # Delay the show subscription check to avoid concurrent browser access
+        asyncio.create_task(delayed_check_show_subscriptions())
         
         # Schedule recurring task
         scheduler.add_job(
@@ -108,6 +110,17 @@ async def lifespan(app: FastAPI):
     
     # Shutdown browser
     await shutdown_browser()
+
+# Add helper functions for delayed task execution
+async def delayed_process_movie_requests():
+    """Run process_movie_requests after a short delay"""
+    await asyncio.sleep(2)  # Wait 2 seconds before starting
+    await process_movie_requests()
+
+async def delayed_check_show_subscriptions():
+    """Run check_show_subscriptions after a longer delay to not conflict with movie requests"""
+    await asyncio.sleep(30)  # Wait 30 seconds before starting show subscriptions check
+    await check_show_subscriptions()
 
 app = FastAPI(lifespan=lifespan)
 

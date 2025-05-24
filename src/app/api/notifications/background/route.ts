@@ -230,12 +230,12 @@ function getLogFiles(): string[] {
     
     // Create sample .log file if none exist (for initialization)
     if (logFiles.length === 0) {
-      const seerBridgeLogInLogs = path.join(LOGS_DIR, 'seerbridge.log');
-      const seerBridgeLogInRoot = path.join(APP_ROOT, 'seerbridge.log');
+      const seerBridgeLogInLogs = path.join(LOGS_DIR, 'seerrbridge.log');
+      const seerBridgeLogInRoot = path.join(APP_ROOT, 'seerrbridge.log');
       
       // Check if the log file exists in logs directory
       if (fs.existsSync(seerBridgeLogInLogs)) {
-        console.log(`[DEBUG] Found seerbridge.log file in logs directory`);
+        console.log(`[DEBUG] Found seerrbridge.log file in logs directory`);
         logFiles.push(seerBridgeLogInLogs);
       } 
       // If not in logs directory, check app root

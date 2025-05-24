@@ -6,7 +6,7 @@ import os
 import json
 import asyncio
 import time
-from asyncio import Queue
+from asyncio import Queue, Semaphore
 from typing import Tuple, Dict, List, Any, Optional
 from datetime import datetime, timezone
 from loguru import logger
@@ -30,6 +30,9 @@ processing_task = None  # To track the current processing task
 
 # Scheduler for background tasks
 scheduler = AsyncIOScheduler()
+
+# Browser access semaphore to prevent concurrent browser access
+browser_semaphore = Semaphore(1)
 
 async def initialize_background_tasks():
     """Initialize background tasks and the queue processor."""
@@ -140,144 +143,148 @@ async def process_movie_requests():
             logger.error("Failed to initialize browser driver. Cannot process media requests.")
             return
 
-    # Load episode_discrepancies.json to check for existing discrepancies
-    discrepant_shows = set()  # Set to store (show_title, season_number) tuples
+    # Acquire the browser semaphore to ensure exclusive access
+    async with browser_semaphore:
+        logger.info("Acquired browser semaphore for movie requests processing")
+        
+        # Load episode_discrepancies.json to check for existing discrepancies
+        discrepant_shows = set()  # Set to store (show_title, season_number) tuples
 
-    if os.path.exists(DISCREPANCY_REPO_FILE):
-        try:
-            with open(DISCREPANCY_REPO_FILE, 'r', encoding='utf-8') as f:
-                repo_data = json.load(f)
-            discrepancies = repo_data.get("discrepancies", [])
-            for discrepancy in discrepancies:
-                show_title = discrepancy.get("show_title")
-                season_number = discrepancy.get("season_number")
-                if show_title and season_number is not None:
-                    discrepant_shows.add((show_title, season_number))
-            logger.info(f"Loaded {len(discrepant_shows)} shows with discrepancies from episode_discrepancies.json")
-        except Exception as e:
-            logger.error(f"Failed to read episode_discrepancies.json: {e}")
-            discrepant_shows = set()  # Proceed with an empty set if reading fails
-    else:
-        logger.info("No episode_discrepancies.json file found. Initializing it.")
-        # Initialize the file if it doesn't exist
-        with open(DISCREPANCY_REPO_FILE, 'w', encoding='utf-8') as f:
-            json.dump({"discrepancies": []}, f)
+        if os.path.exists(DISCREPANCY_REPO_FILE):
+            try:
+                with open(DISCREPANCY_REPO_FILE, 'r', encoding='utf-8') as f:
+                    repo_data = json.load(f)
+                discrepancies = repo_data.get("discrepancies", [])
+                for discrepancy in discrepancies:
+                    show_title = discrepancy.get("show_title")
+                    season_number = discrepancy.get("season_number")
+                    if show_title and season_number is not None:
+                        discrepant_shows.add((show_title, season_number))
+                logger.info(f"Loaded {len(discrepant_shows)} shows with discrepancies from episode_discrepancies.json")
+            except Exception as e:
+                logger.error(f"Failed to read episode_discrepancies.json: {e}")
+                discrepant_shows = set()  # Proceed with an empty set if reading fails
+        else:
+            logger.info("No episode_discrepancies.json file found. Initializing it.")
+            # Initialize the file if it doesn't exist
+            with open(DISCREPANCY_REPO_FILE, 'w', encoding='utf-8') as f:
+                json.dump({"discrepancies": []}, f)
 
-    requests = get_overseerr_media_requests()
-    if not requests:
-        logger.info("No requests to process")
-        return
-    
-    for request in requests:
-        tmdb_id = request['media']['tmdbId']
-        media_id = request['media']['id']
-        media_type = request['media']['mediaType']  # Extract media_type from the request
-        logger.info(f"Processing request with TMDB ID {tmdb_id} and media ID {media_id} (Media Type: {media_type})")
+        requests = get_overseerr_media_requests()
+        if not requests:
+            logger.info("No requests to process")
+            return
+        
+        for request in requests:
+            tmdb_id = request['media']['tmdbId']
+            media_id = request['media']['id']
+            media_type = request['media']['mediaType']  # Extract media_type from the request
+            logger.info(f"Processing request with TMDB ID {tmdb_id} and media ID {media_id} (Media Type: {media_type})")
 
-        # Extract requested seasons for TV shows
-        extra_data = []
-        requested_seasons = []
-        if media_type == 'tv' and 'seasons' in request:
-            requested_seasons = [f"Season {season['seasonNumber']}" for season in request['seasons']]
-            extra_data.append({"name": "Requested Seasons", "value": ", ".join(requested_seasons)})
-            logger.info(f"Requested seasons for TV show: {requested_seasons}")
+            # Extract requested seasons for TV shows
+            extra_data = []
+            requested_seasons = []
+            if media_type == 'tv' and 'seasons' in request:
+                requested_seasons = [f"Season {season['seasonNumber']}" for season in request['seasons']]
+                extra_data.append({"name": "Requested Seasons", "value": ", ".join(requested_seasons)})
+                logger.info(f"Requested seasons for TV show: {requested_seasons}")
 
-        # Fetch media details from Trakt
-        movie_details = get_media_details_from_trakt(tmdb_id, media_type)
-        if not movie_details:
-            logger.error(f"Failed to get media details for TMDB ID {tmdb_id}")
-            continue
+            # Fetch media details from Trakt
+            movie_details = get_media_details_from_trakt(tmdb_id, media_type)
+            if not movie_details:
+                logger.error(f"Failed to get media details for TMDB ID {tmdb_id}")
+                continue
             
-        imdb_id = movie_details['imdb_id']
-        media_title = f"{movie_details['title']} ({movie_details['year']})"
-        logger.info(f"Processing {media_type} request: {media_title}")
+            imdb_id = movie_details['imdb_id']
+            media_title = f"{movie_details['title']} ({movie_details['year']})"
+            logger.info(f"Processing {media_type} request: {media_title}")
 
-        # For TV shows, fetch season details and check for discrepancies
-        has_discrepancy = False
-        if media_type == 'tv' and requested_seasons:
-            trakt_show_id = movie_details['trakt_id']
-            for season in requested_seasons:
-                season_number = int(season.split()[-1])  # Extract number from "Season X"
-                
-                # Check if this season is already in discrepancies
-                if (media_title, season_number) in discrepant_shows:
-                    logger.info(f"Season {season_number} of {media_title} already in discrepancies. Will be handled by check_show_subscriptions.")
-                    has_discrepancy = True
-                    continue
-                
-                # Fetch season details
-                season_details = get_season_details_from_trakt(str(trakt_show_id), season_number)
-                
-                if season_details:
-                    episode_count = season_details.get('episode_count', 0)
-                    aired_episodes = season_details.get('aired_episodes', 0)
-                    logger.info(f"Season {season_number} details: episode_count={episode_count}, aired_episodes={aired_episodes}")
+            # For TV shows, fetch season details and check for discrepancies
+            has_discrepancy = False
+            if media_type == 'tv' and requested_seasons:
+                trakt_show_id = movie_details['trakt_id']
+                for season in requested_seasons:
+                    season_number = int(season.split()[-1])  # Extract number from "Season X"
                     
-                    # Check for discrepancy between episode_count and aired_episodes
-                    if episode_count != aired_episodes:
-                        # Only check for the next episode if there's a discrepancy
-                        has_aired, next_episode_details = check_next_episode_aired(
-                            str(trakt_show_id), season_number, aired_episodes
-                        )
-                        if has_aired:
-                            logger.info(f"Next episode (E{aired_episodes + 1:02d}) has aired for {media_title} Season {season_number}. Updating aired_episodes.")
-                            season_details['aired_episodes'] = aired_episodes + 1
-                        else:
-                            logger.info(f"Next episode (E{aired_episodes + 1:02d}) has not aired for {media_title} Season {season_number}.")
-                        
-                        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-                        # Create list of aired episodes marked as failed with "E01", "E02", etc.
-                        # Only include episodes that have actually aired
-                        failed_episodes = [
-                            f"E{str(i).zfill(2)}"  # Format as E01, E02, etc.
-                            for i in range(1, aired_episodes + 1)
-                        ]
-                        discrepancy_entry = {
-                            "show_title": media_title,
-                            "trakt_show_id": trakt_show_id,
-                            "imdb_id": imdb_id,
-                            "season_number": season_number,
-                            "season_details": season_details,
-                            "timestamp": timestamp,
-                            "failed_episodes": failed_episodes  # Add all episodes as a list of E01, E02, etc.
-                        }
-                        
-                        # Load current discrepancies
-                        with open(DISCREPANCY_REPO_FILE, 'r', encoding='utf-8') as f:
-                            repo_data = json.load(f)
-                        
-                        # Add the new discrepancy
-                        repo_data["discrepancies"].append(discrepancy_entry)
-                        with open(DISCREPANCY_REPO_FILE, 'w', encoding='utf-8') as f:
-                            json.dump(repo_data, f, indent=2)
-                        logger.info(f"Found episode count discrepancy for {media_title} Season {season_number}. Added to {DISCREPANCY_REPO_FILE} with all episodes marked as failed")
-                        discrepant_shows.add((media_title, season_number))
+                    # Check if this season is already in discrepancies
+                    if (media_title, season_number) in discrepant_shows:
+                        logger.info(f"Season {season_number} of {media_title} already in discrepancies. Will be handled by check_show_subscriptions.")
                         has_discrepancy = True
+                        continue
+                    
+                    # Fetch season details
+                    season_details = get_season_details_from_trakt(str(trakt_show_id), season_number)
+                    
+                    if season_details:
+                        episode_count = season_details.get('episode_count', 0)
+                        aired_episodes = season_details.get('aired_episodes', 0)
+                        logger.info(f"Season {season_number} details: episode_count={episode_count}, aired_episodes={aired_episodes}")
+                        
+                        # Check for discrepancy between episode_count and aired_episodes
+                        if episode_count != aired_episodes:
+                            # Only check for the next episode if there's a discrepancy
+                            has_aired, next_episode_details = check_next_episode_aired(
+                                str(trakt_show_id), season_number, aired_episodes
+                            )
+                            if has_aired:
+                                logger.info(f"Next episode (E{aired_episodes + 1:02d}) has aired for {media_title} Season {season_number}. Updating aired_episodes.")
+                                season_details['aired_episodes'] = aired_episodes + 1
+                            else:
+                                logger.info(f"Next episode (E{aired_episodes + 1:02d}) has not aired for {media_title} Season {season_number}.")
+                            
+                            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+                            # Create list of aired episodes marked as failed with "E01", "E02", etc.
+                            # Only include episodes that have actually aired
+                            failed_episodes = [
+                                f"E{str(i).zfill(2)}"  # Format as E01, E02, etc.
+                                for i in range(1, aired_episodes + 1)
+                            ]
+                            discrepancy_entry = {
+                                "show_title": media_title,
+                                "trakt_show_id": trakt_show_id,
+                                "imdb_id": imdb_id,
+                                "season_number": season_number,
+                                "season_details": season_details,
+                                "timestamp": timestamp,
+                                "failed_episodes": failed_episodes  # Add all episodes as a list of E01, E02, etc.
+                            }
+                            
+                            # Load current discrepancies
+                            with open(DISCREPANCY_REPO_FILE, 'r', encoding='utf-8') as f:
+                                repo_data = json.load(f)
+                            
+                            # Add the new discrepancy
+                            repo_data["discrepancies"].append(discrepancy_entry)
+                            with open(DISCREPANCY_REPO_FILE, 'w', encoding='utf-8') as f:
+                                json.dump(repo_data, f, indent=2)
+                            logger.info(f"Found episode count discrepancy for {media_title} Season {season_number}. Added to {DISCREPANCY_REPO_FILE} with all episodes marked as failed")
+                            discrepant_shows.add((media_title, season_number))
+                            has_discrepancy = True
+                        else:
+                            logger.info(f"No episode count discrepancy for {media_title} Season {season_number}. Skipping next episode check.")
+
+            # If it's a TV show with any discrepancies (new or existing), skip full processing
+            if media_type == 'tv' and has_discrepancy:
+                logger.info(f"Skipping full processing for {media_title} due to discrepancies. Will be handled by the next check_show_subscriptions task.")
+                continue
+
+            # Process movies or TV shows without discrepancies normally
+            try:
+                from seerr.search import search_on_debrid
+                from seerr.browser import driver as browser_driver
+                confirmation_flag = await asyncio.to_thread(search_on_debrid, imdb_id, media_title, media_type, browser_driver, extra_data)
+                if confirmation_flag:
+                    if mark_completed(media_id, tmdb_id):
+                        logger.info(f"Marked media {media_id} as completed in Overseerr")
                     else:
-                        logger.info(f"No episode count discrepancy for {media_title} Season {season_number}. Skipping next episode check.")
-
-        # If it's a TV show with any discrepancies (new or existing), skip full processing
-        if media_type == 'tv' and has_discrepancy:
-            logger.info(f"Skipping full processing for {media_title} due to discrepancies. Will be handled by the next check_show_subscriptions task.")
-            continue
-
-        # Process movies or TV shows without discrepancies normally
-        try:
-            from seerr.search import search_on_debrid
-            from seerr.browser import driver as browser_driver
-            confirmation_flag = await asyncio.to_thread(search_on_debrid, imdb_id, media_title, media_type, browser_driver, extra_data)
-            if confirmation_flag:
-                if mark_completed(media_id, tmdb_id):
-                    logger.info(f"Marked media {media_id} as completed in Overseerr")
+                        logger.error(f"Failed to mark media {media_id} as completed in Overseerr")
                 else:
-                    logger.error(f"Failed to mark media {media_id} as completed in Overseerr")
-            else:
-                logger.info(f"Media {media_id} was not properly confirmed. Skipping marking as completed.")
-        except Exception as ex:
-            logger.critical(f"Error processing {media_type} request {media_title}: {ex}")
+                    logger.info(f"Media {media_id} was not properly confirmed. Skipping marking as completed.")
+            except Exception as ex:
+                logger.critical(f"Error processing {media_type} request {media_title}: {ex}")
 
-    logger.info("Finished processing all current requests. Waiting for new requests.")
-    schedule_recheck_movie_requests()
+        logger.info("Finished processing all current requests. Waiting for new requests.")
+        schedule_recheck_movie_requests()
 
 async def check_show_subscriptions():
     """
@@ -303,239 +310,243 @@ async def check_show_subscriptions():
         logger.info("No episode discrepancies file found. Skipping show subscription check.")
         return
 
-    # Read the discrepancies file
-    try:
-        with open(DISCREPANCY_REPO_FILE, 'r', encoding='utf-8') as f:
-            repo_data = json.load(f)
-    except Exception as e:
-        logger.error(f"Failed to read episode_discrepancies.json: {e}")
-        return
-
-    discrepancies = repo_data.get("discrepancies", [])
-    if not discrepancies:
-        logger.info("No discrepancies found in episode_discrepancies.json. Skipping show subscription check.")
-        return
-
-    # Process each show in the discrepancies
-    for discrepancy in discrepancies:
-        show_title = discrepancy.get("show_title")
-        trakt_show_id = discrepancy.get("trakt_show_id")
-        imdb_id = discrepancy.get("imdb_id")
-        season_number = discrepancy.get("season_number")
-        season_details = discrepancy.get("season_details", {})
-        previous_aired_episodes = season_details.get("aired_episodes", 0)
-        failed_episodes = discrepancy.get("failed_episodes", [])  # Get previously failed episodes
-
-        if not trakt_show_id or not season_number or not imdb_id:
-            logger.warning(f"Missing trakt_show_id, season_number, or imdb_id for {show_title}. Skipping.")
-            continue
-
-        logger.info(f"Checking for new episodes for {show_title} Season {season_number}...")
-
-        # Fetch the latest season details from Trakt
-        latest_season_details = get_season_details_from_trakt(str(trakt_show_id), season_number)
-        if not latest_season_details:
-            logger.error(f"Failed to fetch latest season details for {show_title} Season {season_number}. Skipping.")
-            continue
-
-        current_aired_episodes = latest_season_details.get("aired_episodes", 0)
-        episode_count = latest_season_details.get("episode_count", 0)
-        logger.info(f"Previous aired episodes: {previous_aired_episodes}, Current aired episodes: {current_aired_episodes}, Episode count: {episode_count}")
-
-        # Only check for the next episode if there's a discrepancy
-        if episode_count != current_aired_episodes:
-            has_aired, next_episode_details = check_next_episode_aired(
-                str(trakt_show_id), season_number, current_aired_episodes
-            )
-            if has_aired:
-                logger.info(f"Next episode (E{current_aired_episodes + 1:02d}) has aired for {show_title} Season {season_number}. Updating aired_episodes.")
-                latest_season_details['aired_episodes'] = current_aired_episodes + 1
-                current_aired_episodes += 1
-            else:
-                logger.info(f"Next episode (E{current_aired_episodes + 1:02d}) has not aired for {show_title} Season {season_number}.")
-        else:
-            logger.info(f"No episode count discrepancy for {show_title} Season {season_number}. Skipping next episode check.")
-
-        # Update the season details in the discrepancy entry
-        discrepancy["season_details"] = latest_season_details
-        discrepancy["timestamp"] = datetime.now().strftime("%Y%m%d_%H%M%S")
-
-        # Initialize a list to track episodes to process (new episodes + failed episodes)
-        episodes_to_process = []
-
-        # Add previously failed episodes to the list
-        for episode_id in failed_episodes:
-            episode_num = int(episode_id.replace("E", ""))
-            if episode_num <= current_aired_episodes:  # Only reprocess if the episode is still aired
-                episodes_to_process.append((episode_num, episode_id, "failed"))
-                logger.info(f"Reattempting previously failed episode for {show_title} Season {season_number} {episode_id}")
-
-        # Check for new episodes
-        if current_aired_episodes > previous_aired_episodes:
-            logger.info(f"New episodes found for {show_title} Season {season_number}: {current_aired_episodes - previous_aired_episodes} new episodes.")
-            new_episodes_start = previous_aired_episodes + 1
-            new_episodes_end = current_aired_episodes
-            for episode_num in range(new_episodes_start, new_episodes_end + 1):
-                episode_id = f"E{episode_num:02d}"
-                episodes_to_process.append((episode_num, episode_id, "new"))
-                logger.info(f"Found new episode for {show_title} Season {season_number} {episode_id}")
-
-        # If there are no episodes to process (neither new nor failed), skip
-        if not episodes_to_process:
-            logger.info(f"No new or failed episodes to process for {show_title} Season {season_number}.")
-            continue
-
-        # Navigate to the show page
-        url = f"https://debridmediamanager.com/show/{imdb_id}/{season_number}"
-        from seerr.browser import driver as browser_driver
-        browser_driver.get(url)
-        logger.info(f"Navigated to show page for Season {season_number}: {url}")
+    # Acquire the browser semaphore to ensure exclusive access
+    async with browser_semaphore:
+        logger.info("Acquired browser semaphore for show subscription check")
         
-        # Wait for the page to load (ensure the status element is present)
+        # Read the discrepancies file
         try:
-            from selenium.webdriver.support.ui import WebDriverWait
-            from selenium.webdriver.support import expected_conditions as EC
-            from selenium.webdriver.common.by import By
-            from selenium.common.exceptions import TimeoutException
+            with open(DISCREPANCY_REPO_FILE, 'r', encoding='utf-8') as f:
+                repo_data = json.load(f)
+        except Exception as e:
+            logger.error(f"Failed to read episode_discrepancies.json: {e}")
+            return
+
+        discrepancies = repo_data.get("discrepancies", [])
+        if not discrepancies:
+            logger.info("No discrepancies found in episode_discrepancies.json. Skipping show subscription check.")
+            return
+
+        # Process each show in the discrepancies
+        for discrepancy in discrepancies:
+            show_title = discrepancy.get("show_title")
+            trakt_show_id = discrepancy.get("trakt_show_id")
+            imdb_id = discrepancy.get("imdb_id")
+            season_number = discrepancy.get("season_number")
+            season_details = discrepancy.get("season_details", {})
+            previous_aired_episodes = season_details.get("aired_episodes", 0)
+            failed_episodes = discrepancy.get("failed_episodes", [])  # Get previously failed episodes
+
+            if not trakt_show_id or not season_number or not imdb_id:
+                logger.warning(f"Missing trakt_show_id, season_number, or imdb_id for {show_title}. Skipping.")
+                continue
+
+            logger.info(f"Checking for new episodes for {show_title} Season {season_number}...")
+
+            # Fetch the latest season details from Trakt
+            latest_season_details = get_season_details_from_trakt(str(trakt_show_id), season_number)
+            if not latest_season_details:
+                logger.error(f"Failed to fetch latest season details for {show_title} Season {season_number}. Skipping.")
+                continue
+
+            current_aired_episodes = latest_season_details.get("aired_episodes", 0)
+            episode_count = latest_season_details.get("episode_count", 0)
+            logger.info(f"Previous aired episodes: {previous_aired_episodes}, Current aired episodes: {current_aired_episodes}, Episode count: {episode_count}")
+
+            # Only check for the next episode if there's a discrepancy
+            if episode_count != current_aired_episodes:
+                has_aired, next_episode_details = check_next_episode_aired(
+                    str(trakt_show_id), season_number, current_aired_episodes
+                )
+                if has_aired:
+                    logger.info(f"Next episode (E{current_aired_episodes + 1:02d}) has aired for {show_title} Season {season_number}. Updating aired_episodes.")
+                    latest_season_details['aired_episodes'] = current_aired_episodes + 1
+                    current_aired_episodes += 1
+                else:
+                    logger.info(f"Next episode (E{current_aired_episodes + 1:02d}) has not aired for {show_title} Season {season_number}.")
+            else:
+                logger.info(f"No episode count discrepancy for {show_title} Season {season_number}. Skipping next episode check.")
+
+            # Update the season details in the discrepancy entry
+            discrepancy["season_details"] = latest_season_details
+            discrepancy["timestamp"] = datetime.now().strftime("%Y%m%d_%H%M%S")
+
+            # Initialize a list to track episodes to process (new episodes + failed episodes)
+            episodes_to_process = []
+
+            # Add previously failed episodes to the list
+            for episode_id in failed_episodes:
+                episode_num = int(episode_id.replace("E", ""))
+                if episode_num <= current_aired_episodes:  # Only reprocess if the episode is still aired
+                    episodes_to_process.append((episode_num, episode_id, "failed"))
+                    logger.info(f"Reattempting previously failed episode for {show_title} Season {season_number} {episode_id}")
+
+            # Check for new episodes
+            if current_aired_episodes > previous_aired_episodes:
+                logger.info(f"New episodes found for {show_title} Season {season_number}: {current_aired_episodes - previous_aired_episodes} new episodes.")
+                new_episodes_start = previous_aired_episodes + 1
+                new_episodes_end = current_aired_episodes
+                for episode_num in range(new_episodes_start, new_episodes_end + 1):
+                    episode_id = f"E{episode_num:02d}"
+                    episodes_to_process.append((episode_num, episode_id, "new"))
+                    logger.info(f"Found new episode for {show_title} Season {season_number} {episode_id}")
+
+            # If there are no episodes to process (neither new nor failed), skip
+            if not episodes_to_process:
+                logger.info(f"No new or failed episodes to process for {show_title} Season {season_number}.")
+                continue
+
+            # Navigate to the show page
+            url = f"https://debridmediamanager.com/show/{imdb_id}/{season_number}"
+            from seerr.browser import driver as browser_driver
+            browser_driver.get(url)
+            logger.info(f"Navigated to show page for Season {season_number}: {url}")
             
-            WebDriverWait(browser_driver, 5).until(
-                EC.presence_of_element_located((By.XPATH, "//div[@role='status' and contains(@aria-live, 'polite')]"))
-            )
-            logger.info("Page load confirmed via status element.")
-        except TimeoutException:
-            logger.warning("Timeout waiting for page load status. Proceeding anyway.")
-
-        # Process all episodes (new and failed)
-        normalized_seasons = [f"Season {season_number}"]
-        confirmed_seasons = set()
-        is_tv_show = True
-        all_episodes_confirmed = True
-        new_failed_episodes = []  # Track episodes that fail in this run
-
-        for episode_num, episode_id, episode_type in episodes_to_process:
-            logger.info(f"Processing {episode_type} episode for {show_title} Season {season_number} {episode_id}")
-
-            # Clear and update the filter box with episode-specific filter
+            # Wait for the page to load (ensure the status element is present)
             try:
-                filter_input = WebDriverWait(browser_driver, 10).until(
-                    EC.presence_of_element_located((By.ID, "query"))
+                from selenium.webdriver.support.ui import WebDriverWait
+                from selenium.webdriver.support import expected_conditions as EC
+                from selenium.webdriver.common.by import By
+                from selenium.common.exceptions import TimeoutException
+                
+                WebDriverWait(browser_driver, 5).until(
+                    EC.presence_of_element_located((By.XPATH, "//div[@role='status' and contains(@aria-live, 'polite')]"))
                 )
-                filter_input.clear()
-                episode_filter = f"S{season_number:02d}{episode_id}"
-                full_filter = f"{TORRENT_FILTER_REGEX} {episode_filter}"
-                filter_input.send_keys(full_filter)
-                logger.info(f"Applied filter: {full_filter}")
+                logger.info("Page load confirmed via status element.")
+            except TimeoutException:
+                logger.warning("Timeout waiting for page load status. Proceeding anyway.")
 
+            # Process all episodes (new and failed)
+            normalized_seasons = [f"Season {season_number}"]
+            confirmed_seasons = set()
+            is_tv_show = True
+            all_episodes_confirmed = True
+            new_failed_episodes = []  # Track episodes that fail in this run
+
+            for episode_num, episode_id, episode_type in episodes_to_process:
+                logger.info(f"Processing {episode_type} episode for {show_title} Season {season_number} {episode_id}")
+
+                # Clear and update the filter box with episode-specific filter
                 try:
-                    click_show_more_results(browser_driver, logger)
-                except TimeoutException:
-                    logger.warning("Timed out while trying to click 'Show More Results'")
-                except Exception as e:
-                    logger.error(f"Unexpected error in click_show_more_results: {e}")
-
-                # Wait for results to update
-                time.sleep(2)
-
-                # Check for existing RD (100%) using check_red_buttons
-                confirmation_flag, confirmed_seasons = check_red_buttons(
-                    browser_driver, show_title, normalized_seasons, confirmed_seasons, is_tv_show, episode_id=episode_id
-                )
-
-                if confirmation_flag:
-                    logger.success(f"{episode_id} already cached at RD (100%). Skipping further processing.")
-                    continue
-
-                # Process uncached episode
-                try:
-                    result_boxes = WebDriverWait(browser_driver, 10).until(
-                        EC.presence_of_all_elements_located((By.XPATH, "//div[contains(@class, 'border-black')]"))
+                    filter_input = WebDriverWait(browser_driver, 10).until(
+                        EC.presence_of_element_located((By.ID, "query"))
                     )
-                    episode_confirmed = False
+                    filter_input.clear()
+                    episode_filter = f"S{season_number:02d}{episode_id}"
+                    full_filter = f"{TORRENT_FILTER_REGEX} {episode_filter}"
+                    filter_input.send_keys(full_filter)
+                    logger.info(f"Applied filter: {full_filter}")
 
-                    for i, result_box in enumerate(result_boxes, start=1):
-                        try:
-                            title_element = result_box.find_element(By.XPATH, ".//h2")
-                            title_text = title_element.text.strip()
-                            logger.info(f"Box {i} title: {title_text}")
+                    try:
+                        click_show_more_results(browser_driver, logger)
+                    except TimeoutException:
+                        logger.warning("Timed out while trying to click 'Show More Results'")
+                    except Exception as e:
+                        logger.error(f"Unexpected error in click_show_more_results: {e}")
 
-                            title_clean = clean_title(title_text, 'en')
-                            show_clean = clean_title(show_title, 'en')
-                            from fuzzywuzzy import fuzz
-                            match_ratio = fuzz.partial_ratio(title_clean, show_clean)
-                            logger.info(f"Match ratio: {match_ratio} for '{title_clean}' vs '{show_clean}'")
-                            
-                            if episode_id.lower() in title_text.lower() and match_ratio >= 50:
-                                logger.info(f"Found match for {episode_id} in box {i}: {title_text}")
+                    # Wait for results to update
+                    time.sleep(2)
 
-                                if prioritize_buttons_in_box(result_box):
-                                    logger.info(f"Successfully handled {episode_id} in box {i}")
-                                    episode_confirmed = True
+                    # Check for existing RD (100%) using check_red_buttons
+                    confirmation_flag, confirmed_seasons = check_red_buttons(
+                        browser_driver, show_title, normalized_seasons, confirmed_seasons, is_tv_show, episode_id=episode_id
+                    )
 
-                                    # Verify RD status
-                                    try:
-                                        rd_button = WebDriverWait(browser_driver, 10).until(
-                                            EC.presence_of_element_located((By.XPATH, ".//button[contains(text(), 'RD (')]"))
-                                        )
-                                        rd_button_text = rd_button.text
-                                        if "RD (100%)" in rd_button_text:
-                                            logger.success(f"RD (100%) confirmed for {episode_id}. Episode fully processed.")
-                                            episode_confirmed = True
-                                            break
-                                        elif "RD (0%)" in rd_button_text:
-                                            logger.warning(f"RD (0%) detected for {episode_id}. Undoing and skipping.")
-                                            rd_button.click()
-                                            episode_confirmed = False
+                    if confirmation_flag:
+                        logger.success(f"{episode_id} already cached at RD (100%). Skipping further processing.")
+                        continue
+
+                    # Process uncached episode
+                    try:
+                        result_boxes = WebDriverWait(browser_driver, 10).until(
+                            EC.presence_of_all_elements_located((By.XPATH, "//div[contains(@class, 'border-black')]"))
+                        )
+                        episode_confirmed = False
+
+                        for i, result_box in enumerate(result_boxes, start=1):
+                            try:
+                                title_element = result_box.find_element(By.XPATH, ".//h2")
+                                title_text = title_element.text.strip()
+                                logger.info(f"Box {i} title: {title_text}")
+
+                                title_clean = clean_title(title_text, 'en')
+                                show_clean = clean_title(show_title, 'en')
+                                from fuzzywuzzy import fuzz
+                                match_ratio = fuzz.partial_ratio(title_clean, show_clean)
+                                logger.info(f"Match ratio: {match_ratio} for '{title_clean}' vs '{show_clean}'")
+                                
+                                if episode_id.lower() in title_text.lower() and match_ratio >= 50:
+                                    logger.info(f"Found match for {episode_id} in box {i}: {title_text}")
+
+                                    if prioritize_buttons_in_box(result_box):
+                                        logger.info(f"Successfully handled {episode_id} in box {i}")
+                                        episode_confirmed = True
+
+                                        # Verify RD status
+                                        try:
+                                            rd_button = WebDriverWait(browser_driver, 10).until(
+                                                EC.presence_of_element_located((By.XPATH, ".//button[contains(text(), 'RD (')]"))
+                                            )
+                                            rd_button_text = rd_button.text
+                                            if "RD (100%)" in rd_button_text:
+                                                logger.success(f"RD (100%) confirmed for {episode_id}. Episode fully processed.")
+                                                episode_confirmed = True
+                                                break
+                                            elif "RD (0%)" in rd_button_text:
+                                                logger.warning(f"RD (0%) detected for {episode_id}. Undoing and skipping.")
+                                                rd_button.click()
+                                                episode_confirmed = False
+                                                continue
+                                        except TimeoutException:
+                                            logger.warning(f"Timeout waiting for RD status for {episode_id}")
                                             continue
-                                    except TimeoutException:
-                                        logger.warning(f"Timeout waiting for RD status for {episode_id}")
-                                        continue
-                                else:
-                                    logger.warning(f"Failed to handle buttons for {episode_id} in box {i}")
+                                    else:
+                                        logger.warning(f"Failed to handle buttons for {episode_id} in box {i}")
 
-                        except Exception as e:
-                            logger.warning(f"Error processing box {i} for {episode_id}: {e}")
+                            except Exception as e:
+                                logger.warning(f"Error processing box {i} for {episode_id}: {e}")
 
-                    if not episode_confirmed:
-                        logger.error(f"Failed to confirm {episode_id} for {show_title} Season {season_number}")
+                        if not episode_confirmed:
+                            logger.error(f"Failed to confirm {episode_id} for {show_title} Season {season_number}")
+                            new_failed_episodes.append(episode_id)
+                            all_episodes_confirmed = False
+
+                    except TimeoutException:
+                        logger.warning(f"No result boxes found for {episode_id}")
                         new_failed_episodes.append(episode_id)
                         all_episodes_confirmed = False
 
                 except TimeoutException:
-                    logger.warning(f"No result boxes found for {episode_id}")
+                    logger.error(f"Filter input with ID 'query' not found for {episode_id}")
                     new_failed_episodes.append(episode_id)
                     all_episodes_confirmed = False
 
-            except TimeoutException:
-                logger.error(f"Filter input with ID 'query' not found for {episode_id}")
-                new_failed_episodes.append(episode_id)
-                all_episodes_confirmed = False
+            # Reset the filter
+            try:
+                filter_input = browser_driver.find_element(By.ID, "query")
+                filter_input.clear()
+                filter_input.send_keys(TORRENT_FILTER_REGEX)
+                logger.info(f"Reset filter to default: {TORRENT_FILTER_REGEX}")
+            except NoSuchElementException:
+                logger.warning("Could not reset filter to default using ID 'query'")
 
-        # Reset the filter
+            # Update the failed_episodes list in the discrepancy entry
+            discrepancy["failed_episodes"] = new_failed_episodes
+
+            if all_episodes_confirmed:
+                logger.info(f"Successfully processed all episodes for {show_title} Season {season_number}")
+            else:
+                logger.warning(f"Failed to process some episodes for {show_title} Season {season_number}. Failed episodes: {new_failed_episodes}")
+
+        # Write the updated discrepancies back to the file
         try:
-            filter_input = browser_driver.find_element(By.ID, "query")
-            filter_input.clear()
-            filter_input.send_keys(TORRENT_FILTER_REGEX)
-            logger.info(f"Reset filter to default: {TORRENT_FILTER_REGEX}")
-        except NoSuchElementException:
-            logger.warning("Could not reset filter to default using ID 'query'")
+            with open(DISCREPANCY_REPO_FILE, 'w', encoding='utf-8') as f:
+                json.dump(repo_data, f, indent=2)
+            logger.info("Updated episode_discrepancies.json with latest aired episode counts and failed episodes.")
+        except Exception as e:
+            logger.error(f"Failed to write updated episode_discrepancies.json: {e}")
 
-        # Update the failed_episodes list in the discrepancy entry
-        discrepancy["failed_episodes"] = new_failed_episodes
-
-        if all_episodes_confirmed:
-            logger.info(f"Successfully processed all episodes for {show_title} Season {season_number}")
-        else:
-            logger.warning(f"Failed to process some episodes for {show_title} Season {season_number}. Failed episodes: {new_failed_episodes}")
-
-    # Write the updated discrepancies back to the file
-    try:
-        with open(DISCREPANCY_REPO_FILE, 'w', encoding='utf-8') as f:
-            json.dump(repo_data, f, indent=2)
-        logger.info("Updated episode_discrepancies.json with latest aired episode counts and failed episodes.")
-    except Exception as e:
-        logger.error(f"Failed to write updated episode_discrepancies.json: {e}")
-
-    logger.info("Completed show subscription check.")
+        logger.info("Completed show subscription check.")
 
 async def search_individual_episodes(imdb_id, movie_title, season_number, season_details, driver):
     """

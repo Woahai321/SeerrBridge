@@ -266,7 +266,18 @@ def search_on_debrid(imdb_id, movie_title, media_type, driver, extra_data=None):
                                 )
                             except TimeoutException:
                                 logger.warning(f"No result boxes found for season {season}. Skipping.")
-                                continue
+                                # Initialize result_boxes to an empty list to avoid reference errors
+                                result_boxes = []
+                                # Make one more attempt to find result boxes with a longer timeout
+                                try:
+                                    logger.info(f"Making one more attempt to find result boxes for season {season}...")
+                                    result_boxes = WebDriverWait(driver, 3).until(
+                                        EC.presence_of_all_elements_located((By.XPATH, "//div[contains(@class, 'border-black')]"))
+                                    )
+                                    logger.info(f"Found {len(result_boxes)} result boxes for season {season} on second attempt")
+                                except TimeoutException:
+                                    logger.warning(f"Still no result boxes found for season {season} after second attempt")
+                                    continue
                                 
                             # Now process the result boxes for the current season
                             for i, result_box in enumerate(result_boxes, start=1):
@@ -444,6 +455,18 @@ def search_on_debrid(imdb_id, movie_title, media_type, driver, extra_data=None):
                         )
                     except TimeoutException:
                         logger.warning(f"No result boxes found. Skipping.")
+                        # Initialize result_boxes to an empty list to avoid reference errors
+                        result_boxes = []
+                        # Make one more attempt to find result boxes with a longer timeout
+                        try:
+                            logger.info("Making one more attempt to find result boxes.")
+                            result_boxes = WebDriverWait(driver, 3).until(
+                                EC.presence_of_all_elements_located((By.XPATH, "//div[contains(@class, 'border-black')]"))
+                            )
+                            logger.info(f"Found {len(result_boxes)} result boxes on second attempt")
+                        except TimeoutException:
+                            logger.warning("Still no result boxes found after second attempt")
+                            # result_boxes remains an empty list
 
                     for i, result_box in enumerate(result_boxes, start=1):
                         try:

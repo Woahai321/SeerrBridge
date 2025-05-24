@@ -37,7 +37,7 @@ interface LogConfiguration {
 }
 
 // Define the path to the log file in the root directory
-const ROOT_LOG_FILE_PATH = path.join(process.cwd(), "seerbridge.log");
+const ROOT_LOG_FILE_PATH = path.join(process.cwd(), "logs", "seerrbridge.log");
 
 // Define the path to the configuration file
 const CONFIG_FILE_PATH = path.join(process.cwd(), "logs", "log_config.json");
@@ -144,7 +144,7 @@ export async function GET(request: NextRequest) {
     }
     
     // Set the log file path relative to the application root
-    const logFilePath = path.join(process.cwd(), "seerbridge.log");
+    const logFilePath = path.join(process.cwd(), "logs", "seerrbridge.log");
     
     // Check if the file exists
     if (!fs.existsSync(logFilePath)) {

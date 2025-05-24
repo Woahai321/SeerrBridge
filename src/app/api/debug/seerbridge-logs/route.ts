@@ -35,7 +35,7 @@ export async function GET(request: NextRequest) {
   try {
     const appRoot = process.cwd();
     const logsDir = path.join(appRoot, 'logs');
-    const logFilePath = path.join(logsDir, 'seerbridge.log');
+    const logFilePath = path.join(logsDir, 'seerrbridge.log');
     
     // Check if directory and file exist
     const results = {

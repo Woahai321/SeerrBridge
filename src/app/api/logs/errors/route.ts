@@ -30,7 +30,7 @@ interface LogConfiguration {
 }
 
 // Define the path to the log file in the root directory
-const ROOT_LOG_FILE_PATH = path.join(process.cwd(), "seerbridge.log");
+const ROOT_LOG_FILE_PATH = path.join(process.cwd(), "logs", "seerrbridge.log");
 
 // Define the path to the configuration file
 const CONFIG_FILE_PATH = path.join(process.cwd(), "logs", "log_config.json");

@@ -5,12 +5,15 @@ Handles Selenium browser initialization and interactions with Debrid Media Manag
 import platform
 import time
 import os
+import requests
+import zipfile
+import io
 from loguru import logger
 from selenium import webdriver
 from selenium.webdriver.common.by import By
 from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.chrome.service import Service
-from webdriver_manager.chrome import ChromeDriverManager
+from webdriver_manager.chrome import ChromeDriverManager, ChromeType
 from selenium.webdriver.support.ui import WebDriverWait, Select
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.common.exceptions import StaleElementReferenceException, NoSuchElementException, TimeoutException
@@ -29,6 +32,75 @@ from seerr.config import (
 
 # Global driver variable to hold the Selenium WebDriver
 driver = None
+
+def get_latest_chrome_driver():
+    """
+    Fetch the latest stable Chrome driver from Google's Chrome for Testing.
+    Returns the path to the downloaded chromedriver executable.
+    """
+    try:
+        # Get the current operating system
+        current_os = platform.system().lower()
+        
+        # Map OS to platform identifier used by Chrome for Testing
+        platform_map = {
+            'windows': 'win32' if platform.architecture()[0] == '32bit' else 'win64',
+            'linux': 'linux64',
+            'darwin': 'mac-arm64' if platform.processor() == 'arm' else 'mac-x64'
+        }
+        
+        os_platform = platform_map.get(current_os)
+        if not os_platform:
+            logger.error(f"Unsupported operating system: {current_os}")
+            return None
+            
+        # Fetch latest stable version information
+        logger.info(f"Fetching latest stable Chrome driver information for {os_platform}")
+        response = requests.get("https://googlechromelabs.github.io/chrome-for-testing/last-known-good-versions-with-downloads.json")
+        response.raise_for_status()
+        
+        data = response.json()
+        stable_version = data['channels']['Stable']['version']
+        downloads = data['channels']['Stable']['downloads']['chromedriver']
+        
+        # Find the download URL for the current platform
+        download_url = None
+        for item in downloads:
+            if item['platform'] == os_platform:
+                download_url = item['url']
+                break
+                
+        if not download_url:
+            logger.error(f"Could not find Chrome driver download for platform: {os_platform}")
+            return None
+            
+        # Create a directory for the driver if it doesn't exist
+        driver_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "chromedriver")
+        os.makedirs(driver_dir, exist_ok=True)
+        
+        # Download and extract the driver
+        logger.info(f"Downloading Chrome driver v{stable_version} from {download_url}")
+        response = requests.get(download_url)
+        response.raise_for_status()
+        
+        # Extract the zip file
+        with zipfile.ZipFile(io.BytesIO(response.content)) as zip_file:
+            zip_file.extractall(driver_dir)
+            
+        # Find the chromedriver executable in the extracted files
+        if current_os == 'windows':
+            driver_path = os.path.join(driver_dir, "chromedriver-" + os_platform, "chromedriver.exe")
+        else:
+            driver_path = os.path.join(driver_dir, "chromedriver-" + os_platform, "chromedriver")
+            # Make the driver executable on Unix-like systems
+            os.chmod(driver_path, 0o755)
+            
+        logger.success(f"Successfully downloaded and extracted Chrome driver v{stable_version} to {driver_path}")
+        return driver_path
+        
+    except Exception as e:
+        logger.error(f"Error downloading Chrome driver: {e}")
+        return None
 
 async def initialize_browser():
     """Initialize the Selenium WebDriver and set up the browser."""
@@ -76,12 +148,17 @@ async def initialize_browser():
         options.add_experimental_option("useAutomationExtension", False)
         options.add_argument("user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/117.0.0.0 Safari/537.36")
 
-        # Log initialization method
-        logger.info("Using WebDriver Manager for dynamic ChromeDriver downloads.")
-
         try:
-            # Use webdriver-manager to install the appropriate ChromeDriver version
-            driver = webdriver.Chrome(service=Service(ChromeDriverManager().install()), options=options)
+            # Get the latest Chrome driver from Google's Chrome for Testing
+            chrome_driver_path = get_latest_chrome_driver()
+            
+            if chrome_driver_path and os.path.exists(chrome_driver_path):
+                logger.info(f"Using Chrome driver from Chrome for Testing: {chrome_driver_path}")
+                driver = webdriver.Chrome(service=Service(chrome_driver_path), options=options)
+            else:
+                # Fallback to WebDriver Manager if download fails
+                logger.warning("Failed to get Chrome driver from Chrome for Testing. Falling back to WebDriver Manager.")
+                driver = webdriver.Chrome(service=Service(ChromeDriverManager().install()), options=options)
 
             # Suppress 'webdriver' detection
             driver.execute_cdp_cmd("Page.addScriptToEvaluateOnNewDocument", {
@@ -92,7 +169,7 @@ async def initialize_browser():
                 """
             })
 
-            logger.info("Initialized Selenium WebDriver with WebDriver Manager.")
+            logger.info("Initialized Selenium WebDriver successfully.")
             # Navigate to an initial page to confirm browser works
             driver.get("https://debridmediamanager.com")
             logger.info("Navigated to Debrid Media Manager page.")

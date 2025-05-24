@@ -350,11 +350,11 @@ services:
       - ./.env:/app/.env
     environment:
       - SEERRBRIDGE_URL=http://seerrbridge:8777
-      - SEERRBRIDGE_LOG_PATH=/seerrbridge_data/seerbridge.log
+      - SEERRBRIDGE_LOG_PATH=/seerrbridge_data/seerrbridge.log
     entrypoint: >
       sh -c "
         mkdir -p /app && 
-        ln -sf /seerrbridge_data/seerbridge.log /app/seerbridge.log &&
+        ln -sf /seerrbridge_data/seerrbridge.log /app/seerrbridge.log &&
         ln -sf /seerrbridge_data/episode_discrepancies.json /app/episode_discrepancies.json &&
         npm start
       "

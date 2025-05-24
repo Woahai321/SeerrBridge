@@ -19,10 +19,15 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libglib2.0-0 \
     libdrm2 \
     libxrandr2 \
-    ca-certificates
+    ca-certificates \
+    curl \
+    jq
 
-# Download and install Chrome (specific version)
-RUN wget -O /tmp/chrome-linux64.zip https://storage.googleapis.com/chrome-for-testing-public/131.0.6778.69/linux64/chrome-linux64.zip && \
+# Download and install Chrome (latest stable version)
+RUN CHROME_URL=$(curl -s "https://googlechromelabs.github.io/chrome-for-testing/last-known-good-versions-with-downloads.json" | \
+    jq -r '.channels.Stable.downloads.chrome[] | select(.platform == "linux64") | .url') && \
+    echo "Downloading Chrome from: $CHROME_URL" && \
+    wget -O /tmp/chrome-linux64.zip $CHROME_URL && \
     unzip /tmp/chrome-linux64.zip -d /opt/ && \
     mv /opt/chrome-linux64 /opt/chrome && \
     ln -sf /opt/chrome/chrome /usr/bin/google-chrome && \
@@ -44,4 +49,4 @@ COPY . .
 EXPOSE 8777
 
 # Run the application
-CMD ["uvicorn", "seerrbridge:app", "--host", "0.0.0.0", "--port", "8777"]
+CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8777"]

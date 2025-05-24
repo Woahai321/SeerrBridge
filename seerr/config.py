@@ -13,7 +13,7 @@ from loguru import logger
 
 # Configure loguru
 logger.remove()  # Remove default handler
-logger.add("seerbridge.log", rotation="500 MB", encoding='utf-8')  # Use utf-8 encoding for log file
+logger.add("logs/seerrbridge.log", rotation="500 MB", encoding='utf-8')  # Use utf-8 encoding for log file
 logger.add(sys.stdout, colorize=True)  # Ensure stdout can handle Unicode
 logger.level("WARNING", color="<cyan>")
 
@@ -33,7 +33,7 @@ TORRENT_FILTER_REGEX = None
 MAX_MOVIE_SIZE = None
 MAX_EPISODE_SIZE = None
 REFRESH_INTERVAL_MINUTES = 60.0
-DISCREPANCY_REPO_FILE = "episode_discrepancies.json"
+DISCREPANCY_REPO_FILE = "logs/episode_discrepancies.json"
 
 # Add a global variable to track start time
 START_TIME = datetime.now()
