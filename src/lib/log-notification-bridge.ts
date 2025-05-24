@@ -616,10 +616,10 @@ export async function processRecentLogsForNotifications(): Promise<number> {
         const appRoot = process.cwd();
         const logsDir = path.join(appRoot, 'logs');
         
-        // Try to find the seerbridge log file
-        let logPath = path.join(appRoot, 'seerbridge.log');
+        // Try to find the seerrbridge log file
+        let logPath = path.join(appRoot, 'seerrbridge.log');
         if (!fs.existsSync(logPath)) {
-          logPath = path.join(logsDir, 'seerbridge.log');
+          logPath = path.join(logsDir, 'seerrbridge.log');
         }
         
         if (!fs.existsSync(logPath)) {
