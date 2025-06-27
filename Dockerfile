@@ -34,6 +34,11 @@ RUN CHROME_VERSION=$(curl -s "https://googlechromelabs.github.io/chrome-for-test
     mv /opt/chrome-linux64 /opt/chrome && \
     ln -sf /opt/chrome/chrome /usr/bin/google-chrome && \
     chmod +x /usr/bin/google-chrome
+RUN wget "https://storage.googleapis.com/chrome-for-testing-public/138.0.7204.49/linux64/chromedriver-linux64.zip"
+RUN unzip chromedriver-linux64.zip
+RUN mv chromedriver-linux64/chromedriver /usr/local/bin/chromedriver
+RUN chmod +x /usr/local/bin/chromedriver
+RUN chmod 755 /usr/local/bin/chromedriver
 
 # Set environment variables
 ENV CHROME_BIN=/usr/bin/google-chrome
