@@ -327,7 +327,7 @@ services:
     env_file:
       - ./.env
     volumes:
-      - shared_logs:/app
+      - shared_logs:/app/logs
       - ./.env:/app/.env
     restart: unless-stopped
     command: >
@@ -347,7 +347,7 @@ services:
     env_file:
       - ./.env
     volumes:
-      - shared_logs:/app
+      - shared_logs:/app/logs
       - ./.env:/app/.env
     environment:
       - SEERRBRIDGE_URL=http://seerrbridge:8777
