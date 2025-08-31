@@ -202,16 +202,16 @@ async def initialize_browser():
                 login(driver)
                 logger.info("Refreshed the page to apply local storage values.")
                 
-                # After successful login, click on "⚙️ Settings" to open the settings popup
+                # After successful login, click on "Settings" button
                 try:
-                    logger.info("Attempting to click the '⚙️ Settings' link.")
-                    settings_link = WebDriverWait(driver, 10).until(
-                        EC.element_to_be_clickable((By.XPATH, "//span[contains(text(),'⚙️ Settings')]"))
+                    logger.info("Attempting to click the 'Settings' button.")
+                    settings_button = WebDriverWait(driver, 10).until(
+                        EC.element_to_be_clickable((By.XPATH, "//button[.//span[contains(text(), 'Settings')]]"))
                     )
-                    settings_link.click()
-                    logger.info("Clicked on '⚙️ Settings' link.")
+                    settings_button.click()
+                    logger.info("Clicked on 'Settings' button.")
 
-                    logger.info("Locating maximum movie size select element in '⚙️ Settings'.")
+                    logger.info("Locating maximum movie size select element in 'Settings'.")
                     max_movie_select_elem = WebDriverWait(driver, 10).until(
                         EC.visibility_of_element_located((By.ID, "dmm-movie-max-size"))
                     )
@@ -224,7 +224,7 @@ async def initialize_browser():
                     logger.info("Biggest Movie Size Selected as {} GB.".format(MAX_MOVIE_SIZE))
 
                     # MAX EPISODE SIZE: Locate the maximum series size select element
-                    logger.info("Locating maximum series size select element in '⚙️ Settings'.")
+                    logger.info("Locating maximum series size select element in 'Settings'.")
                     max_episode_select_elem = WebDriverWait(driver, 10).until(
                         EC.visibility_of_element_located((By.ID, "dmm-episode-max-size"))
                     )
@@ -248,7 +248,7 @@ async def initialize_browser():
 
                     logger.info(f"Inserted regex into 'Default torrents filter' input box: {TORRENT_FILTER_REGEX}")
 
-                    settings_link.click()
+                    settings_button.click()
                     logger.info("Closed 'Settings' to save settings.")
 
                 except (TimeoutException, NoSuchElementException) as ex:
