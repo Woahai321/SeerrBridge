@@ -191,7 +191,7 @@ async def initialize_browser():
                
                 # Handle potential premium expiration modal
                 try:
-                    modal_h2 = WebDriverWait(driver, 5).until(
+                    modal_h2 = WebDriverWait(driver, 2).until(
                         EC.presence_of_element_located((By.XPATH, "//h2[contains(text(), 'Premium Expiring Soon')]"))
                     )
                     logger.info("Premium Expiring Soon modal detected.")
@@ -214,13 +214,13 @@ async def initialize_browser():
                 # After handling modal, click on "Settings" button
                 try:
                     logger.info("Attempting to click the 'Settings' button.")
-                    settings_button = WebDriverWait(driver, 10).until(
+                    settings_button = WebDriverWait(driver, 3).until(
                         EC.element_to_be_clickable((By.XPATH, "//button[.//span[contains(text(), 'Settings')]]"))
                     )
                     settings_button.click()
                     logger.info("Clicked on 'Settings' button.")
                     logger.info("Locating maximum movie size select element in 'Settings'.")
-                    max_movie_select_elem = WebDriverWait(driver, 10).until(
+                    max_movie_select_elem = WebDriverWait(driver, 3).until(
                         EC.visibility_of_element_located((By.ID, "dmm-movie-max-size"))
                     )
                     # Initialize Select class with the <select> WebElement
@@ -230,7 +230,7 @@ async def initialize_browser():
                     logger.info("Biggest Movie Size Selected as {} GB.".format(MAX_MOVIE_SIZE))
                     # MAX EPISODE SIZE: Locate the maximum series size select element
                     logger.info("Locating maximum series size select element in 'Settings'.")
-                    max_episode_select_elem = WebDriverWait(driver, 10).until(
+                    max_episode_select_elem = WebDriverWait(driver, 3).until(
                         EC.visibility_of_element_located((By.ID, "dmm-episode-max-size"))
                     )
                     # Initialize Select class with the <select> WebElement
@@ -240,13 +240,15 @@ async def initialize_browser():
                     logger.info("Biggest Episode Size Selected as {} GB.".format(MAX_EPISODE_SIZE))
                     # Locate the "Default torrents filter" input box and insert the regex
                     logger.info("Attempting to insert regex into 'Default torrents filter' box.")
-                    default_filter_input = WebDriverWait(driver, 10).until(
+                    default_filter_input = WebDriverWait(driver, 3).until(
                         EC.presence_of_element_located((By.ID, "dmm-default-torrents-filter"))
                     )
-                    default_filter_input.clear() # Clear any existing filter
-                    # Use the regex from .env
-                    default_filter_input.send_keys(TORRENT_FILTER_REGEX)
-                    logger.info(f"Inserted regex into 'Default torrents filter' input box: {TORRENT_FILTER_REGEX}")
+                    if TORRENT_FILTER_REGEX is not None:
+                        default_filter_input.clear()  # Clear any existing filter
+                        default_filter_input.send_keys(TORRENT_FILTER_REGEX)
+                        logger.info(f"Inserted regex into 'Default torrents filter' input box: {TORRENT_FILTER_REGEX}")
+                    else:
+                        logger.info("TORRENT_FILTER_REGEX is not set. Skipping insertion into 'Default torrents filter' box.")
                     settings_button.click()
                     logger.info("Closed 'Settings' to save settings.")
                 except (TimeoutException, NoSuchElementException, ElementClickInterceptedException) as ex:
@@ -272,7 +274,7 @@ async def initialize_browser():
                 # Extract library stats from the page
                 try:
                     logger.info("Extracting library statistics from the page.")
-                    library_stats_element = WebDriverWait(driver, 10).until(
+                    library_stats_element = WebDriverWait(driver, 3).until(
                         EC.presence_of_element_located((By.XPATH, "//h1[contains(@class, 'text-xl') and contains(@class, 'font-bold') and contains(@class, 'text-white') and contains(text(), 'Library')]"))
                     )
                     library_stats_text = library_stats_element.text.strip()
@@ -331,7 +333,7 @@ def login(driver):
 
     try:
         # Check if the "Login with Real Debrid" button exists and is clickable
-        login_button = WebDriverWait(driver, 5).until(
+        login_button = WebDriverWait(driver, 3).until(
             EC.element_to_be_clickable((By.XPATH, "//button[contains(text(),'Login with Real Debrid')]"))
         )
         if login_button:
@@ -486,7 +488,7 @@ def attempt_button_click_with_state_check(button, result_box):
 def check_red_buttons(driver, movie_title, normalized_seasons, confirmed_seasons, is_tv_show, episode_id=None):
     """
     Check for red buttons (RD 100%) on the page and verify if they match the expected title
-    
+   
     Args:
         driver: Selenium WebDriver instance
         movie_title: Expected title to match
@@ -494,84 +496,76 @@ def check_red_buttons(driver, movie_title, normalized_seasons, confirmed_seasons
         confirmed_seasons: Set of already confirmed seasons
         is_tv_show: Whether we're checking a TV show
         episode_id: Optional episode ID for TV shows
-        
+       
     Returns:
         Tuple[bool, set]: (confirmation flag, updated confirmed seasons set)
     """
     from seerr.utils import clean_title, extract_year, extract_season
-    
+   
     confirmation_flag = False
-
     try:
         all_red_buttons_elements = driver.find_elements(By.XPATH, "//button[contains(@class, 'bg-red-900/30')]")
         # Filter out "Report" buttons and buttons that don't contain "RD (100%)"
         red_buttons_elements = [
-            button for button in all_red_buttons_elements 
+            button for button in all_red_buttons_elements
             if "Report" not in button.text and "RD (100%)" in button.text
         ]
         logger.info(f"Found {len(red_buttons_elements)} red button(s) with 'RD (100%)' without 'Report'. Verifying titles.")
         for i, red_button_element in enumerate(red_buttons_elements, start=1):
-            if "Report" in red_button_element.text:
-                continue
-                
-            # Double-check that this is actually an RD (100%) button
-            button_text = red_button_element.text.strip()
-            if "RD (100%)" not in button_text:
-                logger.warning(f"Red button {i} does not contain 'RD (100%)' - text: '{button_text}'. Skipping.")
-                continue
-                
-            logger.info(f"Checking red button {i} with text: '{button_text}'...")
             try:
-                red_button_title_element = red_button_element.find_element(By.XPATH, ".//ancestor::div[contains(@class, 'border-2')]//h2")
-                red_button_title_text = red_button_title_element.text.strip()
-
-                # Use original title first, clean it for comparison
-                red_button_title_cleaned = clean_title(red_button_title_text.split('(')[0].strip(), target_lang='en')
-                movie_title_cleaned = clean_title(movie_title.split('(')[0].strip(), target_lang='en')
-
-                # Extract year for comparison
-                red_button_year = extract_year(red_button_title_text, ignore_resolution=True)
-                expected_year = extract_year(movie_title)
-
-                logger.info(f"Red button {i} title: {red_button_title_cleaned}, Expected movie title: {movie_title_cleaned}")
-
-                # Fuzzy matching with a slightly lower threshold for robustness
-                title_match_ratio = fuzz.partial_ratio(red_button_title_cleaned.lower(), movie_title_cleaned.lower())
-                title_match_threshold = 65  # Lowered from 69 to allow more flexibility
-
-                title_matched = title_match_ratio >= title_match_threshold
-
-                # Year comparison (skip for TV shows or if missing)
-                year_matched = True
-                if not is_tv_show and red_button_year and expected_year:
-                    year_matched = abs(red_button_year - expected_year) <= 1
-
-                # Episode and season matching (for TV shows)
-                season_matched = False
-                episode_matched = True
-                if is_tv_show and normalized_seasons:
-                    found_season = extract_season(red_button_title_text)
-                    found_season_normalized = f"Season {found_season}" if found_season else None
-                    season_matched = found_season_normalized in normalized_seasons if found_season_normalized else False
-                    if episode_id:
-                        episode_matched = episode_id.lower() in red_button_title_text.lower()
-
-                if title_matched and year_matched and (not is_tv_show or (season_matched and episode_matched)):
-                    logger.info(f"Found a match on red button {i} - {red_button_title_cleaned} with RD (100%). Marking as confirmed.")
-                    confirmation_flag = True
-                    if is_tv_show and found_season_normalized and not episode_id:
-                        confirmed_seasons.add(found_season_normalized)
-                    return confirmation_flag, confirmed_seasons  # Early exit on match
-                else:
-                    logger.warning(f"No match for red button {i}: Title - {red_button_title_cleaned}, Year - {red_button_year}, Episode - {episode_id}. Moving to next red button.")
-
-            except NoSuchElementException as e:
-                logger.warning(f"Could not find title associated with red button {i}: {e}")
+                if "Report" in red_button_element.text:
+                    continue
+               
+                # Double-check that this is actually an RD (100%) button
+                button_text = red_button_element.text.strip()
+                if "RD (100%)" not in button_text:
+                    logger.warning(f"Red button {i} does not contain 'RD (100%)' - text: '{button_text}'. Skipping.")
+                    continue
+               
+                logger.info(f"Checking red button {i} with text: '{button_text}'...")
+                try:
+                    red_button_title_element = red_button_element.find_element(By.XPATH, ".//ancestor::div[contains(@class, 'border-2')]//h2")
+                    red_button_title_text = red_button_title_element.text.strip()
+                    # Use original title first, clean it for comparison
+                    red_button_title_cleaned = clean_title(red_button_title_text.split('(')[0].strip(), target_lang='en')
+                    movie_title_cleaned = clean_title(movie_title.split('(')[0].strip(), target_lang='en')
+                    # Extract year for comparison
+                    red_button_year = extract_year(red_button_title_text, ignore_resolution=True)
+                    expected_year = extract_year(movie_title)
+                    logger.info(f"Red button {i} title: {red_button_title_cleaned}, Expected movie title: {movie_title_cleaned}")
+                    # Fuzzy matching with a slightly lower threshold for robustness
+                    title_match_ratio = fuzz.partial_ratio(red_button_title_cleaned.lower(), movie_title_cleaned.lower())
+                    title_match_threshold = 65  # Lowered from 69 to allow more flexibility
+                    title_matched = title_match_ratio >= title_match_threshold
+                    # Year comparison (skip for TV shows or if missing)
+                    year_matched = True
+                    if not is_tv_show and red_button_year and expected_year:
+                        year_matched = abs(red_button_year - expected_year) <= 1
+                    # Episode and season matching (for TV shows)
+                    season_matched = False
+                    episode_matched = True
+                    if is_tv_show and normalized_seasons:
+                        found_season = extract_season(red_button_title_text)
+                        found_season_normalized = f"Season {found_season}" if found_season else None
+                        season_matched = found_season_normalized in normalized_seasons if found_season_normalized else False
+                        if episode_id:
+                            episode_matched = episode_id.lower() in red_button_title_text.lower()
+                    if title_matched and year_matched and (not is_tv_show or (season_matched and episode_matched)):
+                        logger.info(f"Found a match on red button {i} - {red_button_title_cleaned} with RD (100%). Marking as confirmed.")
+                        confirmation_flag = True
+                        if is_tv_show and found_season_normalized and not episode_id:
+                            confirmed_seasons.add(found_season_normalized)
+                        return confirmation_flag, confirmed_seasons  # Early exit on match
+                    else:
+                        logger.warning(f"No match for red button {i}: Title - {red_button_title_cleaned}, Year - {red_button_year}, Episode - {episode_id}. Moving to next red button.")
+                except NoSuchElementException as e:
+                    logger.warning(f"Could not find title associated with red button {i}: {e}")
+                    continue
+            except StaleElementReferenceException as e:
+                logger.warning(f"Stale element reference encountered for red button {i}: {e}. Skipping this button.")
                 continue
-
     except NoSuchElementException:
         logger.info("No red buttons with 'RD (100%)' detected. Proceeding with optional fallback.")
-
     return confirmation_flag, confirmed_seasons
 
 def refresh_library_stats():

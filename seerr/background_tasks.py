@@ -12,6 +12,9 @@ from datetime import datetime, timezone
 from loguru import logger
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from selenium.common.exceptions import NoSuchElementException
+import random
+from selenium.webdriver.common.action_chains import ActionChains
+from selenium.webdriver.common.keys import Keys
 
 from seerr.config import (
     DISCREPANCY_REPO_FILE,
@@ -64,6 +67,26 @@ async def initialize_background_tasks():
     # Schedule token refresh
     schedule_token_refresh()
     scheduler.start()
+
+def type_slowly(driver, element, text, trigger_enter=False):
+    """
+    Simulate human-like typing into an element with varying delays.
+    Uses chained actions for clearing and typing to maintain focus.
+    """
+    actions = ActionChains(driver)
+    actions.click(element)  # Focus
+    actions.key_down(Keys.CONTROL).send_keys('a').key_up(Keys.CONTROL)  # Select all
+    actions.send_keys(Keys.DELETE)  # Clear selected text
+    
+    for char in text:
+        actions.send_keys(char)
+        delay = random.uniform(0.001, 0.002)  # Tighter range: 20–80ms per character
+        actions.pause(delay)
+    
+    if trigger_enter:
+        actions.send_keys(Keys.ENTER)  # Optional: Force submit if needed
+    
+    actions.perform()
 
 def schedule_token_refresh():
     """Schedule the token refresh every 10 minutes."""
@@ -604,7 +627,7 @@ async def check_show_subscriptions():
             from selenium.webdriver.common.by import By
             from selenium.common.exceptions import TimeoutException
             
-            WebDriverWait(browser_driver, 5).until(
+            WebDriverWait(browser_driver, 3).until(
                 EC.presence_of_element_located((By.XPATH, "//div[@role='status' and contains(@aria-live, 'polite')]"))
             )
             logger.info("Page load confirmed via status element.")
@@ -626,12 +649,11 @@ async def check_show_subscriptions():
                 filter_input = WebDriverWait(browser_driver, 10).until(
                     EC.presence_of_element_located((By.ID, "query"))
                 )
-                filter_input.clear()
                 episode_filter = f"S{season_number:02d}{episode_id}"
                 full_filter = f"{TORRENT_FILTER_REGEX} {episode_filter}"
-                filter_input.send_keys(full_filter)
+                type_slowly(browser_driver, filter_input, full_filter)  # Replace send_keys with slow typing
                 logger.info(f"Applied filter: {full_filter}")
-
+                
                 try:
                     click_show_more_results(browser_driver, logger)
                 except TimeoutException:
@@ -719,8 +741,7 @@ async def check_show_subscriptions():
         # Reset the filter
         try:
             filter_input = browser_driver.find_element(By.ID, "query")
-            filter_input.clear()
-            filter_input.send_keys(TORRENT_FILTER_REGEX)
+            type_slowly(browser_driver, filter_input, TORRENT_FILTER_REGEX)  # Slow typing for reset
             logger.info(f"Reset filter to default: {TORRENT_FILTER_REGEX}")
         except NoSuchElementException:
             logger.warning("Could not reset filter to default using ID 'query'")
@@ -812,7 +833,7 @@ async def search_individual_episodes(imdb_id, movie_title, season_number, season
     
     # Wait for the page to load (ensure the status element is present)
     try:
-        WebDriverWait(browser_driver, 5).until(
+        WebDriverWait(browser_driver, 3).until(
             EC.presence_of_element_located((By.XPATH, "//div[@role='status' and contains(@aria-live, 'polite')]"))
         )
         logger.info("Page load confirmed via status element.")
@@ -830,13 +851,12 @@ async def search_individual_episodes(imdb_id, movie_title, season_number, season
         
         # Clear and update the filter box with episode-specific filter
         try:
-            filter_input = WebDriverWait(driver, 10).until(
+            filter_input = WebDriverWait(driver, 3).until(
                 EC.presence_of_element_located((By.ID, "query"))
             )
-            filter_input.clear()
             episode_filter = f"S{season_number:02d}{episode_id}"  # e.g., "S01E01"
             full_filter = f"{TORRENT_FILTER_REGEX} {episode_filter}"
-            filter_input.send_keys(full_filter)
+            type_slowly(driver, filter_input, full_filter)  # Replace send_keys with slow typing
             logger.info(f"Applied filter: {full_filter}")
             
             try:
@@ -848,7 +868,7 @@ async def search_individual_episodes(imdb_id, movie_title, season_number, season
 
             
             # Wait for results to update after applying the filter
-            time.sleep(2)  # Adjust this delay if needed based on page response time
+            time.sleep(1)  # Adjust this delay if needed based on page response time
             
             # First pass: Check for existing RD (100%) using check_red_buttons
             confirmation_flag, confirmed_seasons = check_red_buttons(
@@ -930,8 +950,7 @@ async def search_individual_episodes(imdb_id, movie_title, season_number, season
     # Reset the filter to the default after processing
     try:
         filter_input = browser_driver.find_element(By.ID, "query")
-        filter_input.clear()
-        filter_input.send_keys(TORRENT_FILTER_REGEX)
+        type_slowly(browser_driver, filter_input, TORRENT_FILTER_REGEX)  # Slow typing for reset
         logger.info(f"Reset filter to default: {TORRENT_FILTER_REGEX}")
     except NoSuchElementException:
         logger.warning("Could not reset filter to default using ID 'query'")

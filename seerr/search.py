@@ -120,7 +120,7 @@ def search_on_debrid(imdb_id, movie_title, media_type, driver, extra_data=None):
                 logger.warning("'No results found' message not detected. Proceeding to check for available torrents.")
 
             try:
-                status_element = WebDriverWait(driver, 5).until(
+                status_element = WebDriverWait(driver, 2).until(
                     EC.presence_of_element_located(
                         (By.XPATH, "//div[@role='status' and contains(@aria-live, 'polite') and contains(text(), 'available torrents in RD')]")
                     )
@@ -154,7 +154,7 @@ def search_on_debrid(imdb_id, movie_title, media_type, driver, extra_data=None):
 
             # Step 3: Wait for the "Checking RD availability..." message to disappear
             try:
-                WebDriverWait(driver, 15).until_not(
+                WebDriverWait(driver, 5).until_not(
                     EC.text_to_be_present_in_element(
                         (By.XPATH, "//div[@role='status' and contains(@aria-live, 'polite')]"),
                         "Checking RD availability"
@@ -166,7 +166,7 @@ def search_on_debrid(imdb_id, movie_title, media_type, driver, extra_data=None):
 
             # Step 4: Wait for the "Found X available torrents in RD" message
             try:
-                status_element = WebDriverWait(driver, 15).until(
+                status_element = WebDriverWait(driver, 3).until(
                     EC.presence_of_element_located(
                         (By.XPATH, "//div[@role='status' and contains(@aria-live, 'polite') and contains(text(), 'available torrents in RD')]")
                     )
@@ -241,7 +241,7 @@ def search_on_debrid(imdb_id, movie_title, media_type, driver, extra_data=None):
 
                             # Navigate to the new URL
                             driver.get(season_url)
-                            time.sleep(2)  # Wait for the page to load
+                            time.sleep(1)  # Wait for the page to load
                             logger.info(f"Navigated to season {season} URL: {season_url}")
 
                             # Perform red button checks for the current season
@@ -261,7 +261,7 @@ def search_on_debrid(imdb_id, movie_title, media_type, driver, extra_data=None):
                                 
                             # Re-locate the result boxes after navigating to the new URL
                             try:
-                                result_boxes = WebDriverWait(driver, 10).until(
+                                result_boxes = WebDriverWait(driver, 5).until(
                                     EC.presence_of_all_elements_located((By.XPATH, "//div[contains(@class, 'border-black')]"))
                                 )
                             except TimeoutException:
@@ -338,7 +338,7 @@ def search_on_debrid(imdb_id, movie_title, media_type, driver, extra_data=None):
 
                                             # Perform RD status checks after clicking the button
                                             try:
-                                                rd_button = WebDriverWait(driver, 10).until(
+                                                rd_button = WebDriverWait(driver, 5).until(
                                                     EC.presence_of_element_located((By.XPATH, ".//button[contains(text(), 'RD (')]"))
                                                 )
                                                 rd_button_text = rd_button.text
@@ -373,7 +373,7 @@ def search_on_debrid(imdb_id, movie_title, media_type, driver, extra_data=None):
 
                                             # Perform RD status checks after clicking the button
                                             try:
-                                                rd_button = WebDriverWait(driver, 10).until(
+                                                rd_button = WebDriverWait(driver, 5).until(
                                                     EC.presence_of_element_located((By.XPATH, ".//button[contains(text(), 'RD (')]"))
                                                 )
                                                 rd_button_text = rd_button.text
@@ -450,7 +450,7 @@ def search_on_debrid(imdb_id, movie_title, media_type, driver, extra_data=None):
                     # Handle movies or TV shows without specific seasons
                     # Re-locate the result boxes after navigating to the new URL
                     try:
-                        result_boxes = WebDriverWait(driver, 10).until(
+                        result_boxes = WebDriverWait(driver, 5).until(
                             EC.presence_of_all_elements_located((By.XPATH, "//div[contains(@class, 'border-black')]"))
                         )
                     except TimeoutException:
@@ -542,7 +542,7 @@ def search_on_debrid(imdb_id, movie_title, media_type, driver, extra_data=None):
 
                                 # Perform RD status checks after clicking the button
                                 try:
-                                    rd_button = WebDriverWait(driver, 10).until(
+                                    rd_button = WebDriverWait(driver, 5).until(
                                         EC.presence_of_element_located((By.XPATH, ".//button[contains(text(), 'RD (')]"))
                                     )
                                     rd_button_text = rd_button.text
