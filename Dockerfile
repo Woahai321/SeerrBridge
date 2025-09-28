@@ -24,14 +24,16 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     jq
 
 # Fetch and install the latest stable Chrome version
-RUN CHROME_VERSION=$(curl -s "https://googlechromelabs.github.io/chrome-for-testing/last-known-good-versions-with-downloads.json" | \
+RUN arch=$(uname -m) && \
+    if [ "$arch" = "x86_64" ]; then PLATFORM="linux64"; elif [ "$arch" = "aarch64" ]; then PLATFORM="linux-arm64"; else echo "Unsupported architecture: $arch"; exit 1; fi && \
+    CHROME_VERSION=$(curl -s "https://googlechromelabs.github.io/chrome-for-testing/last-known-good-versions-with-downloads.json" | \
     jq -r '.channels.Stable.version') && \
     CHROME_URL=$(curl -s "https://googlechromelabs.github.io/chrome-for-testing/last-known-good-versions-with-downloads.json" | \
-    jq -r '.channels.Stable.downloads.chrome[] | select(.platform == "linux64") | .url') && \
-    echo "Downloading Chrome version ${CHROME_VERSION} from: $CHROME_URL" && \
-    wget -O /tmp/chrome-linux64.zip $CHROME_URL && \
-    unzip /tmp/chrome-linux64.zip -d /opt/ && \
-    mv /opt/chrome-linux64 /opt/chrome && \
+    jq -r ".channels.Stable.downloads.chrome[] | select(.platform == \"$PLATFORM\") | .url") && \
+    echo "Downloading Chrome version ${CHROME_VERSION} for $PLATFORM from: $CHROME_URL" && \
+    wget -O /tmp/chrome-$PLATFORM.zip $CHROME_URL && \
+    unzip /tmp/chrome-$PLATFORM.zip -d /opt/ && \
+    mv /opt/chrome-$PLATFORM /opt/chrome && \
     ln -sf /opt/chrome/chrome /usr/bin/google-chrome && \
     chmod +x /usr/bin/google-chrome
 
@@ -52,3 +54,4 @@ EXPOSE 8777
 
 # Run the application
 CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8777"]
+
