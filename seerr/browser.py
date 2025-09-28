@@ -18,28 +18,24 @@ from selenium.webdriver.support.ui import WebDriverWait, Select
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.common.exceptions import StaleElementReferenceException, NoSuchElementException, TimeoutException, ElementClickInterceptedException
 from fuzzywuzzy import fuzz
-
 from seerr.config import (
-    HEADLESS_MODE, 
-    RD_ACCESS_TOKEN, 
-    RD_CLIENT_ID, 
-    RD_CLIENT_SECRET, 
+    HEADLESS_MODE,
+    RD_ACCESS_TOKEN,
+    RD_CLIENT_ID,
+    RD_CLIENT_SECRET,
     RD_REFRESH_TOKEN,
     TORRENT_FILTER_REGEX,
     MAX_MOVIE_SIZE,
     MAX_EPISODE_SIZE
 )
-
 # Global driver variable to hold the Selenium WebDriver
 driver = None
-
 # Global library stats
 library_stats = {
     "torrents_count": 0,
     "total_size_tb": 0.0,
     "last_updated": None
 }
-
 def get_latest_chrome_driver():
     """
     Fetch the latest stable Chrome driver from Google's Chrome for Testing.
@@ -48,52 +44,53 @@ def get_latest_chrome_driver():
     try:
         # Get the current operating system
         current_os = platform.system().lower()
-        
+        current_arch = platform.machine().lower()
+       
         # Map OS to platform identifier used by Chrome for Testing
         platform_map = {
             'windows': 'win32' if platform.architecture()[0] == '32bit' else 'win64',
-            'linux': 'linux64',
-            'darwin': 'mac-arm64' if platform.processor() == 'arm' else 'mac-x64'
+            'linux': 'linux64' if current_arch in ['x86_64'] else 'linux-arm64' if current_arch in ['aarch64', 'arm64'] else None,
+            'darwin': 'mac-arm64' if current_arch in ['arm64', 'aarch64'] else 'mac-x64'
         }
-        
+       
         os_platform = platform_map.get(current_os)
         if not os_platform:
             logger.error(f"Unsupported operating system: {current_os}")
             return None
-            
+           
         # Fetch latest stable version information
         logger.info(f"Fetching latest stable Chrome driver information for {os_platform}")
         response = requests.get("https://googlechromelabs.github.io/chrome-for-testing/last-known-good-versions-with-downloads.json")
         response.raise_for_status()
-        
+       
         data = response.json()
         stable_version = data['channels']['Stable']['version']
         downloads = data['channels']['Stable']['downloads']['chromedriver']
-        
+       
         # Find the download URL for the current platform
         download_url = None
         for item in downloads:
             if item['platform'] == os_platform:
                 download_url = item['url']
                 break
-                
+               
         if not download_url:
             logger.error(f"Could not find Chrome driver download for platform: {os_platform}")
             return None
-            
+           
         # Create a directory for the driver if it doesn't exist
         driver_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "chromedriver")
         os.makedirs(driver_dir, exist_ok=True)
-        
+       
         # Download and extract the driver
         logger.info(f"Downloading Chrome driver v{stable_version} from {download_url}")
         response = requests.get(download_url)
         response.raise_for_status()
-        
+       
         # Extract the zip file
         with zipfile.ZipFile(io.BytesIO(response.content)) as zip_file:
             zip_file.extractall(driver_dir)
-            
+           
         # Find the chromedriver executable in the extracted files
         if current_os == 'windows':
             driver_path = os.path.join(driver_dir, "chromedriver-" + os_platform, "chromedriver.exe")
@@ -101,14 +98,13 @@ def get_latest_chrome_driver():
             driver_path = os.path.join(driver_dir, "chromedriver-" + os_platform, "chromedriver")
             # Make the driver executable on Unix-like systems
             os.chmod(driver_path, 0o755)
-            
+           
         logger.success(f"Successfully downloaded and extracted Chrome driver v{stable_version} to {driver_path}")
         return driver_path
-        
+       
     except Exception as e:
         logger.error(f"Error downloading Chrome driver: {e}")
         return None
-
 async def initialize_browser():
     """Initialize the Selenium WebDriver and set up the browser."""
     global driver
@@ -116,7 +112,8 @@ async def initialize_browser():
         logger.info("Starting persistent browser session.")
         # Detect the current operating system
         current_os = platform.system().lower() # Returns 'windows', 'linux', or 'darwin' (macOS)
-        logger.info(f"Detected operating system: {current_os}")
+        current_arch = platform.machine().lower()
+        logger.info(f"Detected operating system: {current_os}, architecture: {current_arch}")
         options = Options()
         ### Handle Docker/Linux-specific configurations
         if current_os == "linux" and os.getenv("RUNNING_IN_DOCKER", "false").lower() == "true":
@@ -132,6 +129,15 @@ async def initialize_browser():
         ### Handle Windows-specific configurations
         elif current_os == "windows":
             logger.info("Detected Windows environment. Applying Windows-specific configurations.")
+        elif current_os == "linux" and current_arch in ['aarch64', 'arm64']:
+            logger.info("Detected ARM Linux environment (likely Raspberry Pi). Applying ARM-specific configurations.")
+            options.binary_location = "/usr/bin/chromium-browser"
+            if HEADLESS_MODE:
+                options.add_argument("--headless=new")
+            options.add_argument("--no-sandbox")
+            options.add_argument("--disable-dev-shm-usage")
+            options.add_argument("--disable-gpu")
+            options.add_argument("--disable-setuid-sandbox")
         if HEADLESS_MODE:
             options.add_argument("--headless=new") # Modern headless mode for Chrome
         options.add_argument("--disable-gpu") # Disable GPU for Docker compatibility
@@ -149,14 +155,17 @@ async def initialize_browser():
         try:
             # Get the latest Chrome driver from Google's Chrome for Testing
             chrome_driver_path = get_latest_chrome_driver()
-           
+          
             if chrome_driver_path and os.path.exists(chrome_driver_path):
                 logger.info(f"Using Chrome driver from Chrome for Testing: {chrome_driver_path}")
                 driver = webdriver.Chrome(service=Service(chrome_driver_path), options=options)
             else:
                 # Fallback to WebDriver Manager if download fails
-                logger.warning("Failed to get Chrome driver from Chrome for Testing. Falling back to WebDriver Manager.")
-                driver = webdriver.Chrome(service=Service(ChromeDriverManager().install()), options=options)
+                logger.warning("Failed to get Chrome driver from Chrome for Testing. Falling back to appropriate driver.")
+                if current_arch in ['aarch64', 'arm64']:
+                    driver = webdriver.Chrome(service=Service("/usr/bin/chromedriver"), options=options)
+                else:
+                    driver = webdriver.Chrome(service=Service(ChromeDriverManager().install()), options=options)
             # Suppress 'webdriver' detection
             driver.execute_cdp_cmd("Page.addScriptToEvaluateOnNewDocument", {
                 "source": """
@@ -188,7 +197,7 @@ async def initialize_browser():
                 driver.refresh()
                 login(driver)
                 logger.info("Refreshed the page to apply local storage values.")
-               
+              
                 # Handle potential premium expiration modal
                 try:
                     modal_h2 = WebDriverWait(driver, 2).until(
@@ -207,10 +216,10 @@ async def initialize_browser():
                     cancel_button = driver.find_element(By.XPATH, "//button[text()='Cancel']")
                     cancel_button.click()
                     logger.info("Dismissed the premium expiration modal by clicking Cancel.")
-                    time.sleep(1)  # Wait briefly for modal to disappear
+                    time.sleep(1) # Wait briefly for modal to disappear
                 except TimeoutException:
                     logger.info("No premium expiration modal found. Proceeding.")
-               
+              
                 # After handling modal, click on "Settings" button
                 try:
                     logger.info("Attempting to click the 'Settings' button.")
@@ -244,7 +253,7 @@ async def initialize_browser():
                         EC.presence_of_element_located((By.ID, "dmm-default-torrents-filter"))
                     )
                     if TORRENT_FILTER_REGEX is not None:
-                        default_filter_input.clear()  # Clear any existing filter
+                        default_filter_input.clear() # Clear any existing filter
                         default_filter_input.send_keys(TORRENT_FILTER_REGEX)
                         logger.info(f"Inserted regex into 'Default torrents filter' input box: {TORRENT_FILTER_REGEX}")
                     else:
@@ -270,7 +279,7 @@ async def initialize_browser():
                 logger.info("Waiting for 2 seconds on the library page.")
                 time.sleep(2)
                 logger.info("Completed waiting on the library page.")
-               
+              
                 # Extract library stats from the page
                 try:
                     logger.info("Extracting library statistics from the page.")
@@ -279,20 +288,20 @@ async def initialize_browser():
                     )
                     library_stats_text = library_stats_element.text.strip()
                     logger.info(f"Found library stats text: {library_stats_text}")
-                   
+                  
                     # Parse the text to extract torrent count and size
-                    # Example: "Library 📚 3132 torrents 🙂 76.5 TB"
+                    # Example: "Library ðŸ“š 3132 torrents ðŸ™‚ 76.5 TB"
                     import re
                     from datetime import datetime
-                   
+                  
                     # Extract torrent count
                     torrent_match = re.search(r'(\d+)\s+torrents', library_stats_text)
                     torrents_count = int(torrent_match.group(1)) if torrent_match else 0
-                   
+                  
                     # Extract TB size
                     size_match = re.search(r'([\d.]+)\s*TB', library_stats_text)
                     total_size_tb = float(size_match.group(1)) if size_match else 0.0
-                   
+                  
                     # Update global library stats
                     global library_stats
                     library_stats = {
@@ -300,14 +309,14 @@ async def initialize_browser():
                         "total_size_tb": total_size_tb,
                         "last_updated": datetime.now().isoformat()
                     }
-                   
+                  
                     logger.success(f"Successfully extracted library stats: {torrents_count} torrents, {total_size_tb} TB")
-                   
+                  
                 except TimeoutException:
                     logger.warning("Could not find library stats element on the page within timeout.")
                 except Exception as e:
                     logger.error(f"Error extracting library stats: {e}")
-               
+              
                 logger.success("Browser initialization completed successfully.")
             except Exception as e:
                 logger.error(f"Error during browser setup: {e}")
@@ -316,9 +325,8 @@ async def initialize_browser():
                     driver = None
     else:
         logger.info("Browser already initialized.")
-   
+  
     return driver # Return the driver instance for direct use
-
 async def shutdown_browser():
     """Shut down the browser and clean up resources."""
     global driver
