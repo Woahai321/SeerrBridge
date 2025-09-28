@@ -8,9 +8,6 @@ import os
 import requests
 import zipfile
 import io
-import tempfile
-import shutil
-import subprocess
 from loguru import logger
 from selenium import webdriver
 from selenium.webdriver.common.by import By
@@ -21,11 +18,12 @@ from selenium.webdriver.support.ui import WebDriverWait, Select
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.common.exceptions import StaleElementReferenceException, NoSuchElementException, TimeoutException, ElementClickInterceptedException
 from fuzzywuzzy import fuzz
+
 from seerr.config import (
-    HEADLESS_MODE,
-    RD_ACCESS_TOKEN,
-    RD_CLIENT_ID,
-    RD_CLIENT_SECRET,
+    HEADLESS_MODE, 
+    RD_ACCESS_TOKEN, 
+    RD_CLIENT_ID, 
+    RD_CLIENT_SECRET, 
     RD_REFRESH_TOKEN,
     TORRENT_FILTER_REGEX,
     MAX_MOVIE_SIZE,
@@ -34,6 +32,7 @@ from seerr.config import (
 
 # Global driver variable to hold the Selenium WebDriver
 driver = None
+
 # Global library stats
 library_stats = {
     "torrents_count": 0,
@@ -47,38 +46,65 @@ def get_latest_chrome_driver():
     Returns the path to the downloaded chromedriver executable.
     """
     try:
+        # Get the current operating system
         current_os = platform.system().lower()
-        current_arch = platform.machine().lower()
+        
+        # Map OS to platform identifier used by Chrome for Testing
         platform_map = {
             'windows': 'win32' if platform.architecture()[0] == '32bit' else 'win64',
-            'linux': 'linux64' if current_arch in ['x86_64'] else 'linux-arm64' if current_arch in ['aarch64', 'arm64'] else None,
-            'darwin': 'mac-arm64' if current_arch in ['arm64', 'aarch64'] else 'mac-x64'
+            'linux': 'linux64',
+            'darwin': 'mac-arm64' if platform.processor() == 'arm' else 'mac-x64'
         }
+        
         os_platform = platform_map.get(current_os)
         if not os_platform:
-            logger.error(f"Unsupported operating system or architecture: {current_os}/{current_arch}")
+            logger.error(f"Unsupported operating system: {current_os}")
             return None
+            
+        # Fetch latest stable version information
         logger.info(f"Fetching latest stable Chrome driver information for {os_platform}")
         response = requests.get("https://googlechromelabs.github.io/chrome-for-testing/last-known-good-versions-with-downloads.json")
         response.raise_for_status()
+        
         data = response.json()
         stable_version = data['channels']['Stable']['version']
         downloads = data['channels']['Stable']['downloads']['chromedriver']
-        download_url = next((item['url'] for item in downloads if item['platform'] == os_platform), None)
+        
+        # Find the download URL for the current platform
+        download_url = None
+        for item in downloads:
+            if item['platform'] == os_platform:
+                download_url = item['url']
+                break
+                
         if not download_url:
             logger.error(f"Could not find Chrome driver download for platform: {os_platform}")
             return None
+            
+        # Create a directory for the driver if it doesn't exist
         driver_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "chromedriver")
         os.makedirs(driver_dir, exist_ok=True)
+        
+        # Download and extract the driver
         logger.info(f"Downloading Chrome driver v{stable_version} from {download_url}")
         response = requests.get(download_url)
         response.raise_for_status()
+        
+        # Extract the zip file
         with zipfile.ZipFile(io.BytesIO(response.content)) as zip_file:
             zip_file.extractall(driver_dir)
-        driver_path = os.path.join(driver_dir, f"chromedriver-{os_platform}", "chromedriver.exe" if current_os == 'windows' else "chromedriver")
-        os.chmod(driver_path, 0o755) if current_os != 'windows' else None
+            
+        # Find the chromedriver executable in the extracted files
+        if current_os == 'windows':
+            driver_path = os.path.join(driver_dir, "chromedriver-" + os_platform, "chromedriver.exe")
+        else:
+            driver_path = os.path.join(driver_dir, "chromedriver-" + os_platform, "chromedriver")
+            # Make the driver executable on Unix-like systems
+            os.chmod(driver_path, 0o755)
+            
         logger.success(f"Successfully downloaded and extracted Chrome driver v{stable_version} to {driver_path}")
         return driver_path
+        
     except Exception as e:
         logger.error(f"Error downloading Chrome driver: {e}")
         return None
@@ -88,59 +114,50 @@ async def initialize_browser():
     global driver
     if driver is None:
         logger.info("Starting persistent browser session.")
-        current_os = platform.system().lower()
-        current_arch = platform.machine().lower()
-        logger.info(f"Detected operating system: {current_os}, architecture: {current_arch}")
-        
-        # Clean up any lingering Chrome/Chromium processes
-        if current_os == "linux":
-            try:
-                subprocess.run(["pkill", "-9", "chrome"], check=False)
-                subprocess.run(["pkill", "-9", "chromedriver"], check=False)
-                logger.info("Terminated any lingering Chrome/Chromium processes.")
-            except Exception as e:
-                logger.warning(f"Failed to terminate lingering processes: {e}")
-
-        # Create a temporary user data directory
-        user_data_dir = tempfile.mkdtemp(prefix="seerrbridge_chrome_")
-        logger.info(f"Using temporary user data directory: {user_data_dir}")
-
+        # Detect the current operating system
+        current_os = platform.system().lower() # Returns 'windows', 'linux', or 'darwin' (macOS)
+        logger.info(f"Detected operating system: {current_os}")
         options = Options()
-        options.add_argument(f"--user-data-dir={user_data_dir}")
-        
-        if current_os == "linux":
-            logger.info("Detected Linux environment. Applying Linux-specific configurations.")
-            if current_arch in ['aarch64', 'arm64']:
-                options.binary_location = "/usr/bin/chromium-browser"
-                options.add_argument("--window-size=1280,720")
-            else:
-                options.binary_location = os.getenv("CHROME_BIN", "/usr/bin/google-chrome")
-                options.add_argument("--window-size=1920,1080")
-            if HEADLESS_MODE:
-                options.add_argument("--headless=new")
-            options.add_argument("--no-sandbox")
-            options.add_argument("--disable-dev-shm-usage")
-            options.add_argument("--disable-gpu")
-            options.add_argument("--disable-setuid-sandbox")
+        ### Handle Docker/Linux-specific configurations
+        if current_os == "linux" and os.getenv("RUNNING_IN_DOCKER", "false").lower() == "true":
+            logger.info("Detected Linux environment inside Docker. Applying Linux-specific configurations.")
+            # Explicitly set the Chrome binary location
+            options.binary_location = os.getenv("CHROME_BIN", "/usr/bin/google-chrome")
+            # Enable headless mode for Linux/Docker environments
+            options.add_argument("--headless=new") # Updated modern headless flag
+            options.add_argument("--no-sandbox") # Required for running as root in Docker
+            options.add_argument("--disable-dev-shm-usage") # Handle shared memory limitations
+            options.add_argument("--disable-gpu") # Disable GPU rendering for headless environments
+            options.add_argument("--disable-setuid-sandbox") # Bypass setuid sandbox
+        ### Handle Windows-specific configurations
         elif current_os == "windows":
             logger.info("Detected Windows environment. Applying Windows-specific configurations.")
-            options.add_argument("--window-size=1920,1080")
-        
+        if HEADLESS_MODE:
+            options.add_argument("--headless=new") # Modern headless mode for Chrome
+        options.add_argument("--disable-gpu") # Disable GPU for Docker compatibility
+        options.add_argument("--no-sandbox") # Required for running browser as root
+        options.add_argument("--disable-dev-shm-usage") # Disable shared memory usage restrictions
+        options.add_argument("--disable-setuid-sandbox") # Disable sandboxing for root permissions
+        options.add_argument("--enable-logging")
+        options.add_argument("--window-size=1920,1080") # Set explicit window size to avoid rendering issues
+        # WebDriver options to suppress infobars and disable automation detection
         options.add_argument("--disable-blink-features=AutomationControlled")
         options.add_argument("--disable-infobars")
         options.add_experimental_option("excludeSwitches", ["enable-automation"])
         options.add_experimental_option("useAutomationExtension", False)
         options.add_argument("user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/117.0.0.0 Safari/537.36")
-        
         try:
+            # Get the latest Chrome driver from Google's Chrome for Testing
             chrome_driver_path = get_latest_chrome_driver()
+           
             if chrome_driver_path and os.path.exists(chrome_driver_path):
                 logger.info(f"Using Chrome driver from Chrome for Testing: {chrome_driver_path}")
                 driver = webdriver.Chrome(service=Service(chrome_driver_path), options=options)
             else:
-                logger.warning("Failed to get Chrome driver from Chrome for Testing. Falling back to system-installed Chromium driver.")
-                driver = webdriver.Chrome(service=Service("/usr/bin/chromedriver"), options=options)
-            
+                # Fallback to WebDriver Manager if download fails
+                logger.warning("Failed to get Chrome driver from Chrome for Testing. Falling back to WebDriver Manager.")
+                driver = webdriver.Chrome(service=Service(ChromeDriverManager().install()), options=options)
+            # Suppress 'webdriver' detection
             driver.execute_cdp_cmd("Page.addScriptToEvaluateOnNewDocument", {
                 "source": """
                 Object.defineProperty(navigator, 'webdriver', {
@@ -149,18 +166,17 @@ async def initialize_browser():
                 """
             })
             logger.info("Initialized Selenium WebDriver successfully.")
+            # Navigate to an initial page to confirm browser works
             driver.get("https://debridmediamanager.com")
             logger.info("Navigated to Debrid Media Manager page.")
         except Exception as e:
             logger.error(f"Failed to initialize Selenium WebDriver: {e}")
-            if os.path.exists(user_data_dir):
-                shutil.rmtree(user_data_dir, ignore_errors=True)
-                logger.info(f"Cleaned up temporary user data directory: {user_data_dir}")
-            driver = None
+            driver = None # Ensure driver is None on failure
             raise e
-        
+        # If initialization succeeded, continue with setup
         if driver:
             try:
+                # Inject Real-Debrid access token and other credentials into local storage
                 driver.execute_script(f"""
                     localStorage.setItem('rd:accessToken', '{RD_ACCESS_TOKEN}');
                     localStorage.setItem('rd:clientId', '"{RD_CLIENT_ID}"');
@@ -168,31 +184,37 @@ async def initialize_browser():
                     localStorage.setItem('rd:refreshToken', '"{RD_REFRESH_TOKEN}"');
                 """)
                 logger.info("Set Real-Debrid credentials in local storage.")
+                # Refresh the page to apply the local storage values
                 driver.refresh()
                 login(driver)
                 logger.info("Refreshed the page to apply local storage values.")
-                driver.refresh()
+               
+                # Handle potential premium expiration modal
                 try:
                     modal_h2 = WebDriverWait(driver, 2).until(
                         EC.presence_of_element_located((By.XPATH, "//h2[contains(text(), 'Premium Expiring Soon')]"))
                     )
                     logger.info("Premium Expiring Soon modal detected.")
+                    # Extract the message to get days
                     p_element = driver.find_element(By.XPATH, "//p[contains(text(), 'Your Real-Debrid premium subscription will expire in')]")
                     message = p_element.text.strip()
                     import re
                     days_match = re.search(r'expire in (\d+) days', message)
                     days = int(days_match.group(1)) if days_match else "UNKNOWN"
+                    # Log distinct message in big caps
                     logger.warning(f"YOUR REAL-DEBRID PREMIUM WILL EXPIRE IN {days} DAYS!!!")
+                    # Click Cancel to dismiss
                     cancel_button = driver.find_element(By.XPATH, "//button[text()='Cancel']")
                     cancel_button.click()
                     logger.info("Dismissed the premium expiration modal by clicking Cancel.")
-                    time.sleep(1)
+                    time.sleep(1)  # Wait briefly for modal to disappear
                 except TimeoutException:
                     logger.info("No premium expiration modal found. Proceeding.")
-                
+               
+                # After handling modal, click on "Settings" button
                 try:
                     logger.info("Attempting to click the 'Settings' button.")
-                    settings_button = WebDriverWait(driver, 10).until(
+                    settings_button = WebDriverWait(driver, 3).until(
                         EC.element_to_be_clickable((By.XPATH, "//button[.//span[contains(text(), 'Settings')]]"))
                     )
                     settings_button.click()
@@ -201,22 +223,28 @@ async def initialize_browser():
                     max_movie_select_elem = WebDriverWait(driver, 3).until(
                         EC.visibility_of_element_located((By.ID, "dmm-movie-max-size"))
                     )
+                    # Initialize Select class with the <select> WebElement
                     select_obj = Select(max_movie_select_elem)
+                    # Select size specified in the .env file
                     select_obj.select_by_value(MAX_MOVIE_SIZE)
-                    logger.info(f"Biggest Movie Size Selected as {MAX_MOVIE_SIZE} GB.")
+                    logger.info("Biggest Movie Size Selected as {} GB.".format(MAX_MOVIE_SIZE))
+                    # MAX EPISODE SIZE: Locate the maximum series size select element
                     logger.info("Locating maximum series size select element in 'Settings'.")
                     max_episode_select_elem = WebDriverWait(driver, 3).until(
                         EC.visibility_of_element_located((By.ID, "dmm-episode-max-size"))
                     )
+                    # Initialize Select class with the <select> WebElement
                     select_obj = Select(max_episode_select_elem)
+                    # Select size specified in the .env file
                     select_obj.select_by_value(MAX_EPISODE_SIZE)
-                    logger.info(f"Biggest Episode Size Selected as {MAX_EPISODE_SIZE} GB.")
+                    logger.info("Biggest Episode Size Selected as {} GB.".format(MAX_EPISODE_SIZE))
+                    # Locate the "Default torrents filter" input box and insert the regex
                     logger.info("Attempting to insert regex into 'Default torrents filter' box.")
                     default_filter_input = WebDriverWait(driver, 3).until(
                         EC.presence_of_element_located((By.ID, "dmm-default-torrents-filter"))
                     )
                     if TORRENT_FILTER_REGEX is not None:
-                        default_filter_input.clear()
+                        default_filter_input.clear()  # Clear any existing filter
                         default_filter_input.send_keys(TORRENT_FILTER_REGEX)
                         logger.info(f"Inserted regex into 'Default torrents filter' input box: {TORRENT_FILTER_REGEX}")
                     else:
@@ -226,20 +254,24 @@ async def initialize_browser():
                 except (TimeoutException, NoSuchElementException, ElementClickInterceptedException) as ex:
                     logger.error(f"Error while interacting with the settings: {ex}")
                     logger.warning("Continuing without applying custom settings (TORRENT_FILTER_REGEX, MAX_MOVIE_SIZE, MAX_EPISODE_SIZE)")
-                
+                # Navigate to the library section
                 logger.info("Navigating to the library section.")
                 driver.get("https://debridmediamanager.com/library")
+                # Wait for 2 seconds on the library page before further processing
                 try:
+                    # Ensure the library page has loaded correctly (e.g., wait for a specific element on the library page)
                     library_element = WebDriverWait(driver, 2).until(
-                        EC.presence_of_element_located((By.XPATH, "//div[@id='library-content']"))
+                        EC.presence_of_element_located((By.XPATH, "//div[@id='library-content']")) # Adjust the XPath as necessary
                     )
                     logger.info("Library section loaded successfully.")
                 except TimeoutException:
                     logger.info("Library loading.")
+                # Wait for at least 2 seconds on the library page
                 logger.info("Waiting for 2 seconds on the library page.")
                 time.sleep(2)
                 logger.info("Completed waiting on the library page.")
-                
+               
+                # Extract library stats from the page
                 try:
                     logger.info("Extracting library statistics from the page.")
                     library_stats_element = WebDriverWait(driver, 3).until(
@@ -247,57 +279,53 @@ async def initialize_browser():
                     )
                     library_stats_text = library_stats_element.text.strip()
                     logger.info(f"Found library stats text: {library_stats_text}")
+                   
+                    # Parse the text to extract torrent count and size
+                    # Example: "Library 📚 3132 torrents 🙂 76.5 TB"
                     import re
                     from datetime import datetime
+                   
+                    # Extract torrent count
                     torrent_match = re.search(r'(\d+)\s+torrents', library_stats_text)
                     torrents_count = int(torrent_match.group(1)) if torrent_match else 0
+                   
+                    # Extract TB size
                     size_match = re.search(r'([\d.]+)\s*TB', library_stats_text)
                     total_size_tb = float(size_match.group(1)) if size_match else 0.0
+                   
+                    # Update global library stats
                     global library_stats
                     library_stats = {
                         "torrents_count": torrents_count,
                         "total_size_tb": total_size_tb,
                         "last_updated": datetime.now().isoformat()
                     }
+                   
                     logger.success(f"Successfully extracted library stats: {torrents_count} torrents, {total_size_tb} TB")
+                   
                 except TimeoutException:
                     logger.warning("Could not find library stats element on the page within timeout.")
                 except Exception as e:
                     logger.error(f"Error extracting library stats: {e}")
-                
+               
                 logger.success("Browser initialization completed successfully.")
             except Exception as e:
                 logger.error(f"Error during browser setup: {e}")
                 if driver:
                     driver.quit()
                     driver = None
-                if os.path.exists(user_data_dir):
-                    shutil.rmtree(user_data_dir, ignore_errors=True)
-                    logger.info(f"Cleaned up temporary user data directory: {user_data_dir}")
-        else:
-            logger.info("Browser already initialized.")
-        
-        return driver
+    else:
+        logger.info("Browser already initialized.")
+   
+    return driver # Return the driver instance for direct use
 
 async def shutdown_browser():
     """Shut down the browser and clean up resources."""
     global driver
     if driver:
-        try:
-            driver.quit()
-            logger.warning("Selenium WebDriver closed.")
-        except Exception as e:
-            logger.error(f"Error closing Selenium WebDriver: {e}")
-        finally:
-            driver = None
-            # Clean up any lingering Chrome/Chromium processes
-            if platform.system().lower() == "linux":
-                try:
-                    subprocess.run(["pkill", "-9", "chrome"], check=False)
-                    subprocess.run(["pkill", "-9", "chromedriver"], check=False)
-                    logger.info("Terminated any lingering Chrome/Chromium processes.")
-                except Exception as e:
-                    logger.warning(f"Failed to terminate lingering processes: {e}")
+        driver.quit()
+        logger.warning("Selenium WebDriver closed.")
+        driver = None
 
 def login(driver):
     """Handle login to Debrid Media Manager."""
