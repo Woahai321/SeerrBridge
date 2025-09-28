@@ -197,7 +197,7 @@ async def initialize_browser():
                 driver.refresh()
                 login(driver)
                 logger.info("Refreshed the page to apply local storage values.")
-              
+                driver.refresh()
                 # Handle potential premium expiration modal
                 try:
                     modal_h2 = WebDriverWait(driver, 2).until(
@@ -290,7 +290,7 @@ async def initialize_browser():
                     logger.info(f"Found library stats text: {library_stats_text}")
                   
                     # Parse the text to extract torrent count and size
-                    # Example: "Library ðŸ“š 3132 torrents ðŸ™‚ 76.5 TB"
+                    # Example: "Library, 3132 torrents, 76.5 TB"
                     import re
                     from datetime import datetime
                   
