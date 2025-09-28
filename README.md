@@ -33,25 +33,6 @@ Example:
 
 ---
 
-## ✨ Run SeerrBridge & ListSync with ElfHosted 🚀
-
-[ElfHosted](https://store.elfhosted.com/seerrbridge/elf/6929/) is your friendly neighborhood [open-source](https://elfhosted.com/open/) PaaS, handling the geeky heavy-lifting (_hosting, security, updates, you name it!_) so you can focus on syncing your lists!
-
-> [!IMPORTANT]
-> **ElfHosted 💜 SeerrBridge & ListSync!**
->
-> SeerrBridge and its awesome companion ListSync are fully supported and integrated into the ElfHosted ecosystem, you can already get them pre-configured in the bundles below, with a $1, 7-day trial!
-
-> [!TIP]
-> **ElfHosted Streaming Bundles: Your Turn-Key Streaming Powerhouse!** 💹
->
-> Want SeerrBridge without the DIY setup? 🎉 These ElfHosted bundles come pre-wired with RealDebrid, SeerrBridge and ListSync, and your choice of media server. Get the ultimate hassle-free, automated infinite streaming experience:
-> * [Starter](https://store.elfhosted.com/product/starter/elf/6929/)  Personal Media Streamer [2xHD / 1x4K, contented]
-> * [Hobbit](https://store.elfhosted.com/product/hobbit/elf/6929/) Personal Media Streamer [4xHD / 2x4K, semi-dedicated]
-> * [Ranger](https://store.elfhosted.com/product/ranger/elf/6929/) Personal Media Streamer [8xHD / 4x4K, semi-dedicated]
-
----
-
 <details>
 <summary>📊 Flowchart (Rectangle of Life)</summary>
 
