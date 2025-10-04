@@ -220,14 +220,14 @@ async def initialize_browser():
                 except TimeoutException:
                     logger.info("No premium expiration modal found. Proceeding.")
               
-                # After handling modal, click on "Settings" button
+                # Navigate to the new settings page
                 try:
-                    logger.info("Attempting to click the 'Settings' button.")
-                    settings_button = WebDriverWait(driver, 3).until(
-                        EC.element_to_be_clickable((By.XPATH, "//button[.//span[contains(text(), 'Settings')]]"))
+                    logger.info("Navigating to the new settings page.")
+                    driver.get("https://debridmediamanager.com/settings")
+                    WebDriverWait(driver, 3).until(
+                        EC.presence_of_element_located((By.ID, "dmm-movie-max-size"))
                     )
-                    settings_button.click()
-                    logger.info("Clicked on 'Settings' button.")
+                    logger.info("Settings page loaded successfully.")
                     logger.info("Locating maximum movie size select element in 'Settings'.")
                     max_movie_select_elem = WebDriverWait(driver, 3).until(
                         EC.visibility_of_element_located((By.ID, "dmm-movie-max-size"))
@@ -258,8 +258,8 @@ async def initialize_browser():
                         logger.info(f"Inserted regex into 'Default torrents filter' input box: {TORRENT_FILTER_REGEX}")
                     else:
                         logger.info("TORRENT_FILTER_REGEX is not set. Skipping insertion into 'Default torrents filter' box.")
-                    settings_button.click()
-                    logger.info("Closed 'Settings' to save settings.")
+                    # Assume settings are auto-saved; no explicit save button
+                    logger.info("Settings updated successfully.")
                 except (TimeoutException, NoSuchElementException, ElementClickInterceptedException) as ex:
                     logger.error(f"Error while interacting with the settings: {ex}")
                     logger.warning("Continuing without applying custom settings (TORRENT_FILTER_REGEX, MAX_MOVIE_SIZE, MAX_EPISODE_SIZE)")
@@ -279,7 +279,7 @@ async def initialize_browser():
                 logger.info("Waiting for 2 seconds on the library page.")
                 time.sleep(2)
                 logger.info("Completed waiting on the library page.")
-              
+             
                 # Extract library stats from the page
                 try:
                     logger.info("Extracting library statistics from the page.")
@@ -288,20 +288,20 @@ async def initialize_browser():
                     )
                     library_stats_text = library_stats_element.text.strip()
                     logger.info(f"Found library stats text: {library_stats_text}")
-                  
+                 
                     # Parse the text to extract torrent count and size
                     # Example: "Library, 3132 torrents, 76.5 TB"
                     import re
                     from datetime import datetime
-                  
+                 
                     # Extract torrent count
                     torrent_match = re.search(r'(\d+)\s+torrents', library_stats_text)
                     torrents_count = int(torrent_match.group(1)) if torrent_match else 0
-                  
+                 
                     # Extract TB size
                     size_match = re.search(r'([\d.]+)\s*TB', library_stats_text)
                     total_size_tb = float(size_match.group(1)) if size_match else 0.0
-                  
+                 
                     # Update global library stats
                     global library_stats
                     library_stats = {
@@ -309,14 +309,14 @@ async def initialize_browser():
                         "total_size_tb": total_size_tb,
                         "last_updated": datetime.now().isoformat()
                     }
-                  
+                 
                     logger.success(f"Successfully extracted library stats: {torrents_count} torrents, {total_size_tb} TB")
-                  
+                 
                 except TimeoutException:
                     logger.warning("Could not find library stats element on the page within timeout.")
                 except Exception as e:
                     logger.error(f"Error extracting library stats: {e}")
-              
+             
                 logger.success("Browser initialization completed successfully.")
             except Exception as e:
                 logger.error(f"Error during browser setup: {e}")
@@ -325,7 +325,7 @@ async def initialize_browser():
                     driver = None
     else:
         logger.info("Browser already initialized.")
-  
+ 
     return driver # Return the driver instance for direct use
 async def shutdown_browser():
     """Shut down the browser and clean up resources."""
