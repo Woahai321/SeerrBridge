@@ -28,9 +28,13 @@ from seerr.overseerr import get_overseerr_media_requests, mark_completed
 from seerr.trakt import get_media_details_from_trakt, get_season_details_from_trakt, check_next_episode_aired
 from seerr.utils import parse_requested_seasons, normalize_season, extract_season, clean_title
 
+# Load queue sizes from environment variables with defaults
+MOVIE_QUEUE_MAXSIZE = int(os.getenv('MOVIE_QUEUE_MAXSIZE', '250'))
+TV_QUEUE_MAXSIZE = int(os.getenv('TV_QUEUE_MAXSIZE', '250'))
+
 # Initialize queues for different types of requests
-movie_queue = Queue(maxsize=250)  # Queue for movie requests
-tv_queue = Queue(maxsize=250)     # Queue for TV show requests 
+movie_queue = Queue(maxsize=MOVIE_QUEUE_MAXSIZE)  # Queue for movie requests
+tv_queue = Queue(maxsize=TV_QUEUE_MAXSIZE)     # Queue for TV show requests 
 processing_task = None  # To track the current processing task
 
 # Timestamp tracking for queue activity
@@ -315,7 +319,7 @@ async def process_tv_queue():
 async def add_movie_to_queue(imdb_id, movie_title, media_type, extra_data, media_id, tmdb_id):
     """Add a movie request to the movie queue."""
     if movie_queue.full():
-        logger.warning(f"Movie queue is full. Cannot add request for IMDb ID: {imdb_id}")
+        logger.warning(f"Movie queue is full (maxsize={MOVIE_QUEUE_MAXSIZE}). Cannot add request for IMDb ID: {imdb_id}")
         return False
     
     await movie_queue.put((imdb_id, movie_title, media_type, extra_data, media_id, tmdb_id))
@@ -326,7 +330,7 @@ async def add_movie_to_queue(imdb_id, movie_title, media_type, extra_data, media
 async def add_tv_to_queue(imdb_id, movie_title, media_type, extra_data, media_id, tmdb_id):
     """Add a TV show request to the TV queue."""
     if tv_queue.full():
-        logger.warning(f"TV queue is full. Cannot add request for IMDb ID: {imdb_id}")
+        logger.warning(f"TV queue is full (maxsize={TV_QUEUE_MAXSIZE}). Cannot add request for IMDb ID: {imdb_id}")
         return False
     
     await tv_queue.put(("tv_processing", imdb_id, movie_title, media_type, extra_data, media_id, tmdb_id))
@@ -337,7 +341,7 @@ async def add_tv_to_queue(imdb_id, movie_title, media_type, extra_data, media_id
 async def add_subscription_check_to_queue():
     """Add a subscription check task to the TV queue."""
     if tv_queue.full():
-        logger.warning("TV queue is full. Cannot add subscription check task.")
+        logger.warning(f"TV queue is full (maxsize={TV_QUEUE_MAXSIZE}). Cannot add subscription check task.")
         return False
     
     await tv_queue.put(("subscription_check",))
