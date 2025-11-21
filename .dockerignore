@@ -1,2 +1,109 @@
-node_modules
-.next
+# Git
+.git
+.gitignore
+
+# Documentation
+*.md
+!README.md
+
+# Environment files
+.env
+.env.*
+!.env.example
+
+# Logs
+logs/
+*.log
+
+# Cache directories
+.cache/
+.nuxt/
+.output/
+dist/
+node_modules/
+
+# Python cache
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Virtual environments
+venv/
+env/
+ENV/
+env.bak/
+venv.bak/
+.venv/
+
+# IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.fleet/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
+# OS files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Temporary files
+*.tmp
+*.temp
+.tmp/
+.temp/
+
+# Coverage reports
+coverage/
+*.lcov
+.nyc_output
+
+# Docker files (except the ones we need)
+docker-compose.dev.yml
+docker-compose.nuxt.yml
+Dockerfile.node
+
+# Old reference files
+old_seerr-reference/
+
+# Data directories (will be mounted as volumes)
+data/
+public/cache/
+
+# Test files
+test/
+tests/
+*.test.js
+*.spec.js
+
+# Development files
+.eslintrc*
+.prettierrc*
+.editorconfig
