@@ -3,6 +3,7 @@ Enhanced Sync Manager for SeerrBridge
 Handles intelligent database sync with proper status checking and queue management
 """
 import time
+import traceback
 from datetime import datetime
 from typing import List, Dict, Any, Optional, Tuple
 from sqlalchemy.orm import Session
@@ -74,10 +75,45 @@ class EnhancedSyncManager:
         Process a single request with proper status checking and queue management
         """
         try:
-            tmdb_id = request['media']['tmdbId']
-            media_id = request['media']['id']
-            request_id = request['id']
-            media_type = request['media']['mediaType']
+            # Validate request structure
+            if not isinstance(request, dict):
+                log_error("Enhanced Sync Error", f"Request is not a dictionary: {type(request)}", 
+                         module="enhanced_sync_manager", function="_process_request_with_status_check")
+                return {'synced': False, 'queued': False}
+            
+            if 'media' not in request:
+                log_error("Enhanced Sync Error", f"Request missing 'media' key: {list(request.keys())}", 
+                         module="enhanced_sync_manager", function="_process_request_with_status_check")
+                return {'synced': False, 'queued': False}
+            
+            media_obj = request['media']
+            if not isinstance(media_obj, dict):
+                log_error("Enhanced Sync Error", f"Request['media'] is not a dictionary: {type(media_obj)}", 
+                         module="enhanced_sync_manager", function="_process_request_with_status_check")
+                return {'synced': False, 'queued': False}
+            
+            if 'tmdbId' not in media_obj:
+                log_error("Enhanced Sync Error", f"Request['media'] missing 'tmdbId' key: {list(media_obj.keys())}", 
+                         module="enhanced_sync_manager", function="_process_request_with_status_check")
+                return {'synced': False, 'queued': False}
+            
+            tmdb_id_raw = media_obj.get('tmdbId')
+            media_id = media_obj.get('id')
+            request_id = request.get('id')
+            media_type = media_obj.get('mediaType')
+            
+            # Convert tmdb_id to int if it's not already
+            try:
+                tmdb_id = int(tmdb_id_raw) if tmdb_id_raw is not None else None
+            except (ValueError, TypeError) as e:
+                log_error("Enhanced Sync Error", f"Invalid tmdbId format: {tmdb_id_raw} (type: {type(tmdb_id_raw)})", 
+                         module="enhanced_sync_manager", function="_process_request_with_status_check")
+                return {'synced': False, 'queued': False}
+            
+            if tmdb_id is None:
+                log_error("Enhanced Sync Error", f"tmdbId is None or missing", 
+                         module="enhanced_sync_manager", function="_process_request_with_status_check")
+                return {'synced': False, 'queued': False}
             
             # Check if we've already processed this item in this sync cycle
             item_key = f"{media_type}_{tmdb_id}_{request_id}"
@@ -116,6 +152,12 @@ class EnhancedSyncManager:
                     log_warning("Enhanced Sync Warning", f"Could not get details for TMDB ID {tmdb_id}, skipping", 
                                module="enhanced_sync_manager", function="_process_request_with_status_check")
                     return {'synced': False, 'queued': False}
+                
+                # Validate media_details structure
+                if not isinstance(media_details, dict):
+                    log_error("Enhanced Sync Error", f"media_details is not a dictionary: {type(media_details)} for TMDB ID {tmdb_id}", 
+                             module="enhanced_sync_manager", function="_process_request_with_status_check")
+                    return {'synced': False, 'queued': False}
             
             if not existing_media:
                 # Media doesn't exist - create it and add to queue
@@ -129,7 +171,8 @@ class EnhancedSyncManager:
             return await self._handle_existing_media(existing_media, request, media_details)
             
         except Exception as e:
-            log_error("Enhanced Sync Error", f"Error processing request: {e}", 
+            error_traceback = traceback.format_exc()
+            log_error("Enhanced Sync Error", f"Error processing request: {e}\nTraceback:\n{error_traceback}", 
                      module="enhanced_sync_manager", function="_process_request_with_status_check")
             return {'synced': False, 'queued': False}
     
@@ -142,10 +185,22 @@ class EnhancedSyncManager:
         try:
             from seerr.unified_media_manager import start_media_processing
             
-            tmdb_id = request['media']['tmdbId']
-            media_id = request['media']['id']
-            request_id = request['id']
-            media_type = request['media']['mediaType']
+            # Use safe access with .get() to avoid errors
+            media_obj = request.get('media', {})
+            if not isinstance(media_obj, dict):
+                log_error("Enhanced Sync Error", f"Request['media'] is not a dictionary in _create_and_queue_media: {type(media_obj)}", 
+                         module="enhanced_sync_manager", function="_create_and_queue_media")
+                return False
+            
+            tmdb_id = media_obj.get('tmdbId')
+            media_id = media_obj.get('id')
+            request_id = request.get('id')
+            media_type = media_obj.get('mediaType')
+            
+            if not tmdb_id or not media_id or not request_id or not media_type:
+                log_error("Enhanced Sync Error", f"Missing required fields in request: tmdb_id={tmdb_id}, media_id={media_id}, request_id={request_id}, media_type={media_type}", 
+                         module="enhanced_sync_manager", function="_create_and_queue_media")
+                return False
             
             # Prepare extra data
             extra_data = {
@@ -262,10 +317,25 @@ class EnhancedSyncManager:
     async def _add_existing_to_queue(self, media: UnifiedMedia, request: Dict[str, Any]):
         """Add existing media to queue with proper tracking"""
         try:
+            # Use safe access with .get() to avoid errors
+            media_obj = request.get('media', {})
+            if not isinstance(media_obj, dict):
+                log_error("Enhanced Sync Error", f"Request['media'] is not a dictionary in _add_existing_to_queue: {type(media_obj)}", 
+                         module="enhanced_sync_manager", function="_add_existing_to_queue")
+                return
+            
+            media_id = media_obj.get('id')
+            request_id = request.get('id')
+            
+            if not media_id or not request_id:
+                log_error("Enhanced Sync Error", f"Missing required fields in request: media_id={media_id}, request_id={request_id}", 
+                         module="enhanced_sync_manager", function="_add_existing_to_queue")
+                return
+            
             # Prepare extra data
             extra_data = {
-                'overseerr_media_id': request['media']['id'],
-                'overseerr_request_id': request['id'],
+                'overseerr_media_id': media_id,
+                'overseerr_request_id': request_id,
                 'retry_attempt': media.queue_attempts + 1,
                 'sync_queued_at': datetime.utcnow().isoformat()
             }
@@ -277,9 +347,9 @@ class EnhancedSyncManager:
                     media.title,
                     'movie',
                     extra_data,
-                    request['media']['id'],
+                    media_id,
                     media.tmdb_id,
-                    request['id']
+                    request_id
                 )
             else:  # tv
                 # For TV shows, add requested seasons info
@@ -289,9 +359,9 @@ class EnhancedSyncManager:
                     media.title,
                     'tv',
                     extra_data,
-                    request['media']['id'],
+                    media_id,
                     media.tmdb_id,
-                    request['id']
+                    request_id
                 )
             
             if success:

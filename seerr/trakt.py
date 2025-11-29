@@ -84,13 +84,45 @@ def get_media_details_from_trakt(tmdb_id: str, media_type: str) -> Optional[dict
 
             if response.status_code == 200:
                 data = response.json()
-                if data and isinstance(data, list) and data:
-                    media_info = data[0][trakt_type]
+                if data and isinstance(data, list) and len(data) > 0:
+                    # Check if data[0] is a dict and contains the trakt_type key
+                    first_result = data[0]
+                    if not isinstance(first_result, dict):
+                        logger.error(f"Trakt API response first result is not a dictionary: {type(first_result)}")
+                        if USE_DATABASE:
+                            track_trakt_api_usage(url, False, search_response_time)
+                        return None
+                    
+                    if trakt_type not in first_result:
+                        logger.error(f"{trakt_type.capitalize()} details for ID not found in Trakt API response (missing key '{trakt_type}'). Available keys: {list(first_result.keys())}")
+                        if USE_DATABASE:
+                            track_trakt_api_usage(url, False, search_response_time)
+                        return None
+                    
+                    media_info = first_result[trakt_type]
+                    if not isinstance(media_info, dict):
+                        logger.error(f"Trakt API response media_info is not a dictionary: {type(media_info)}")
+                        if USE_DATABASE:
+                            track_trakt_api_usage(url, False, search_response_time)
+                        return None
+                    
+                    if 'ids' not in media_info or not isinstance(media_info['ids'], dict):
+                        logger.error(f"Trakt API response media_info missing 'ids' dictionary")
+                        if USE_DATABASE:
+                            track_trakt_api_usage(url, False, search_response_time)
+                        return None
+                    
+                    if 'trakt' not in media_info['ids']:
+                        logger.error(f"Trakt API response media_info['ids'] missing 'trakt' key. Available keys: {list(media_info['ids'].keys())}")
+                        if USE_DATABASE:
+                            track_trakt_api_usage(url, False, search_response_time)
+                        return None
+                    
                     trakt_id = media_info['ids']['trakt']
                     if USE_DATABASE:
                         track_trakt_api_usage(url, True, search_response_time)
                 else:
-                    logger.error(f"{trakt_type.capitalize()} details for ID not found in Trakt API response.")
+                    logger.error(f"{trakt_type.capitalize()} details for ID not found in Trakt API response (empty or invalid response).")
                     if USE_DATABASE:
                         track_trakt_api_usage(url, False, search_response_time)
                     return None
@@ -234,14 +266,43 @@ def get_detailed_media_info(trakt_id: int, trakt_type: str) -> Optional[dict]:
             }
             
             # Add images if available
-            if 'images' in data:
+            if 'images' in data and isinstance(data['images'], dict):
                 images = data['images']
-                if 'poster' in images and images['poster']:
-                    detailed_info['poster_url'] = images['poster']['full']
-                if 'fanart' in images and images['fanart']:
-                    detailed_info['fanart_url'] = images['fanart']['full']
-                if 'backdrop' in images and images['backdrop']:
-                    detailed_info['backdrop_url'] = images['backdrop']['full']
+                
+                # Helper function to safely extract image URL from dict or list
+                def extract_image_url(image_data):
+                    """Extract image URL from Trakt API response (handles both dict and list formats)"""
+                    if not image_data:
+                        return ''
+                    
+                    # If it's a dict, try to get 'full' directly
+                    if isinstance(image_data, dict):
+                        if 'full' in image_data:
+                            return image_data['full']
+                        # Sometimes it's nested under 'file'
+                        if 'file' in image_data and isinstance(image_data['file'], dict):
+                            return image_data['file'].get('full', '')
+                        return ''
+                    
+                    # If it's a list, get the first item
+                    if isinstance(image_data, list) and len(image_data) > 0:
+                        first_item = image_data[0]
+                        if isinstance(first_item, dict):
+                            if 'full' in first_item:
+                                return first_item['full']
+                            # Sometimes it's nested under 'file'
+                            if 'file' in first_item and isinstance(first_item['file'], dict):
+                                return first_item['file'].get('full', '')
+                    
+                    return ''
+                
+                # Extract image URLs safely
+                if 'poster' in images:
+                    detailed_info['poster_url'] = extract_image_url(images['poster'])
+                if 'fanart' in images:
+                    detailed_info['fanart_url'] = extract_image_url(images['fanart'])
+                if 'backdrop' in images:
+                    detailed_info['backdrop_url'] = extract_image_url(images['backdrop'])
             
             track_trakt_api_usage(url, True, response_time)
             return detailed_info
