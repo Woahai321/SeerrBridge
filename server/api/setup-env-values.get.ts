@@ -1,0 +1,50 @@
+import { defineEventHandler } from 'h3'
+
+export default defineEventHandler(async (event) => {
+  try {
+    // Return only non-sensitive environment variables that can be safely shown
+    // Sensitive values (tokens, keys, secrets) are not returned
+    const safeEnvVars: Record<string, any> = {}
+    
+    // Non-sensitive configuration values
+    if (process.env.HEADLESS_MODE) {
+      safeEnvVars.headless_mode = process.env.HEADLESS_MODE.toLowerCase() === 'true'
+    }
+    
+    if (process.env.REFRESH_INTERVAL_MINUTES) {
+      const val = parseInt(process.env.REFRESH_INTERVAL_MINUTES, 10)
+      if (!isNaN(val)) {
+        safeEnvVars.refresh_interval_minutes = val
+      }
+    }
+    
+    if (process.env.TORRENT_FILTER_REGEX) {
+      safeEnvVars.torrent_filter_regex = process.env.TORRENT_FILTER_REGEX
+    }
+    
+    // Check if sensitive values exist (without returning them)
+    const hasSensitiveValues = {
+      rd_access_token: !!process.env.RD_ACCESS_TOKEN,
+      rd_refresh_token: !!process.env.RD_REFRESH_TOKEN,
+      rd_client_id: !!process.env.RD_CLIENT_ID,
+      rd_client_secret: !!process.env.RD_CLIENT_SECRET,
+      overseerr_base: !!process.env.OVERSEERR_BASE,
+      overseerr_api_key: !!process.env.OVERSEERR_API_KEY,
+      trakt_api_key: !!process.env.TRAKT_API_KEY
+    }
+    
+    return {
+      success: true,
+      safeValues: safeEnvVars,
+      hasSensitiveValues,
+      allRequiredPresent: Object.values(hasSensitiveValues).every(v => v === true)
+    }
+  } catch (error) {
+    console.error('Error getting environment values:', error)
+    return {
+      success: false,
+      error: 'Failed to get environment values'
+    }
+  }
+})
+

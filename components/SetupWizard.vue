@@ -10,6 +10,43 @@
         </p>
       </div>
 
+
+      <!-- Environment Variables Available Banner -->
+      <div v-if="envVarsAvailable && !setupSkipped" class="bg-blue-50 dark:bg-blue-900/20 border border-blue-500 rounded-lg p-4 mb-4">
+        <div class="flex items-start justify-between">
+          <div class="flex items-start">
+            <Icon name="lucide:info" class="w-5 h-5 text-blue-600 mr-2 flex-shrink-0 mt-0.5" />
+            <div class="flex-1">
+              <h4 class="font-semibold text-blue-900 dark:text-blue-100">Environment Variables Detected</h4>
+              <p class="text-sm text-blue-800 dark:text-blue-200 mt-1">
+                All required configuration values are available in your .env file. You can skip the setup wizard and use these values directly.
+              </p>
+            </div>
+          </div>
+          <button
+            @click="skipSetupWithEnv"
+            :disabled="isSaving || isSkippingSetup"
+            class="ml-4 px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed flex items-center space-x-2"
+          >
+            <Icon v-if="isSkippingSetup" name="lucide:loader-2" class="w-4 h-4 animate-spin" />
+            <span>{{ isSkippingSetup ? 'Loading...' : 'Skip Setup & Use .env' }}</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- Success Message After Skipping -->
+      <div v-if="setupSkipped" class="bg-green-50 dark:bg-green-900/20 border border-green-500 rounded-lg p-4">
+        <div class="flex items-start">
+          <Icon name="lucide:check-circle" class="w-5 h-5 text-green-600 mr-2 flex-shrink-0" />
+          <div class="flex-1">
+            <h4 class="font-semibold text-green-900 dark:text-green-100">Setup Complete!</h4>
+            <p class="text-sm text-green-800 dark:text-green-200 mt-1">
+              Configuration loaded from environment variables successfully. Redirecting to dashboard...
+            </p>
+          </div>
+        </div>
+      </div>
+
       <div class="bg-card shadow rounded-lg border border-border">
         <div class="px-4 py-5 sm:p-6">
           <!-- Progress Steps -->
@@ -538,6 +575,9 @@ import { ref, computed, onMounted, watch, nextTick } from 'vue'
 
 const currentStep = ref(0)
 const isSaving = ref(false)
+const isSkippingSetup = ref(false)
+const setupSkipped = ref(false)
+const envVarsAvailable = ref(false)
 const testing = ref([false, false, false, false])
 
 const steps = ref([
@@ -590,14 +630,45 @@ const config = ref({
 // Load saved setup state on mount
 onMounted(async () => {
   try {
+    // Check for environment variables first - use both endpoints for reliability
+    const [setupStatus, envValues] = await Promise.all([
+      $fetch('/api/setup-status').catch(() => ({ success: false, data: { canSkipSetup: false } })),
+      $fetch('/api/setup-env-values').catch(() => ({ success: false, allRequiredPresent: false }))
+    ])
+    
+    console.log('Setup status check:', { setupStatus, envValues })
+    
+    // Show skip button if either endpoint indicates all required env vars are present
+    const canSkip = (setupStatus.success && setupStatus.data?.canSkipSetup) || 
+                    (envValues.success && envValues.allRequiredPresent)
+    
+    if (canSkip) {
+      envVarsAvailable.value = true
+      console.log('Environment variables detected - skip button should be visible')
+    } else {
+      console.log('Environment variables not fully available:', {
+        setupStatusCanSkip: setupStatus.success && setupStatus.data?.canSkipSetup,
+        envValuesAllPresent: envValues.success && envValues.allRequiredPresent,
+        envValuesData: envValues
+      })
+    }
+    
+    // Try to load environment variables into config
+    await loadConfigFromEnv()
+    
     const { data: setupState } = await $fetch('/api/setup-load-state')
     if (setupState) {
       // Restore current step
       currentStep.value = setupState.currentStep || 0
       
-      // Restore config
+      // Restore config (but don't overwrite env-loaded values)
       if (setupState.config) {
-        Object.assign(config.value, setupState.config)
+        // Only merge values that aren't already set from env
+        Object.keys(setupState.config).forEach(key => {
+          if (!config.value[key] || config.value[key] === '') {
+            config.value[key] = setupState.config[key]
+          }
+        })
       }
       
       // Ensure default torrent_filter_regex is prefilled if not already set
@@ -630,6 +701,64 @@ onMounted(async () => {
     console.error('Error loading setup state:', error)
   }
 })
+
+const loadConfigFromEnv = async () => {
+  try {
+    // Get safe environment variable values
+    const envData = await $fetch('/api/setup-env-values')
+    
+    if (envData.success && envData.safeValues) {
+      // Auto-populate non-sensitive values
+      if (envData.safeValues.headless_mode !== undefined) {
+        config.value.headless_mode = envData.safeValues.headless_mode
+      }
+      if (envData.safeValues.refresh_interval_minutes !== undefined) {
+        config.value.refresh_interval_minutes = envData.safeValues.refresh_interval_minutes
+      }
+      if (envData.safeValues.torrent_filter_regex) {
+        config.value.torrent_filter_regex = envData.safeValues.torrent_filter_regex
+      }
+    }
+  } catch (error) {
+    console.error('Error loading config from env:', error)
+  }
+}
+
+const skipSetupWithEnv = async () => {
+  isSkippingSetup.value = true
+  
+  try {
+    // Call the endpoint to load from .env and save to database
+    const response = await $fetch('/api/setup-load-env', {
+      method: 'POST'
+    })
+    
+    if (response.success) {
+      setupSkipped.value = true
+      // Redirect to dashboard after a short delay
+      setTimeout(() => {
+        navigateTo('/dashboard')
+      }, 1500)
+    } else {
+      // Show a more helpful error message
+      let errorMsg = response.error || response.message || 'Unknown error'
+      if (response.missingBackend || response.failedKeys) {
+        errorMsg = `Configuration could not be fully saved. ${errorMsg}\n\n` +
+          `Please ensure:\n` +
+          `1. Python 3 is installed and available\n` +
+          `2. SEERRBRIDGE_MASTER_KEY is set in your .env file\n` +
+          `3. The SeerrBridge backend service is running (or will encrypt values when it starts)`
+      }
+      alert('Failed to load configuration from environment variables:\n\n' + errorMsg)
+    }
+  } catch (error) {
+    console.error('Error skipping setup with env vars:', error)
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error'
+    alert('Error loading configuration from environment variables: ' + errorMessage)
+  } finally {
+    isSkippingSetup.value = false
+  }
+}
 
 // Computed property to check if DMM credentials are valid (read-only, doesn't mutate state)
 // This is used in template bindings and must not mutate reactive state to prevent infinite loops
