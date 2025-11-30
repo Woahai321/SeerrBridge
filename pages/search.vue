@@ -373,23 +373,24 @@
   />
 
   <!-- Toast Notifications -->
-  <div class="fixed bottom-4 right-4 z-50 space-y-2">
-    <TransitionGroup name="toast" tag="div">
+  <div class="fixed bottom-4 right-4 z-50 space-y-2 max-h-[calc(100vh-2rem)] overflow-hidden pointer-events-none">
+    <TransitionGroup name="toast" tag="div" class="flex flex-col-reverse space-y-reverse space-y-2">
       <div
-        v-for="toast in toasts"
+        v-for="toast in displayedToasts"
         :key="toast.id"
-        class="px-4 py-3 rounded-lg shadow-lg min-w-[300px] max-w-[400px] animate-fade-in"
+        class="px-4 py-3 rounded-lg shadow-lg min-w-[300px] max-w-[400px] animate-fade-in pointer-events-auto border"
         :class="getToastClass(toast.type)"
       >
         <div class="flex items-center gap-3">
           <Icon :name="getToastIcon(toast.type)" class="w-5 h-5 flex-shrink-0" />
-          <div class="flex-1">
+          <div class="flex-1 min-w-0">
             <p class="text-sm font-medium">{{ toast.title }}</p>
-            <p class="text-sm opacity-90">{{ toast.message }}</p>
+            <p class="text-sm opacity-90 line-clamp-2">{{ toast.message }}</p>
           </div>
           <button
             @click="removeToast(toast.id)"
-            class="flex-shrink-0 hover:opacity-70 transition-opacity"
+            class="flex-shrink-0 hover:opacity-70 transition-opacity p-1 -mt-1 -mr-1"
+            aria-label="Close notification"
           >
             <Icon name="mdi:close" class="w-4 h-4" />
           </button>
@@ -412,15 +413,47 @@ interface Toast {
 }
 
 const toasts = ref<Toast[]>([])
+const toastTimeouts = new Map<string, NodeJS.Timeout>()
+
+// Maximum number of toasts to display at once
+const MAX_DISPLAYED_TOASTS = 5
+
+// Timeout durations in milliseconds based on toast type
+const TOAST_DURATIONS = {
+  success: 4000,  // 4 seconds
+  info: 5000,     // 5 seconds
+  warning: 6000,  // 6 seconds
+  error: 8000     // 8 seconds (errors stay longer)
+}
+
+// Computed property to limit displayed toasts
+const displayedToasts = computed(() => {
+  return toasts.value.slice(0, MAX_DISPLAYED_TOASTS)
+})
 
 const addToast = (type: Toast['type'], title: string, message: string) => {
-  const id = Date.now().toString()
+  const id = `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`
   toasts.value.push({ id, type, title, message })
   
-  // Auto remove after 5 seconds
-  setTimeout(() => {
+  // Limit total toasts in memory to prevent memory leaks
+  if (toasts.value.length > 20) {
+    const removed = toasts.value.splice(20)
+    removed.forEach(t => {
+      const timeout = toastTimeouts.get(t.id)
+      if (timeout) {
+        clearTimeout(timeout)
+        toastTimeouts.delete(t.id)
+      }
+    })
+  }
+  
+  // Auto remove after duration based on type
+  const duration = TOAST_DURATIONS[type] || TOAST_DURATIONS.info
+  const timeout = setTimeout(() => {
     removeToast(id)
-  }, 5000)
+  }, duration)
+  
+  toastTimeouts.set(id, timeout)
 }
 
 const removeToast = (id: string) => {
@@ -428,7 +461,20 @@ const removeToast = (id: string) => {
   if (index > -1) {
     toasts.value.splice(index, 1)
   }
+  
+  // Clear timeout if it exists
+  const timeout = toastTimeouts.get(id)
+  if (timeout) {
+    clearTimeout(timeout)
+    toastTimeouts.delete(id)
+  }
 }
+
+// Clean up timeouts on unmount
+onUnmounted(() => {
+  toastTimeouts.forEach(timeout => clearTimeout(timeout))
+  toastTimeouts.clear()
+})
 
 const getToastClass = (type: string) => {
   const classes = {
@@ -799,17 +845,21 @@ useHead({
 <style scoped>
 .toast-enter-active,
 .toast-leave-active {
-  transition: all 0.3s ease;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .toast-enter-from {
   opacity: 0;
-  transform: translateY(100%);
+  transform: translateY(100%) scale(0.95);
 }
 
 .toast-leave-to {
   opacity: 0;
-  transform: translateY(100%);
+  transform: translateY(100%) scale(0.95);
+}
+
+.toast-move {
+  transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 }
 </style>
 

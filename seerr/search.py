@@ -6,6 +6,7 @@ import time
 import json
 import os
 import asyncio
+import re
 from selenium.webdriver.common.by import By
 from selenium.webdriver.common.keys import Keys
 from selenium.webdriver.support.ui import WebDriverWait
@@ -32,6 +33,185 @@ from seerr.utils import (
     match_single_season
 )
 from seerr.background_tasks import search_individual_episodes
+
+def search_dmm_by_title_and_extract_id(driver, title, media_type, year=None):
+    """
+    Search DMM by title and extract IMDB ID from search results.
+    This is a fallback when IMDB ID is not available.
+    
+    Args:
+        driver: Selenium WebDriver instance
+        title: Title of the media (without year)
+        media_type: 'movie' or 'tv'
+        year: Optional year to help with matching
+        
+    Returns:
+        str: IMDB ID if found, None otherwise
+    """
+    from selenium.webdriver.common.by import By
+    from selenium.webdriver.support.ui import WebDriverWait
+    from selenium.webdriver.support import expected_conditions as EC
+    from selenium.webdriver.common.keys import Keys
+    from selenium.common.exceptions import TimeoutException, NoSuchElementException, WebDriverException
+    from urllib.parse import quote
+    import re
+    import time
+    
+    try:
+        logger.info(f"Searching DMM for '{title}' ({media_type}) to find IMDB ID (fallback when IMDB ID is missing)")
+        
+        # Try using direct URL with query parameter first (more reliable)
+        try:
+            encoded_title = quote(title)
+            search_url = f"https://debridmediamanager.com/search?query={encoded_title}"
+            logger.info(f"Navigating to search URL: {search_url}")
+            driver.get(search_url)
+            
+            # Wait a bit for page to load and JavaScript to execute
+            time.sleep(3)
+            
+            # Wait for results to load - try multiple selectors with retries
+            max_retries = 3
+            results_found = False
+            for attempt in range(max_retries):
+                try:
+                    result_links = driver.find_elements(By.CSS_SELECTOR, "a[href*='/show/'], a[href*='/movie/'], a.haptic")
+                    if len(result_links) > 0:
+                        results_found = True
+                        logger.info(f"Found {len(result_links)} result links on attempt {attempt + 1}")
+                        break
+                    else:
+                        logger.debug(f"No results found on attempt {attempt + 1}, waiting...")
+                        time.sleep(2)
+                except Exception as e:
+                    logger.debug(f"Error finding results on attempt {attempt + 1}: {e}")
+                    time.sleep(2)
+            
+            if not results_found:
+                logger.warning(f"Timeout waiting for search results for '{title}'. Trying alternative approach...")
+                # Fallback: try using search input
+                raise TimeoutException("Results not found via URL")
+                
+        except (TimeoutException, WebDriverException) as e:
+            logger.info(f"Direct URL approach failed, trying search input method: {e}")
+            # Fallback: Navigate to search page and use input
+            driver.get("https://debridmediamanager.com/search")
+            
+            # Wait for search input and enter title
+            try:
+                search_input = WebDriverWait(driver, 10).until(
+                    EC.presence_of_element_located((By.ID, "search-input"))
+                )
+                search_input.clear()
+                search_input.send_keys(title)
+                time.sleep(1)  # Wait a bit before sending return
+                search_input.send_keys(Keys.RETURN)
+                
+                # Wait for results to load
+                WebDriverWait(driver, 15).until(
+                    lambda d: len(d.find_elements(By.CSS_SELECTOR, "a[href*='/show/'], a[href*='/movie/'], a.haptic")) > 0
+                )
+            except TimeoutException:
+                logger.warning(f"No search results found for '{title}'")
+                return None
+        
+        # Find all result links (shows or movies)
+        result_links = driver.find_elements(By.CSS_SELECTOR, "a[href*='/show/'], a[href*='/movie/']")
+        
+        if not result_links:
+            logger.warning(f"No result links found for '{title}'")
+            return None
+        
+        logger.info(f"Found {len(result_links)} potential results for '{title}'")
+        
+        # Extract title from the search query (remove year if present)
+        title_clean = clean_title(title.split('(')[0].strip())
+        
+        # Try to find matching result by title
+        best_match = None
+        best_score = 0
+        
+        for link in result_links:
+            try:
+                # Extract IMDB ID from href (e.g., /show/tt26750568 or /movie/tt1234567)
+                href = link.get_attribute('href')
+                if not href:
+                    continue
+                
+                # Extract IMDB ID from URL
+                match = re.search(r'/(?:show|movie)/(tt\d+)', href)
+                if not match:
+                    continue
+                
+                imdb_id = match.group(1)
+                
+                # Get the title from the result element
+                try:
+                    # Look for h3 element with title (based on user's example)
+                    title_element = link.find_element(By.CSS_SELECTOR, "h3")
+                    result_title = title_element.text.strip()
+                except NoSuchElementException:
+                    # Fallback: try to get text from the link itself
+                    result_title = link.text.strip()
+                    if not result_title:
+                        continue
+                
+                # Get year from result if available
+                result_year = None
+                try:
+                    year_element = link.find_element(By.CSS_SELECTOR, ".text-sm.text-gray-600, div.text-sm")
+                    year_text = year_element.text.strip()
+                    # Try to extract year
+                    year_match = re.search(r'\b(19|20)\d{2}\b', year_text)
+                    if year_match:
+                        result_year = int(year_match.group(0))
+                except NoSuchElementException:
+                    pass
+                
+                # Clean and compare titles
+                result_title_clean = clean_title(result_title.split('(')[0].strip())
+                
+                # Calculate match score
+                title_score = fuzz.partial_ratio(title_clean.lower(), result_title_clean.lower())
+                
+                # Bonus points for year match if provided
+                year_bonus = 0
+                if year and result_year and year == result_year:
+                    year_bonus = 20
+                
+                total_score = title_score + year_bonus
+                
+                logger.info(f"Result: '{result_title}' ({result_year}) - IMDB: {imdb_id} - Score: {total_score} (title: {title_score}, year: {year_bonus})")
+                
+                # Only consider matches with at least 75% title similarity
+                if title_score >= 75 and total_score > best_score:
+                    best_match = imdb_id
+                    best_score = total_score
+                    
+            except Exception as e:
+                logger.debug(f"Error processing result link: {e}")
+                continue
+        
+        if best_match:
+            logger.info(f"Found matching IMDB ID for '{title}': {best_match} (match score: {best_score})")
+            return best_match
+        else:
+            logger.warning(f"No suitable match found for '{title}' (best score was below threshold)")
+            return None
+            
+    except WebDriverException as e:
+        logger.error(f"WebDriver error searching DMM for '{title}': {str(e)}")
+        if hasattr(e, 'msg') and e.msg:
+            logger.error(f"WebDriver error message: {e.msg}")
+        return None
+    except TimeoutException as e:
+        logger.error(f"Timeout error searching DMM for '{title}': {str(e)}")
+        return None
+    except Exception as e:
+        logger.error(f"Unexpected error searching DMM for '{title}': {type(e).__name__}: {str(e)}")
+        import traceback
+        logger.debug(f"Traceback: {traceback.format_exc()}")
+        return None
 
 def extract_episodes_from_torrents(driver, movie_title, season_num, processed_torrents):
     """
@@ -2071,6 +2251,7 @@ def search_on_debrid(imdb_id, movie_title, media_type, driver, extra_data=None, 
     from selenium.webdriver.support import expected_conditions as EC
     from selenium.webdriver.common.keys import Keys
     from seerr.browser import check_red_buttons
+    import re  # Import re at function level since it's used locally later
     try:
         logger.info(f"Starting Selenium automation for IMDb ID: {imdb_id}, Media Type: {media_type}")
         
@@ -2444,6 +2625,32 @@ def search_on_debrid(imdb_id, movie_title, media_type, driver, extra_data=None, 
 
     try:
         # Starting browser automation
+        # Check if IMDB ID is missing or invalid - if so, search by title (RARE FALLBACK)
+        if not imdb_id or imdb_id.lower() == 'none' or (isinstance(imdb_id, str) and imdb_id.strip() == ''):
+            logger.warning(f"IMDB ID is missing or invalid ({imdb_id}). Performing title search fallback (rare case).")
+            
+            # Extract year from title if present (format: "Title (Year)")
+            year = None
+            title_for_search = movie_title
+            year_match = re.search(r'\((\d{4})\)', movie_title)
+            if year_match:
+                year = int(year_match.group(1))
+                title_for_search = movie_title.split('(')[0].strip()
+            
+            # Search DMM by title to find IMDB ID
+            found_imdb_id = search_dmm_by_title_and_extract_id(driver, title_for_search, media_type, year)
+            
+            if found_imdb_id:
+                logger.info(f"Found IMDB ID via title search: {found_imdb_id}. Using it instead of missing ID.")
+                imdb_id = found_imdb_id
+            else:
+                logger.error(f"Could not find IMDB ID via title search for '{title_for_search}'. Cannot proceed.")
+                if USE_DATABASE and processed_media_id:
+                    from seerr.unified_media_manager import update_media_processing_status
+                    update_media_processing_status(processed_media_id, 'failed', 'browser_automation', 
+                                                  error_message=f'IMDB ID not found via title search for {title_for_search}')
+                return False
+        
         # Navigate directly using IMDb ID
         if media_type == 'movie':
             url = f"https://debridmediamanager.com/movie/{imdb_id}"

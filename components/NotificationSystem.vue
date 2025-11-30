@@ -1,10 +1,10 @@
 <template>
-  <div class="fixed top-4 right-4 z-50 space-y-2">
-    <TransitionGroup name="notification" tag="div">
+  <div class="fixed top-4 right-4 z-50 space-y-2 max-h-[calc(100vh-2rem)] overflow-hidden pointer-events-none">
+    <TransitionGroup name="notification" tag="div" class="flex flex-col-reverse space-y-reverse space-y-2">
       <div
-        v-for="notification in notifications"
+        v-for="notification in displayedNotifications"
         :key="notification.id"
-        class="glass-card p-4 max-w-sm animate-fade-in"
+        class="glass-card p-4 max-w-sm animate-fade-in pointer-events-auto shadow-lg border"
         :class="getNotificationClass(notification.type)"
       >
         <div class="flex items-start space-x-3">
@@ -19,16 +19,17 @@
             <p class="text-sm font-medium text-foreground">
               {{ notification.title }}
             </p>
-            <p class="text-xs text-muted-foreground mt-1">
+            <p class="text-xs text-muted-foreground mt-1 line-clamp-2">
               {{ notification.message }}
             </p>
-            <p v-if="notification.media_title" class="text-xs text-muted-foreground mt-1">
+            <p v-if="notification.media_title" class="text-xs text-muted-foreground mt-1 line-clamp-1">
               {{ notification.media_type === 'movie' ? 'Movie' : 'TV Show' }}: {{ notification.media_title }}
             </p>
           </div>
           <button 
             @click="removeNotification(notification.id)"
-            class="flex-shrink-0 text-muted-foreground hover:text-foreground transition-colors"
+            class="flex-shrink-0 text-muted-foreground hover:text-foreground transition-colors p-1 -mt-1 -mr-1"
+            aria-label="Close notification"
           >
             <AppIcon icon="lucide:x" size="16" />
           </button>
@@ -40,8 +41,28 @@
 
 <script setup lang="ts">
 import { useNotifications } from '~/composables/useNotifications'
+import type { Notification } from '~/composables/useNotifications'
 
 const { notifications, removeNotification, startPolling, initializeNotifications } = useNotifications()
+
+// Maximum number of toasts to display at once
+const MAX_DISPLAYED_TOASTS = 5
+
+// Timeout durations in milliseconds based on notification type
+const TOAST_DURATIONS = {
+  success: 4000,  // 4 seconds
+  info: 5000,     // 5 seconds
+  warning: 6000,  // 6 seconds
+  error: 8000     // 8 seconds (errors stay longer)
+}
+
+// Track active timeouts for each notification
+const notificationTimeouts = new Map<string | number, NodeJS.Timeout>()
+
+// Computed property to limit displayed notifications
+const displayedNotifications = computed(() => {
+  return notifications.value.slice(0, MAX_DISPLAYED_TOASTS)
+})
 
 const getNotificationClass = (type: string) => {
   const classes = {
@@ -73,27 +94,81 @@ const getNotificationIconClass = (type: string) => {
   return classes[type as keyof typeof classes] || 'text-muted-foreground'
 }
 
-// Auto-remove notifications after 5 seconds
+// Setup auto-dismiss timeout for a notification
+const setupAutoDismiss = (notification: Notification) => {
+  // Clear any existing timeout for this notification
+  const notificationId = String(notification.id)
+  const existingTimeout = notificationTimeouts.get(notificationId)
+  if (existingTimeout) {
+    clearTimeout(existingTimeout)
+  }
+
+  // Get duration based on notification type
+  const duration = TOAST_DURATIONS[notification.type] || TOAST_DURATIONS.info
+
+  // Set up new timeout
+  const timeout = setTimeout(() => {
+    removeNotification(notification.id)
+    notificationTimeouts.delete(notificationId)
+  }, duration)
+
+  notificationTimeouts.set(notificationId, timeout)
+}
+
+// Set up auto-dismiss for all displayed notifications
+const setupAllDisplayedNotifications = () => {
+  displayedNotifications.value.forEach(notification => {
+    const notificationId = String(notification.id)
+    // Set up timer if not already set up
+    if (!notificationTimeouts.has(notificationId)) {
+      setupAutoDismiss(notification)
+    }
+  })
+  
+  // Clean up timeouts for notifications that are no longer displayed
+  const displayedIds = new Set(displayedNotifications.value.map(n => String(n.id)))
+  notificationTimeouts.forEach((timeout, id) => {
+    if (!displayedIds.has(String(id))) {
+      clearTimeout(timeout)
+      notificationTimeouts.delete(id)
+    }
+  })
+}
+
+// Watch displayed notifications and set up auto-dismiss
+watch(displayedNotifications, () => {
+  setupAllDisplayedNotifications()
+}, { immediate: true, deep: true })
+
+// Also watch the full notifications list to catch when new ones are added
+watch(notifications, () => {
+  nextTick(() => {
+    setupAllDisplayedNotifications()
+  })
+}, { deep: true })
+
+// Clean up on unmount
 onMounted(async () => {
   // Initialize notifications on startup
   await initializeNotifications()
   
-  const interval = setInterval(() => {
-    notifications.value.forEach(notification => {
-      const timestamp = notification.created_at || notification.timestamp
-      const age = Date.now() - new Date(timestamp).getTime()
-      // Only auto-remove if already read, otherwise keep showing it until it's marked read
-      if (age > 5000 && notification.read) {
-        removeNotification(notification.id)
-      }
-    })
-  }, 1000)
-
+  // Set up auto-dismiss for all displayed notifications after initialization
+  await nextTick()
+  setupAllDisplayedNotifications()
+  
+  // Periodic check to ensure all displayed notifications have timers (safety net)
+  const checkInterval = setInterval(() => {
+    setupAllDisplayedNotifications()
+  }, 2000) // Check every 2 seconds
+  
   // Start polling for notifications
   const stopPolling = startPolling(30000) // Poll every 30 seconds
 
   onUnmounted(() => {
-    clearInterval(interval)
+    // Clear all timeouts and intervals
+    clearInterval(checkInterval)
+    notificationTimeouts.forEach(timeout => clearTimeout(timeout))
+    notificationTimeouts.clear()
     stopPolling()
   })
 })
@@ -102,16 +177,20 @@ onMounted(async () => {
 <style scoped>
 .notification-enter-active,
 .notification-leave-active {
-  transition: all 0.3s ease;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .notification-enter-from {
   opacity: 0;
-  transform: translateX(100%);
+  transform: translateX(100%) scale(0.95);
 }
 
 .notification-leave-to {
   opacity: 0;
-  transform: translateX(100%);
+  transform: translateX(100%) scale(0.95);
+}
+
+.notification-move {
+  transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 }
 </style>

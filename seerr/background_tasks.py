@@ -2424,8 +2424,33 @@ async def check_show_subscriptions():
             continue
 
         # Navigate to the show page
-        url = f"https://debridmediamanager.com/show/{imdb_id}/{season_number}"
         from seerr.browser import driver as browser_driver
+        
+        # Check if IMDB ID is missing or invalid - if so, search by title (RARE FALLBACK)
+        if not imdb_id or imdb_id.lower() == 'none' or (isinstance(imdb_id, str) and imdb_id.strip() == ''):
+            logger.warning(f"IMDB ID is missing or invalid ({imdb_id}) for {show_title}. Performing title search fallback (rare case).")
+            from seerr.search import search_dmm_by_title_and_extract_id
+            import re
+            
+            # Extract year from title if present (format: "Title (Year)")
+            year = None
+            title_for_search = show_title
+            year_match = re.search(r'\((\d{4})\)', show_title)
+            if year_match:
+                year = int(year_match.group(1))
+                title_for_search = show_title.split('(')[0].strip()
+            
+            # Search DMM by title to find IMDB ID
+            found_imdb_id = search_dmm_by_title_and_extract_id(browser_driver, title_for_search, 'tv', year)
+            
+            if found_imdb_id:
+                logger.info(f"Found IMDB ID via title search: {found_imdb_id}. Using it instead of missing ID.")
+                imdb_id = found_imdb_id
+            else:
+                logger.error(f"Could not find IMDB ID via title search for '{title_for_search}'. Skipping this show.")
+                continue
+        
+        url = f"https://debridmediamanager.com/show/{imdb_id}/{season_number}"
         browser_driver.get(url)
         logger.info(f"Navigated to show page for Season {season_number}: {url}")
         
@@ -2902,6 +2927,35 @@ async def search_individual_episodes(imdb_id, movie_title, season_number, season
         logger.error(f"No discrepancy entry found for {movie_title} Season {season_number} in database")
         return False
 
+    # Check if IMDB ID is missing or invalid - if so, search by title (RARE FALLBACK)
+    if not imdb_id or imdb_id.lower() == 'none' or (isinstance(imdb_id, str) and imdb_id.strip() == ''):
+        logger.warning(f"IMDB ID is missing or invalid ({imdb_id}) for {movie_title}. Performing title search fallback (rare case).")
+        from seerr.search import search_dmm_by_title_and_extract_id
+        import re
+        
+        # Extract year from title if present (format: "Title (Year)")
+        year = None
+        title_for_search = movie_title
+        year_match = re.search(r'\((\d{4})\)', movie_title)
+        if year_match:
+            year = int(year_match.group(1))
+            title_for_search = movie_title.split('(')[0].strip()
+        
+        # Use the same driver instance for consistency
+        from seerr.browser import driver as browser_driver
+        if driver is None:
+            driver = browser_driver
+        
+        # Search DMM by title to find IMDB ID
+        found_imdb_id = search_dmm_by_title_and_extract_id(driver, title_for_search, 'tv', year)
+        
+        if found_imdb_id:
+            logger.info(f"Found IMDB ID via title search: {found_imdb_id}. Using it instead of missing ID.")
+            imdb_id = found_imdb_id
+        else:
+            logger.error(f"Could not find IMDB ID via title search for '{title_for_search}'. Cannot proceed.")
+            return False
+    
     # Navigate to the show page with season
     url = f"https://debridmediamanager.com/show/{imdb_id}/{season_number}"
     from seerr.browser import driver as browser_driver
