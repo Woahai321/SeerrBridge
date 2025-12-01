@@ -1,0 +1,147 @@
+
+services:
+  mysql:
+    image: mysql:8.0
+    container_name: seerrbridge-mysql-dev
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-seerrbridge_root}
+      MYSQL_DATABASE: ${DB_NAME:-seerrbridge}
+      MYSQL_USER: ${DB_USER:-seerrbridge}
+      MYSQL_PASSWORD: ${DB_PASSWORD:-seerrbridge}
+      MYSQL_INITDB_SKIP_TZINFO: 1
+    ports:
+      - "3307:3306"
+    volumes:
+      - mysql_data_dev:/var/lib/mysql
+      - ./mysql-init:/docker-entrypoint-initdb.d
+    command: --default-authentication-plugin=mysql_native_password
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-p${MYSQL_ROOT_PASSWORD:-seerrbridge_root}"]
+      timeout: 20s
+      retries: 10
+      interval: 10s
+      start_period: 30s
+    networks:
+      - seerrbridge-dev-network
+
+  seerrbridge:
+    build: .
+    container_name: seerrbridge-app-dev
+    restart: unless-stopped
+    depends_on:
+      mysql:
+        condition: service_healthy
+      darthvadarr-nuxt-dev:
+        condition: service_started
+    environment:
+      # Database configuration
+      DB_HOST: mysql
+      DB_PORT: 3306
+      DB_NAME: ${DB_NAME:-seerrbridge}
+      DB_USER: ${DB_USER:-seerrbridge}
+      DB_PASSWORD: ${DB_PASSWORD:-seerrbridge}
+      USE_DATABASE: "true"
+      
+      # SeerrBridge configuration
+      RD_ACCESS_TOKEN: ${RD_ACCESS_TOKEN}
+      RD_REFRESH_TOKEN: ${RD_REFRESH_TOKEN}
+      RD_CLIENT_ID: ${RD_CLIENT_ID}
+      RD_CLIENT_SECRET: ${RD_CLIENT_SECRET}
+      OVERSEERR_BASE: ${OVERSEERR_BASE}
+      OVERSEERR_API_KEY: ${OVERSEERR_API_KEY}
+      TRAKT_API_KEY: ${TRAKT_API_KEY}
+      HEADLESS_MODE: ${HEADLESS_MODE:-true}
+      ENABLE_AUTOMATIC_BACKGROUND_TASK: ${ENABLE_AUTOMATIC_BACKGROUND_TASK:-false}
+      ENABLE_SHOW_SUBSCRIPTION_TASK: ${ENABLE_SHOW_SUBSCRIPTION_TASK:-false}
+      TORRENT_FILTER_REGEX: ${TORRENT_FILTER_REGEX}
+      MAX_MOVIE_SIZE: ${MAX_MOVIE_SIZE}
+      MAX_EPISODE_SIZE: ${MAX_EPISODE_SIZE}
+      REFRESH_INTERVAL_MINUTES: ${REFRESH_INTERVAL_MINUTES:-60}
+      
+      # Failed Item Retry Configuration
+      ENABLE_FAILED_ITEM_RETRY: ${ENABLE_FAILED_ITEM_RETRY:-true}
+      FAILED_ITEM_RETRY_INTERVAL_MINUTES: ${FAILED_ITEM_RETRY_INTERVAL_MINUTES:-30}
+      FAILED_ITEM_MAX_RETRY_ATTEMPTS: ${FAILED_ITEM_MAX_RETRY_ATTEMPTS:-3}
+      FAILED_ITEM_RETRY_DELAY_HOURS: ${FAILED_ITEM_RETRY_DELAY_HOURS:-2}
+      FAILED_ITEM_RETRY_BACKOFF_MULTIPLIER: ${FAILED_ITEM_RETRY_BACKOFF_MULTIPLIER:-2}
+      FAILED_ITEM_MAX_RETRY_DELAY_HOURS: ${FAILED_ITEM_MAX_RETRY_DELAY_HOURS:-24}
+      
+      # Development configuration
+      PYTHONUNBUFFERED: "1"
+      PYTHONDONTWRITEBYTECODE: "1"
+      SEERRBRIDGE_MASTER_KEY: ${SEERRBRIDGE_MASTER_KEY:-default_master_key_for_dev}
+    ports:
+      - "8777:8777"  # SeerrBridge API
+      - "8778:8778"  # Setup API server
+    volumes:
+      - .:/app
+      - ./logs:/app/logs
+      - ./data:/app/data
+    networks:
+      - seerrbridge-dev-network
+    command: sh -c "pip install -r requirements.txt && python scripts/wait-for-setup.py"
+
+  darthvadarr-nuxt-dev:
+    image: node:20-alpine
+    container_name: darthvadarr-nuxt-dev
+    restart: unless-stopped
+    working_dir: /app
+    depends_on:
+      mysql:
+        condition: service_healthy
+    # Install Python3 and required packages for decryption script
+    command: sh -c "apk add --no-cache python3 py3-pip gcc musl-dev libffi-dev openssl-dev python3-dev mariadb-connector-c-dev && pip3 install --no-cache-dir --break-system-packages cryptography loguru && npm install --legacy-peer-deps && npm run dev -- --host 0.0.0.0"
+    environment:
+      # Database configuration
+      DB_HOST: mysql
+      DB_PORT: 3306
+      DB_NAME: ${DB_NAME:-seerrbridge}
+      DB_USER: ${DB_USER:-seerrbridge}
+      DB_PASSWORD: ${DB_PASSWORD:-seerrbridge}
+      
+      # SeerrBridge API configuration
+      SEERRBRIDGE_URL: http://seerrbridge:8777
+      
+      # Nuxt configuration
+      NODE_ENV: development
+      NUXT_HOST: 0.0.0.0
+      NUXT_PORT: 3777
+      
+      # Enhanced hot reloading and file watching for Docker
+      NUXT_DEVTOOLS: "true"
+      CHOKIDAR_USEPOLLING: "true"
+      WATCHPACK_POLLING: "true"
+      CHOKIDAR_INTERVAL: 1000
+      CHOKIDAR_BINARY_INTERVAL: 1000
+      
+      # Node.js optimization for development
+      NODE_OPTIONS: "--max-old-space-size=4096"
+      
+      # Master key for consistency
+      SEERRBRIDGE_MASTER_KEY: ${SEERRBRIDGE_MASTER_KEY:-default_master_key_for_dev}
+    ports:
+      - "3777:3777"  # Nuxt frontend
+    volumes:
+      - .:/app
+      - /app/node_modules
+      - /app/.nuxt
+      - /app/.output
+      - ./logs:/app/logs
+      - ./data:/app/data
+    networks:
+      - seerrbridge-dev-network
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3777/api/health", "||", "exit", "1"]
+      timeout: 10s
+      retries: 5
+      interval: 30s
+      start_period: 60s
+
+volumes:
+  mysql_data_dev:
+    driver: local
+
+networks:
+  seerrbridge-dev-network:
+    driver: bridge

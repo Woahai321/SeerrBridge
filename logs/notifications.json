@@ -1,7 +1,0 @@
-{
-  "discord_webhook_url": "YOUR-DISCORD-WEBHOOK",
-  "notify_on_success": false,
-  "notify_on_error": false,
-  "notify_on_warning": false,
-  "show_debug_widget": false
-}

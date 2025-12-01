@@ -1,0 +1,30 @@
+{
+  "manifest_version": 3,
+  "name": "__MSG_extensionName__",
+  "description": "__MSG_extensionDescription__",
+  "version": "1.0.0",
+  "action": { "default_state": "enabled" },
+  "permissions": [
+    "declarativeNetRequest",
+    "declarativeNetRequestWithHostAccess",
+    "storage",
+    "activeTab"
+  ],
+  "options_page": "options.html",
+  "default_locale": "en",
+  "background": {
+    "service_worker": "background.js"
+  },
+  "action": {
+    "default_icon": "icons/icon_disabled.png"
+  },
+  "icons": {
+    "16": "icons/icon_enabled.png",
+    "32": "icons/icon_enabled.png",
+    "48": "icons/icon_enabled.png",
+    "128": "icons/icon_enabled.png"
+  },
+  "host_permissions": [
+    "<all_urls>"
+  ]
+}

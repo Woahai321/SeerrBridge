@@ -1,0 +1,24 @@
+# Ignore large data directories that slow down compilation
+data/
+data/images/
+data/images/movies/
+# Note: Removed logs/ to allow pages/logs/ routes to be scanned
+# Only the root logs directory is ignored via Nitro config
+seerr/
+scripts/
+mysql-init/
+
+# Ignore build outputs
+.nuxt/
+.output/
+dist/
+
+# Ignore node modules
+node_modules/
+
+# Explicitly ignore image files
+*.webp
+*.jpg
+*.jpeg
+*.png
+*.gif

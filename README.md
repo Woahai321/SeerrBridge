@@ -63,26 +63,110 @@ Example:
 </details>
 
 <details>
-<summary>🌉 BridgeBoard (SeerrBridge Dashboard) - NEW FEATURE🌟</summary>
+<summary>🌉 Darth Vadarr (SeerrBridge Dashboard) - NEW FEATURE🌟</summary>
 
-## What is BridgeBoard?
+## What is Darth Vadarr?
 
-BridgeBoard is a sleek, modern web dashboard that complements the SeerrBridge application, providing a visual interface to monitor and manage your media automation:
+Darth Vadarr is a modern, feature-rich web dashboard built with **Nuxt 4** and **Vue 3** that provides a comprehensive visual interface to monitor, manage, and control your SeerrBridge media automation. It replaces the need for command-line tools and log files, offering an intuitive web-based experience.
+
 ![image](https://github.com/user-attachments/assets/0f49edb0-0ade-4c40-9dbd-3c65d542091b)
 
-- **Status Monitoring**: View the current status of SeerrBridge and your movie / TV show requests.
-- **TV Show Subscription Tracking**: Monitor your subscribed shows, their episode status, and unsubscribe.
-- **Log Configurator**: Manage how SeerrBridge logs are displayed within the dashboard, and where.
-you can create custom log types, regex patterns, and fully manage how logs are processed in the app.
-The app comes with a preset [logs_config.json](https://github.com/Woahai321/SeerrBridge/blob/main/logs/log_config.json), but you can configure logs anyway you like. We may adjust this from time to time.
-- **Request History**: Access historical data of all processed requests and logs via the Log Configurator.
-- **Notifications**: Monitor SeerrBridge processing within Discord via a webhook notification.
-- **Environment Variable Management**: You can manage variables within the application settings and save directly to your .env.
-- **Preset & Custom Regex**: Within settings, you can select from pre-defined regex patterns, make custom ones, and or use the regex builder to create a new custom regex based on your preferences.
+### 🎯 Core Features
 
-BridgeBoard connects directly to your SeerrBridge instance via API, providing a user-friendly way to interact with and monitor your media automation without having to check logs or use command line tools.
+#### **Dashboard Overview**
+- **Real-time Status Monitoring**: Live view of SeerrBridge service status, uptime, and health metrics
+- **Statistics Cards**: Animated cards displaying key metrics including:
+  - Total processed media (movies & TV shows)
+  - Currently processing items
+  - Success/failure counts
+  - Queue status and activity
+- **Currently Processing Section**: Real-time view of items being processed with detailed status information
+- **Recent Media Feed**: Chronological view of recently processed media with thumbnails and metadata
 
-To access BridgeBoard, navigate to `http://localhost:3777` after starting both containers with Docker Compose, or running it manually.
+#### **Processed Media Management**
+- **Comprehensive Media Library**: Browse all processed movies and TV shows with advanced filtering
+- **Search & Filter**: 
+  - Search by title, year, or metadata
+  - Filter by status (completed, processing, failed, pending)
+  - Filter by media type (movie, TV show)
+  - Filter by processing stage
+- **Media Details**: 
+  - Detailed information for each media item
+  - Season and episode tracking for TV shows
+  - Processing history and status
+  - Retry/retrigger functionality for failed items
+- **Bulk Operations**: Manage multiple media items at once
+
+#### **Search & Discovery**
+- **Overseerr Integration**: Search for movies and TV shows directly from Overseerr
+- **Grid & List Views**: Toggle between visual grid and detailed list views
+- **Media Details**: View comprehensive information before processing
+- **Quick Actions**: Request media directly from the dashboard
+
+#### **Collections Browser**
+- **Franchise Collections**: Browse movies organized by franchise (e.g., Marvel Cinematic Universe, Star Wars)
+- **Collection Details**: View all movies in a franchise with metadata
+- **Search Collections**: Find collections by name or movie title
+- **Random Discovery**: Discover new collections with random suggestions
+
+#### **Logs & Monitoring**
+- **Categorized Logs**: View logs by type:
+  - All logs (comprehensive view)
+  - Errors only
+  - Critical errors
+  - Success logs
+  - Failed episodes
+- **Real-time Updates**: Live log streaming with automatic refresh
+- **Log Filtering**: Filter logs by level, type, and time range
+- **Pagination**: Navigate through large log files efficiently
+
+#### **Settings & Configuration**
+- **API Credentials Management**: 
+  - Real-Debrid configuration (Client ID, Client Secret, Access Token, Refresh Token)
+  - Trakt API key
+  - Overseerr/Jellyseerr API key and base URL
+- **Application Settings**:
+  - Headless mode toggle
+  - Automatic background task enablement
+  - Show subscription task control
+  - Refresh interval configuration
+- **Torrent Filtering**:
+  - Preset regex patterns
+  - Custom regex builder
+  - Regex pattern testing
+- **Size Limits**:
+  - Maximum movie size settings
+  - Maximum episode size settings
+- **Database Management**: View and manage database connections and status
+- **Theme Support**: Light, dark, and system theme options
+
+#### **Setup Wizard**
+- **Guided Initial Setup**: Step-by-step wizard for first-time configuration
+- **Credential Testing**: Test API credentials before saving
+- **Configuration Validation**: Ensure all required settings are properly configured
+
+### 🎨 User Experience Features
+
+- **Responsive Design**: Fully responsive interface that works on desktop, tablet, and mobile devices
+- **Dark/Light Themes**: Multiple theme options with system preference detection
+- **Real-time Updates**: Live data updates without manual refresh
+- **Smooth Animations**: Polished UI with smooth transitions and loading states
+- **Error Handling**: Graceful error handling with user-friendly messages
+- **Performance Optimized**: Built with Nuxt 4 for optimal performance and SEO
+
+### 🔌 Technical Integration
+
+Darth Vadarr connects directly to your SeerrBridge backend via REST API, providing:
+- **Secure Communication**: All API calls are authenticated and encrypted
+- **Database Integration**: Direct connection to MySQL database for real-time data
+- **WebSocket Support**: Real-time updates where applicable
+- **Caching**: Intelligent data caching for improved performance
+
+### 📍 Access
+
+To access Darth Vadarr, navigate to **`http://localhost:3777`** after starting the Docker containers.
+
+The dashboard automatically connects to your SeerrBridge backend running on port 8777, providing seamless integration between the frontend and backend services.
 </details>
 
 <details>
@@ -193,37 +277,47 @@ This is what you want to copy from your local storage and set in your .env:
 ![image](https://github.com/user-attachments/assets/3bb77fd5-2c8f-4675-a1da-59f0cb9cb178)
 
 
-### 4. **Python 3.10.11+**
-   - The bot requires **Python 3.10.11** or higher. You can download Python from [here](https://www.python.org/downloads/).
-
-### 5. **Required Python Libraries**
-   - You can install the required libraries by running:
-     ```bash
-     pip install -r requirements.txt
-     ```
-
 ---
 
 ### Example `.env` File
 
-Create a `.env` (or rename the example .env) file in the root directory of the project and add the following environment variables:
+Create a `.env` file in the root directory of the project. The following environment variables are used for Docker setup:
 
 ```bash
+# Database Configuration (Required)
+DB_NAME=seerrbridge
+DB_USER=seerrbridge
+DB_PASSWORD=seerrbridge
+DB_ROOT_PASSWORD=seerrbridge_root
+
+# Encryption Master Key (Recommended for production)
+# If not set, a temporary key will be generated (data lost on restart)
+SEERRBRIDGE_MASTER_KEY=your_master_key_here
+
+# Real-Debrid Configuration
 RD_ACCESS_TOKEN={"value":"YOUR_TOKEN","expiry":123456789}
 RD_REFRESH_TOKEN=YOUR_REFRESH_TOKEN
 RD_CLIENT_ID=YOUR_CLIENT_ID
 RD_CLIENT_SECRET=YOUR_CLIENT_SECRET
+
+# Trakt API Configuration
 TRAKT_API_KEY=YOUR_TRAKT_TOKEN
+
+# Overseerr/Jellyseerr Configuration
 OVERSEERR_API_KEY=YOUR_OVERSEERR_TOKEN
 OVERSEERR_BASE=https://YOUR_OVERSEERR_URL.COM
+
+# Application Settings
 HEADLESS_MODE=true
-ENABLE_AUTOMATIC_BACKGROUND_TASK=false
-ENABLE_SHOW_SUBSCRIPTION_TASK=false
+ENABLE_AUTOMATIC_BACKGROUND_TASK=true
+ENABLE_SHOW_SUBSCRIPTION_TASK=true
 REFRESH_INTERVAL_MINUTES=120
 TORRENT_FILTER_REGEX=^(?!.*【.*?】)(?!.*[\u0400-\u04FF])(?!.*\[esp\]).*
 MAX_MOVIE_SIZE=0
 MAX_EPISODE_SIZE=0
 ```
+
+**Note**: Most configuration (API keys, tokens, advanced settings, etc.) can be managed via the web interface and is stored securely in the database. Only database credentials and the master key need to be in the `.env` file.
 </details>
 
 <details>
@@ -234,133 +328,56 @@ MAX_EPISODE_SIZE=0
 Configure your webhook as mentioned above so SeerrBridge can ingest and process approval requests.
 
 
-### Python Environment
+---
+
+### 🐳 Docker Setup
+
+SeerrBridge consists of three main components:
+- **MySQL Database**: Stores application data and configuration
+- **SeerrBridge Backend**: Python/FastAPI application that handles webhooks and automation
+- **Darth Vadarr Dashboard**: Nuxt.js frontend for monitoring and managing SeerrBridge
+
+The recommended way to run SeerrBridge is using Docker Compose.
+
+## Prerequisites
+- Docker and Docker Compose installed on your system
+- A `.env` file with your configuration (see example below)
+
+### Quick Start with Docker Compose
 
 1. **Clone the repository**:
    ```bash
    git clone https://github.com/Woahai321/SeerrBridge.git
    cd SeerrBridge
    ```
-2. **Install dependencies**:
-   ```bash
-   pip install -r requirements.txt
-   ```
-3. **Run the application**:
-   ```bash
-   python seerrbridge.py
-   ```
 
-### BridgeBoard (Dashboard) Setup
-
-To run the BridgeBoard dashboard locally:
-
-1. **Ensure you have Node.js v20 or newer installed**:
-   ```bash
-   node --version
-   # Should show v20.x.x or higher
-   ```
-   If you need to install or update Node.js, visit [nodejs.org](https://nodejs.org/).
-
-2. **Navigate to the project directory**:
-   ```bash
-   cd SeerrBridge
-   ```
-
-3. **Install Node.js dependencies**:
-   ```bash
-   npm install
-   ```
-
-4. **Build the dashboard**:
-   ```bash
-   npm run build
-   ```
-
-5. **Start the BridgeBoard dashboard**:
-   ```bash
-   npm start
-   ```
-
-6. **Access the dashboard** at [http://localhost:3777](http://localhost:3777)
-
-
----
-
-### 🐳 Docker Support
-
-SeerrBridge consists of two components: the main application (seerrbridge) and an optional dashboard (bridgeboard). The recommended way to run them is using Docker Compose with the pre-built images.
-
-## Prerequisites
-- Docker and Docker Compose installed on your system
-- A `.env` file with your configuration
-
-### Quick Start with Docker Compose
-
-1. **Create a docker-compose.yml file**:
-
-```yaml
-services:
-  seerrbridge:
-    image: ghcr.io/woahai321/seerrbridge:latest
-    container_name: seerrbridge
-    ports:
-      - "8777:8777"
-    env_file:
-      - ./.env
-    volumes:
-      - shared_logs:/app/logs
-      - ./.env:/app/.env
-    restart: unless-stopped
-    command: >
-      sh -c "
-        cat /app/.env > /dev/null && 
-        echo 'Starting SeerrBridge with refreshed env' &&
-        uvicorn main:app --host 0.0.0.0 --port 8777
-      "
-    networks:
-      - seerrbridge_network
-
-  bridgeboard:
-    image: ghcr.io/woahai321/bridgeboard:latest
-    container_name: bridgeboard
-    ports:
-      - "3777:3777"
-    env_file:
-      - ./.env
-    volumes:
-      - shared_logs:/app/logs
-      - ./.env:/app/.env
-    environment:
-      - SEERRBRIDGE_URL=http://seerrbridge:8777
-      - SEERRBRIDGE_LOG_PATH=/logs/seerrbridge.log
-    entrypoint: >
-      sh -c "
-        npm start
-      "
-    restart: unless-stopped
-    depends_on:
-      - seerrbridge
-    networks:
-      - seerrbridge_network
-
-volumes:
-  shared_logs:
-
-networks:
-  seerrbridge_network:
-    driver: bridge
-```
-
-2. **Create or edit your `.env` file**:
+2. **Create or edit your `.env` file** in the project root:
 
 ```bash
+# Database Configuration (Required)
+DB_NAME=seerrbridge
+DB_USER=seerrbridge
+DB_PASSWORD=seerrbridge
+DB_ROOT_PASSWORD=seerrbridge_root
+
+# Encryption Master Key (Recommended for production)
+# If not set, a temporary key will be generated (data lost on restart)
+SEERRBRIDGE_MASTER_KEY=your_master_key_here
+
+# Real-Debrid Configuration
 RD_ACCESS_TOKEN={"value":"YOUR_TOKEN","expiry":123456789}
 RD_REFRESH_TOKEN=YOUR_REFRESH_TOKEN
 RD_CLIENT_ID=YOUR_CLIENT_ID
 RD_CLIENT_SECRET=YOUR_CLIENT_SECRET
+
+# Trakt API Configuration
 TRAKT_API_KEY=YOUR_TRAKT_TOKEN
+
+# Overseerr/Jellyseerr Configuration
 OVERSEERR_API_KEY=YOUR_OVERSEERR_TOKEN
 OVERSEERR_BASE=https://YOUR_OVERSEERR_URL.COM
+
+# Application Settings
 HEADLESS_MODE=true
 ENABLE_AUTOMATIC_BACKGROUND_TASK=true
 ENABLE_SHOW_SUBSCRIPTION_TASK=true
@@ -370,100 +387,138 @@ MAX_MOVIE_SIZE=0
 MAX_EPISODE_SIZE=0
 ```
 
-3. **Ensure you get the latest image**:
+**Note**: All configuration (API keys, tokens, advanced settings, etc.) can also be managed via the web interface and is stored securely in the database. Only database credentials and the master key need to be in the `.env` file.
+
+3. **Start the containers**:
 
 ```bash
-docker compose pull
+docker compose -f docker-compose.local.yml up -d
 ```
 
-4. **Start the containers**:
-
-```bash
-docker compose up -d
-```
-
-5. **Access the applications**:
+4. **Access the applications**:
    - SeerrBridge API: [http://localhost:8777](http://localhost:8777)
-   - BridgeBoard Dashboard: [http://localhost:3777](http://localhost:3777)
+   - Darth Vadarr Dashboard: [http://localhost:3777](http://localhost:3777)
+   - MySQL Database: `localhost:3307` (if you need direct database access)
 
 ### Configuration Notes
 
-- **Volumes**: The configuration creates a `config` directory to persist SeerrBridge data
-- **Networks**: Both containers are placed on the same network so they can communicate
-- **Environment Variables**: The bridgeboard container is configured to connect to the seerrbridge container using the internal Docker network
+- **Volumes**: The configuration creates persistent volumes for:
+  - MySQL data (`mysql_data`)
+  - Application logs (`./logs`)
+  - Application data (`./data`)
+- **Networks**: All containers are placed on the same network (`seerrbridge-network`) so they can communicate
+- **Health Checks**: All services include health checks to ensure proper startup order
 - **Restart Policy**: Containers will restart automatically unless manually stopped
----
+- **Database Initialization**: The MySQL container automatically initializes the database schema on first run
 
-***IF YOU ARE USING OVERSEERR IN DOCKER AND SEERRBRIDGE IN DOCKER, YOUR WEBHOOK IN OVERSEERR NEEDS TO BE THE DOCKER CONTAINER IP***
+### Docker Compose File Structure
 
-To find the IP of the SeerrBridge Docker container do the following:
+The `docker-compose.local.yml` file includes:
 
-```bash
-docker ps
+```yaml
+services:
+  mysql:              # MySQL 8.0 database
+  seerrbridge:        # SeerrBridge backend (Python/FastAPI)
+  darthvadarr-nuxt:   # Darth Vadarr dashboard (Nuxt.js)
 ```
 
-You will see the container and ID
+### Viewing Logs
 
-![image](https://github.com/user-attachments/assets/dac5fb21-89a7-42ff-8e73-911a6b8ee149)
-
-Grab the ID and do
-
+To view logs from all services:
 ```bash
-docker inspect YOUR-ID
+docker compose -f docker-compose.local.yml logs -f
 ```
 
-You will see the ID in the response:
-
-![image](https://github.com/user-attachments/assets/b9a67170-748b-4c44-b37c-86a820e8d09a)
-
-This will determine your Overseerr Webhook URL i.e. HTTP://DOCKER-CONTAINER-IP:8077/jellyseer-webhook/
-
----
-
-
-
-## Docker Network Configuration
-
-### Steps to Align Containers on the Same Network
-
-1. **Check Container Networks:**
-   Run the following command to list the containers and their associated networks:
-   ```bash
-   docker ps --format '{{ .ID }} {{ .Names }} {{ json .Networks }}'
-   ```
-   This will display the container IDs, names, and the networks they are connected to.
-
-2. **Disconnect the Container from Its Current Network:**
-   Use the following command to disconnect a container from its current network:
-   ```bash
-   docker network disconnect NETWORK_NAME CONTAINER_ID
-   ```
-   Replace `NETWORK_NAME` with the name of the network the container is currently on, and `CONTAINER_ID` with the ID of the container.
-
-3. **Connect the Container to the Desired Network:**
-   Use the following command to connect the container to the target network:
-   ```bash
-   docker network connect TARGET_NETWORK_NAME CONTAINER_ID
-   ```
-   Replace `TARGET_NETWORK_NAME` with the name of the network you want the container to join (e.g., `overseerr`), and `CONTAINER_ID` with the ID of the container.
-
-4. **Verify the Changes:**
-   Run the `docker ps --format '{{ .ID }} {{ .Names }} {{ json .Networks }}'` command again to confirm that both containers are now on the same network.
-
-### Example
-To move a container with ID `abc123` from its current network to the `overseerr` network:
+To view logs from a specific service:
 ```bash
-docker network disconnect current_network abc123
-docker network connect overseerr abc123
+docker compose -f docker-compose.local.yml logs -f seerrbridge
+docker compose -f docker-compose.local.yml logs -f darthvadarr-nuxt
+docker compose -f docker-compose.local.yml logs -f mysql
 ```
 
-### Notes
-- Ensure both containers are connected to the same network after completing the steps.
-- If the containers are still not communicating, double-check the network configuration and ensure no firewall rules are blocking the connection.
+### Stopping the Services
+
+To stop all services:
+```bash
+docker compose -f docker-compose.local.yml down
+```
+
+To stop and remove volumes (⚠️ **This will delete all data**):
+```bash
+docker compose -f docker-compose.local.yml down -v
+```
 
 ---
 
-That's it! Your **SeerrBridge** container should now be up and running. 🚀
+### Docker Network Configuration for Webhooks
+
+If you're running both Overseerr/Jellyseerr and SeerrBridge in Docker, you have two options for configuring the webhook:
+
+#### Option 1: Use Docker Network (Recommended)
+If both containers are on the same Docker network, use the container name:
+```
+http://seerrbridge-app:8777/jellyseer-webhook/
+```
+
+#### Option 2: Use Host Network
+If Overseerr/Jellyseerr is running on the host machine, use:
+```
+http://localhost:8777/jellyseer-webhook/
+```
+
+#### Option 3: Use Container IP
+If you need to use the container IP address:
+
+1. **Find the container ID**:
+   ```bash
+   docker ps
+   ```
+
+2. **Get the container IP**:
+   ```bash
+   docker inspect seerrbridge-app | grep IPAddress
+   ```
+
+3. **Use the IP in your webhook URL**:
+   ```
+   http://CONTAINER_IP:8777/jellyseer-webhook/
+   ```
+
+---
+
+
+
+### Connecting to External Docker Networks
+
+If you need to connect SeerrBridge to an existing Docker network (e.g., to communicate with Overseerr/Jellyseerr running in another Docker Compose setup):
+
+1. **Check existing networks:**
+   ```bash
+   docker network ls
+   ```
+
+2. **Connect SeerrBridge to the external network:**
+   ```bash
+   docker network connect EXTERNAL_NETWORK_NAME seerrbridge-app
+   ```
+
+3. **Update your webhook URL** to use the container name:
+   ```
+   http://seerrbridge-app:8777/jellyseer-webhook/
+   ```
+
+Alternatively, you can modify `docker-compose.local.yml` to use an external network:
+
+```yaml
+networks:
+  seerrbridge-network:
+    external: true
+    name: your_existing_network_name
+```
+
+---
+
+That's it! Your **SeerrBridge** containers should now be up and running. 🚀
 </details>
 
 <details>

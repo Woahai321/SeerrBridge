@@ -1,58 +1,144 @@
+version: '3.8'
+
 services:
+  # ==============================================================================
+  # MySQL Database Service
+  # ==============================================================================
+  mysql:
+    image: mysql:8.0
+    container_name: seerrbridge-mysql
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-seerrbridge_root}
+      MYSQL_DATABASE: ${DB_NAME:-seerrbridge}
+      MYSQL_USER: ${DB_USER:-seerrbridge}
+      MYSQL_PASSWORD: ${DB_PASSWORD:-seerrbridge}
+      MYSQL_INITDB_SKIP_TZINFO: 1
+    ports:
+      - "3307:3306"  # Expose on 3307 to avoid conflicts with local MySQL
+    volumes:
+      - mysql_data:/var/lib/mysql
+      - ./mysql-init:/docker-entrypoint-initdb.d
+    command: --default-authentication-plugin=mysql_native_password
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-p${MYSQL_ROOT_PASSWORD:-seerrbridge_root}"]
+      timeout: 20s
+      retries: 10
+      interval: 30s
+      start_period: 30s
+    networks:
+      - seerrbridge-network
+
+  # ==============================================================================
+  # SeerrBridge Backend Service
+  # ==============================================================================
   seerrbridge:
     build:
       context: .
-      dockerfile: Dockerfile  # Explicitly specify the Python Dockerfile
-    container_name: seerrbridge
-    ports:
-      - "8777:8777"
-    env_file:
-      - ./.env
-    volumes:
-      - shared_logs:/app/logs
-      - ./.env:/app/.env
-    restart: unless-stopped
-    command: >
-      sh -c "
-        cat /app/.env > /dev/null &&
-        echo 'Starting SeerrBridge with refreshed env' &&
-        uvicorn main:app --host 0.0.0.0 --port 8777
-      "
-    networks:
-      - seerrbridge_network
-
-  bridgeboard:
-    build:
-      context: .
-      dockerfile: Dockerfile.node  # Point to the Node.js Dockerfile
-    container_name: bridgeboard
-    ports:
-      - "3777:3777"
-    env_file:
-      - ./.env
-    volumes:
-      - shared_logs:/app/logs
-      - ./.env:/app/.env
-      - node_modules:/app/node_modules
-      - next_build:/app/.next
-    environment:
-      - SEERRBRIDGE_URL=http://seerrbridge:8777
-      - SEERRBRIDGE_LOG_PATH=/logs/seerrbridge.log
-    entrypoint: >
-      sh -c "
-        npm start
-      "
+      dockerfile: Dockerfile
+    container_name: seerrbridge-app
     restart: unless-stopped
     depends_on:
-      - seerrbridge
+      mysql:
+        condition: service_healthy
+    environment:
+      # Database configuration - REQUIRED for initial database connection
+      # These are needed before the app can load config from the database
+      DB_HOST: mysql
+      DB_PORT: 3306
+      DB_NAME: ${DB_NAME:-seerrbridge}
+      DB_USER: ${DB_USER:-seerrbridge}
+      DB_PASSWORD: ${DB_PASSWORD:-seerrbridge}
+      USE_DATABASE: "true"
+      
+      # Encryption Master Key - RECOMMENDED for production
+      # Required to decrypt sensitive configuration stored in the database
+      # If not set, a temporary key will be generated (data lost on restart)
+      SEERRBRIDGE_MASTER_KEY: ${SEERRBRIDGE_MASTER_KEY}
+      
+      # Python Configuration
+      PYTHONUNBUFFERED: "1"
+      PYTHONDONTWRITEBYTECODE: "1"
+      
+      # Note: All other configuration (API keys, tokens, advanced settings, etc.)
+      # is managed via the web interface and stored securely in the database.
+    ports:
+      - "8777:8777"  # SeerrBridge API
+      - "8778:8778"  # Setup API server
+    volumes:
+      - ./logs:/app/logs  # Log files
+      - ./data:/app/data  # Application data
     networks:
-      - seerrbridge_network
+      - seerrbridge-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8777/status", "||", "exit", "1"]
+      timeout: 10s
+      retries: 5
+      interval: 30s
+      start_period: 60s
 
+  # ==============================================================================
+  # Darth Vadarr Nuxt Frontend Service
+  # ==============================================================================
+  darthvadarr-nuxt:
+    build:
+      context: .
+      dockerfile: Dockerfile.nuxt
+      args:
+        DB_HOST: mysql
+        DB_PORT: 3306
+        DB_NAME: ${DB_NAME:-seerrbridge}
+        DB_USER: ${DB_USER:-seerrbridge}
+        DB_PASSWORD: ${DB_PASSWORD:-seerrbridge}
+        SEERRBRIDGE_URL: http://seerrbridge:8777
+    container_name: darthvadarr-nuxt
+    restart: unless-stopped
+    depends_on:
+      mysql:
+        condition: service_healthy
+      seerrbridge:
+        condition: service_started
+    environment:
+      # Database configuration
+      DB_HOST: mysql
+      DB_PORT: 3306
+      DB_NAME: ${DB_NAME:-seerrbridge}
+      DB_USER: ${DB_USER:-seerrbridge}
+      DB_PASSWORD: ${DB_PASSWORD:-seerrbridge}
+      
+      # SeerrBridge API configuration
+      SEERRBRIDGE_URL: http://seerrbridge:8777
+      
+      # Nuxt configuration
+      NODE_ENV: production
+      NUXT_HOST: 0.0.0.0
+      NUXT_PORT: 3777
+    ports:
+      - "3777:3777"  # Nuxt frontend
+    volumes:
+      - ./logs:/app/logs  # Log files
+      - ./data:/app/data  # Application data
+    networks:
+      - seerrbridge-network
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3777/api/health", "||", "exit", "1"]
+      timeout: 10s
+      retries: 5
+      interval: 30s
+      start_period: 40s
+
+# ==============================================================================
+# Volumes
+# ==============================================================================
 volumes:
-  shared_logs:
-  node_modules:
-  next_build:
+  mysql_data:
+    driver: local
+    name: seerrbridge_mysql_data  # Named volume for easier management
 
+# ==============================================================================
+# Networks
+# ==============================================================================
 networks:
-  seerrbridge_network:
+  seerrbridge-network:
     driver: bridge
+    name: seerrbridge-network

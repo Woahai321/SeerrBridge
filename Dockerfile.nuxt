@@ -1,0 +1,91 @@
+# Multi-stage build for production optimization
+FROM node:20-alpine as builder
+
+# Set working directory
+WORKDIR /app
+
+# Install dependencies for building native modules
+RUN apk add --no-cache \
+    python3 \
+    make \
+    g++ \
+    linux-headers
+
+# Copy package files
+COPY package*.json ./
+
+# Install dependencies
+RUN npm ci --legacy-peer-deps --omit=dev
+
+# Copy source code
+COPY . .
+
+# Set build environment variables
+ENV NODE_ENV=production
+ENV NUXT_HOST=0.0.0.0
+ENV NUXT_PORT=3777
+
+# Set database environment variables for build-time runtime config
+ARG DB_HOST=mysql
+ARG DB_PORT=3306
+ARG DB_NAME=seerrbridge
+ARG DB_USER=seerrbridge
+ARG DB_PASSWORD=seerrbridge
+ARG SEERRBRIDGE_URL=http://seerrbridge:8777
+
+ENV DB_HOST=${DB_HOST}
+ENV DB_PORT=${DB_PORT}
+ENV DB_NAME=${DB_NAME}
+ENV DB_USER=${DB_USER}
+ENV DB_PASSWORD=${DB_PASSWORD}
+ENV SEERRBRIDGE_URL=${SEERRBRIDGE_URL}
+
+# Build the application
+RUN npm run build
+
+# Production stage
+FROM node:20-alpine
+
+# Create non-root user for security
+RUN addgroup -g 1001 -S nodejs && \
+    adduser -S nuxt -u 1001
+
+# Install runtime dependencies
+RUN apk add --no-cache \
+    mysql-client \
+    curl \
+    libc6-compat
+
+# Set working directory
+WORKDIR /app
+
+# Copy built application from builder stage
+COPY --from=builder --chown=nuxt:nodejs /app/.output ./.output
+COPY --from=builder --chown=nuxt:nodejs /app/package*.json ./
+
+# Install only production dependencies
+RUN npm ci --legacy-peer-deps --omit=dev --ignore-scripts && \
+    npm cache clean --force
+
+# Create necessary directories with proper permissions
+RUN mkdir -p /app/logs /app/data && \
+    chown -R nuxt:nodejs /app
+
+# Set environment variables
+ENV NODE_ENV=production
+ENV NUXT_HOST=0.0.0.0
+ENV NUXT_PORT=3777
+ENV NODE_OPTIONS="--max-old-space-size=2048"
+
+# Switch to non-root user
+USER nuxt
+
+# Expose port
+EXPOSE 3777
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
+    CMD curl -f http://localhost:3777/api/health || exit 1
+
+# Start the application
+CMD ["node", ".output/server/index.mjs"]
