@@ -155,7 +155,7 @@ export default defineNuxtConfig({
 
   // Development server configuration
   devServer: {
-    port: 3000,
+    port: 3777,
     host: '0.0.0.0'
   },
 
@@ -195,7 +195,7 @@ export default defineNuxtConfig({
         followSymlinks: false
       },
       hmr: {
-        port: 3000,
+        port: 3777,
         host: '0.0.0.0'
       },
       // Reduce file system operations

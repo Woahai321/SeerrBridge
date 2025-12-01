@@ -9,8 +9,8 @@
   },
   "scripts": {
     "build": "nuxt build",
-    "dev": "nuxt dev --port 3000 --host 0.0.0.0",
-    "dev:docker": "nuxt dev --port 3000 --host 0.0.0.0",
+    "dev": "nuxt dev --port 3777 --host 0.0.0.0",
+    "dev:docker": "nuxt dev --port 3777 --host 0.0.0.0",
     "generate": "nuxt generate",
     "preview": "nuxt preview",
     "postinstall": "nuxt prepare",

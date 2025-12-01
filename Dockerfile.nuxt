@@ -23,7 +23,7 @@ COPY . .
 # Set build environment variables
 ENV NODE_ENV=production
 ENV NUXT_HOST=0.0.0.0
-ENV NUXT_PORT=3000
+ENV NUXT_PORT=3777
 
 # Set database environment variables for build-time runtime config
 ARG DB_HOST=mysql
@@ -74,18 +74,18 @@ RUN mkdir -p /app/logs /app/data && \
 # Set environment variables
 ENV NODE_ENV=production
 ENV NUXT_HOST=0.0.0.0
-ENV NUXT_PORT=3000
+ENV NUXT_PORT=3777
 ENV NODE_OPTIONS="--max-old-space-size=2048"
 
 # Switch to non-root user
 USER nuxt
 
 # Expose port
-EXPOSE 3000
+EXPOSE 3777
 
 # Health check
 HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
-    CMD curl -f http://localhost:3000/api/health || exit 1
+    CMD curl -f http://localhost:3777/api/health || exit 1
 
 # Start the application
 CMD ["node", ".output/server/index.mjs"]

@@ -106,7 +106,7 @@ services:
       # Nuxt configuration
       NODE_ENV: development
       NUXT_HOST: 0.0.0.0
-      NUXT_PORT: 3000
+      NUXT_PORT: 3777
       
       # Enhanced hot reloading and file watching for Docker
       NUXT_DEVTOOLS: "true"
@@ -121,7 +121,7 @@ services:
       # Master key for consistency
       SEERRBRIDGE_MASTER_KEY: ${SEERRBRIDGE_MASTER_KEY:-default_master_key_for_dev}
     ports:
-      - "3000:3000"  # Nuxt frontend
+      - "3777:3777"  # Nuxt frontend
     volumes:
       - .:/app
       - /app/node_modules
@@ -132,7 +132,7 @@ services:
     networks:
       - seerrbridge-dev-network
     healthcheck:
-      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3000/api/health", "||", "exit", "1"]
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3777/api/health", "||", "exit", "1"]
       timeout: 10s
       retries: 5
       interval: 30s

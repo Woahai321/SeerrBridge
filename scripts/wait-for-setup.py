@@ -397,8 +397,8 @@ def wait_for_setup_completion(timeout: int = 600) -> bool:
     log_status("Starting setup wizard completion check...", "info")
     # Try both production and dev URLs
     setup_api_urls = [
-        "http://darthvadarr-nuxt:3000/api/setup-status",  # Production
-        "http://darthvadarr-nuxt-dev:3000/api/setup-status"  # Development
+        "http://darthvadarr-nuxt:3777/api/setup-status",  # Production
+        "http://darthvadarr-nuxt-dev:3777/api/setup-status"  # Development
     ]
     start_time = time.time()
     attempt = 0

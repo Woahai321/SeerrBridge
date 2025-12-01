@@ -16,8 +16,8 @@ from datetime import datetime
 class StartupOrchestrator:
     def __init__(self):
         self.db_url = "http://mysql:3306"
-        self.frontend_url = "http://darthvadarr-nuxt-dev:3000"
-        self.setup_api_url = "http://darthvadarr-nuxt-dev:3000/api/setup-status"
+        self.frontend_url = "http://darthvadarr-nuxt-dev:3777"
+        self.setup_api_url = "http://darthvadarr-nuxt-dev:3777/api/setup-status"
         self.backend_process: Optional[subprocess.Popen] = None
         self.start_time = datetime.now()
         self.retry_delay = 2  # Initial retry delay in seconds
