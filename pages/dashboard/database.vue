@@ -1,22 +1,24 @@
 <template>
-  <div class="space-y-8">
+  <div class="space-y-4 sm:space-y-6 lg:space-y-8">
     <!-- Header Section -->
-    <div class="flex items-center justify-between flex-wrap gap-4">
-      <div>
-        <h1 class="text-3xl font-bold text-foreground tracking-tight">Database Management</h1>
-        <p class="text-sm text-muted-foreground mt-1">Monitor database health, explore tables, and run queries</p>
+    <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 sm:gap-4">
+      <div class="min-w-0 flex-1">
+        <h1 class="text-2xl sm:text-3xl font-bold text-foreground tracking-tight">Database Management</h1>
+        <p class="text-xs sm:text-sm text-muted-foreground mt-1">Monitor database health, explore tables, and run queries</p>
       </div>
       
       <!-- Action Buttons -->
-      <div class="flex items-center gap-3">
+      <div class="flex items-center gap-2 sm:gap-3 flex-wrap">
         <!-- Auto-refresh Toggle -->
         <Button 
           @click="autoRefreshEnabled = !autoRefreshEnabled" 
           :variant="autoRefreshEnabled ? 'default' : 'outline'"
-          class="gap-2"
+          size="sm"
+          class="gap-1.5 sm:gap-2 text-xs sm:text-sm"
         >
-          <AppIcon :icon="autoRefreshEnabled ? 'lucide:play' : 'lucide:pause'" size="18" />
-          {{ autoRefreshEnabled ? 'Auto ON' : 'Auto OFF' }}
+          <AppIcon :icon="autoRefreshEnabled ? 'lucide:play' : 'lucide:pause'" size="14" class="sm:w-4 sm:h-4" />
+          <span class="hidden sm:inline">{{ autoRefreshEnabled ? 'Auto ON' : 'Auto OFF' }}</span>
+          <span class="sm:hidden">{{ autoRefreshEnabled ? 'ON' : 'OFF' }}</span>
         </Button>
         
         <!-- Refresh Button -->
@@ -24,74 +26,78 @@
           @click="handleRefresh" 
           :disabled="isRefreshing"
           variant="outline"
+          size="sm"
+          class="p-2 sm:px-3 sm:py-2"
         >
-          <AppIcon v-if="isRefreshing" icon="lucide:loader-2" size="18" class="animate-spin" />
-          <AppIcon v-else icon="lucide:refresh-cw" size="18" />
+          <AppIcon v-if="isRefreshing" icon="lucide:loader-2" size="14" class="sm:w-4 sm:h-4 animate-spin" />
+          <AppIcon v-else icon="lucide:refresh-cw" size="14" class="sm:w-4 sm:h-4" />
         </Button>
         
         <!-- Clear Database Button -->
         <Button 
           @click="confirmClearDatabase"
           variant="outline"
-          class="text-red-600 hover:text-red-700 hover:bg-red-50 border-red-200 hover:border-red-300"
+          size="sm"
+          class="text-red-600 hover:text-red-700 hover:bg-red-50 border-red-200 hover:border-red-300 text-xs sm:text-sm gap-1.5 sm:gap-2"
         >
-          <AppIcon icon="lucide:trash-2" size="18" />
-          Clear Database
+          <AppIcon icon="lucide:trash-2" size="14" class="sm:w-4 sm:h-4" />
+          <span class="hidden sm:inline">Clear Database</span>
+          <span class="sm:hidden">Clear</span>
         </Button>
       </div>
     </div>
     
     <!-- Database Health Overview -->
-    <div class="bg-card border border-border rounded-2xl p-6 space-y-6">
-      <div class="flex items-center justify-between">
-        <h2 class="text-xl font-semibold text-foreground">Database Health</h2>
-        <div class="flex items-center gap-4">
-          <span v-if="lastUpdated" class="text-sm text-muted-foreground flex items-center gap-2">
-            <AppIcon icon="lucide:clock" size="16" class="text-blue-500" />
-            Last updated: {{ lastUpdated.toLocaleTimeString() }}
+    <div class="bg-card border border-border rounded-xl sm:rounded-2xl p-4 sm:p-6 space-y-4 sm:space-y-6">
+      <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 sm:gap-4">
+        <h2 class="text-lg sm:text-xl font-semibold text-foreground">Database Health</h2>
+        <div class="flex items-center gap-2 sm:gap-4">
+          <span v-if="lastUpdated" class="text-xs sm:text-sm text-muted-foreground flex items-center gap-1.5 sm:gap-2">
+            <AppIcon icon="lucide:clock" size="12" class="sm:w-4 sm:h-4 text-blue-500" />
+            <span class="hidden sm:inline">Last updated: </span>{{ lastUpdated.toLocaleTimeString() }}
           </span>
         </div>
       </div>
       
       <!-- Status Overview -->
-      <div class="grid grid-cols-2 lg:grid-cols-3 gap-4">
+      <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
         <!-- Database Status Card -->
-        <div class="bg-background border border-border rounded-2xl p-6 shadow-sm hover:shadow-md transition-all cursor-pointer hover:border-emerald-500/50 group relative overflow-hidden">
+        <div class="bg-background border border-border rounded-xl sm:rounded-2xl p-4 sm:p-6 shadow-sm hover:shadow-md transition-all cursor-pointer hover:border-emerald-500/50 group relative overflow-hidden">
           <div class="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-emerald-500 to-green-500"></div>
-          <div class="flex items-center justify-between mb-3">
-            <div class="w-12 h-12 bg-emerald-500/10 rounded-xl flex items-center justify-center group-hover:bg-emerald-500/20 transition-colors">
-              <AppIcon icon="lucide:check-circle" size="24" class="text-emerald-500" />
+          <div class="flex items-center justify-between mb-2 sm:mb-3">
+            <div class="w-10 h-10 sm:w-12 sm:h-12 bg-emerald-500/10 rounded-lg sm:rounded-xl flex items-center justify-center group-hover:bg-emerald-500/20 transition-colors">
+              <AppIcon icon="lucide:check-circle" size="20" class="sm:w-6 sm:h-6 text-emerald-500" />
             </div>
-            <span class="text-xs font-medium text-emerald-500">Status</span>
+            <span class="text-[10px] sm:text-xs font-medium text-emerald-500">Status</span>
           </div>
-          <p class="text-3xl font-bold text-foreground mb-1">{{ health?.status?.version || 'N/A' }}</p>
-          <p class="text-xs text-muted-foreground">Database Version</p>
+          <p class="text-2xl sm:text-3xl font-bold text-foreground mb-1">{{ health?.status?.version || 'N/A' }}</p>
+          <p class="text-[10px] sm:text-xs text-muted-foreground">Database Version</p>
         </div>
         
         <!-- Database Size Card -->
-        <div class="bg-background border border-border rounded-2xl p-6 shadow-sm hover:shadow-md transition-all cursor-pointer hover:border-blue-500/50 group relative overflow-hidden">
+        <div class="bg-background border border-border rounded-xl sm:rounded-2xl p-4 sm:p-6 shadow-sm hover:shadow-md transition-all cursor-pointer hover:border-blue-500/50 group relative overflow-hidden">
           <div class="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-blue-500 to-indigo-500"></div>
-          <div class="flex items-center justify-between mb-3">
-            <div class="w-12 h-12 bg-blue-500/10 rounded-xl flex items-center justify-center group-hover:bg-blue-500/20 transition-colors">
-              <AppIcon icon="lucide:database" size="24" class="text-blue-500" />
+          <div class="flex items-center justify-between mb-2 sm:mb-3">
+            <div class="w-10 h-10 sm:w-12 sm:h-12 bg-blue-500/10 rounded-lg sm:rounded-xl flex items-center justify-center group-hover:bg-blue-500/20 transition-colors">
+              <AppIcon icon="lucide:database" size="20" class="sm:w-6 sm:h-6 text-blue-500" />
             </div>
-            <span class="text-xs font-medium text-blue-500">Size</span>
+            <span class="text-[10px] sm:text-xs font-medium text-blue-500">Size</span>
           </div>
-          <p class="text-3xl font-bold text-foreground mb-1">{{ formatBytes(health?.database?.total_data_size + health?.database?.total_index_size) || '0 B' }}</p>
-          <p class="text-xs text-muted-foreground">Total Size</p>
+          <p class="text-2xl sm:text-3xl font-bold text-foreground mb-1">{{ formatBytes(health?.database?.total_data_size + health?.database?.total_index_size) || '0 B' }}</p>
+          <p class="text-[10px] sm:text-xs text-muted-foreground">Total Size</p>
         </div>
         
         <!-- Performance Card -->
-        <div class="bg-background border border-border rounded-2xl p-6 shadow-sm hover:shadow-md transition-all cursor-pointer hover:border-purple-500/50 group relative overflow-hidden">
-          <div class="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-purple-500 to-pink-500"></div>
-          <div class="flex items-center justify-between mb-3">
-            <div class="w-12 h-12 bg-purple-500/10 rounded-xl flex items-center justify-center group-hover:bg-purple-500/20 transition-colors">
-              <AppIcon icon="lucide:trending-up" size="24" class="text-purple-500" />
+        <div class="bg-background border border-border rounded-xl sm:rounded-2xl p-4 sm:p-6 shadow-sm hover:shadow-md transition-all cursor-pointer hover:border-primary/50 group relative overflow-hidden">
+          <div class="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-primary to-primary/60"></div>
+          <div class="flex items-center justify-between mb-2 sm:mb-3">
+            <div class="w-10 h-10 sm:w-12 sm:h-12 bg-primary/10 rounded-lg sm:rounded-xl flex items-center justify-center group-hover:bg-primary/20 transition-colors">
+              <AppIcon icon="lucide:trending-up" size="20" class="sm:w-6 sm:h-6 text-primary" />
             </div>
-            <span class="text-xs font-medium text-purple-500">{{ Math.round((health?.status?.questions || 0) / 1000) }}K</span>
+            <span class="text-[10px] sm:text-xs font-medium text-primary">{{ Math.round((health?.status?.questions || 0) / 1000) }}K</span>
           </div>
-          <p class="text-3xl font-bold text-foreground mb-1">{{ formatNumber(health?.status?.questions || 0) }}</p>
-          <p class="text-xs text-muted-foreground">Total Queries</p>
+          <p class="text-2xl sm:text-3xl font-bold text-foreground mb-1">{{ formatNumber(health?.status?.questions || 0) }}</p>
+          <p class="text-[10px] sm:text-xs text-muted-foreground">Total Queries</p>
         </div>
       </div>
       
@@ -99,32 +105,32 @@
       <div class="border-t border-border"></div>
       
       <!-- Detailed Stats -->
-      <div class="flex flex-col lg:flex-row gap-4 lg:gap-0">
+      <div class="flex flex-col lg:flex-row gap-3 sm:gap-4 lg:gap-0">
         <!-- Connection Info -->
-        <div class="flex-1 bg-background border border-border rounded-2xl lg:rounded-l-2xl lg:rounded-r-none lg:border-r-0 p-4 shadow-sm hover:shadow-md transition-all">
-          <div class="flex items-center justify-between mb-4">
-            <div class="flex items-center gap-3">
-              <div class="w-10 h-10 bg-emerald-500/10 rounded-xl flex items-center justify-center">
-                <AppIcon icon="lucide:users" size="20" class="text-emerald-500" />
+        <div class="flex-1 bg-background border border-border rounded-xl sm:rounded-2xl lg:rounded-l-2xl lg:rounded-r-none lg:border-r-0 p-3 sm:p-4 shadow-sm hover:shadow-md transition-all">
+          <div class="flex items-center justify-between mb-3 sm:mb-4">
+            <div class="flex items-center gap-2 sm:gap-3">
+              <div class="w-8 h-8 sm:w-10 sm:h-10 bg-emerald-500/10 rounded-lg sm:rounded-xl flex items-center justify-center">
+                <AppIcon icon="lucide:users" size="16" class="sm:w-5 sm:h-5 text-emerald-500" />
               </div>
               <div>
-                <h3 class="text-xl font-bold text-foreground">{{ health?.status?.threads_connected || 0 }}</h3>
-                <p class="text-xs text-muted-foreground">Active Connections</p>
+                <h3 class="text-lg sm:text-xl font-bold text-foreground">{{ health?.status?.threads_connected || 0 }}</h3>
+                <p class="text-[10px] sm:text-xs text-muted-foreground">Active Connections</p>
               </div>
             </div>
-            <span class="text-xs font-semibold px-2.5 py-1 bg-emerald-500/10 text-emerald-500 rounded-full">
+            <span class="text-[10px] sm:text-xs font-semibold px-2 sm:px-2.5 py-0.5 sm:py-1 bg-emerald-500/10 text-emerald-500 rounded-full">
               {{ Math.round(((health?.status?.threads_connected || 0) / (health?.status?.max_connections || 1)) * 100) }}%
             </span>
           </div>
           
-          <div class="grid grid-cols-2 gap-2 pt-3 border-t border-border">
+          <div class="grid grid-cols-2 gap-2 pt-2 sm:pt-3 border-t border-border">
             <div>
-              <p class="text-xs text-muted-foreground mb-0.5">Max Connections</p>
-              <p class="text-base font-bold text-foreground">{{ formatNumber(health?.status?.max_connections || 0) }}</p>
+              <p class="text-[10px] sm:text-xs text-muted-foreground mb-0.5">Max Connections</p>
+              <p class="text-sm sm:text-base font-bold text-foreground">{{ formatNumber(health?.status?.max_connections || 0) }}</p>
             </div>
             <div>
-              <p class="text-xs text-muted-foreground mb-0.5">Running Threads</p>
-              <p class="text-base font-bold text-foreground">{{ formatNumber(health?.status?.threads_running || 0) }}</p>
+              <p class="text-[10px] sm:text-xs text-muted-foreground mb-0.5">Running Threads</p>
+              <p class="text-sm sm:text-base font-bold text-foreground">{{ formatNumber(health?.status?.threads_running || 0) }}</p>
             </div>
           </div>
         </div>
@@ -133,30 +139,30 @@
         <div class="hidden lg:block w-px bg-border self-stretch"></div>
         
         <!-- Table Info -->
-        <div class="flex-1 bg-background border border-border rounded-2xl lg:rounded-r-2xl lg:rounded-l-none lg:border-l-0 p-4 shadow-sm hover:shadow-md transition-all">
-          <div class="flex items-center justify-between mb-4">
-            <div class="flex items-center gap-3">
-              <div class="w-10 h-10 bg-blue-500/10 rounded-xl flex items-center justify-center">
-                <AppIcon icon="lucide:table" size="20" class="text-blue-500" />
+        <div class="flex-1 bg-background border border-border rounded-xl sm:rounded-2xl lg:rounded-r-2xl lg:rounded-l-none lg:border-l-0 p-3 sm:p-4 shadow-sm hover:shadow-md transition-all">
+          <div class="flex items-center justify-between mb-3 sm:mb-4">
+            <div class="flex items-center gap-2 sm:gap-3">
+              <div class="w-8 h-8 sm:w-10 sm:h-10 bg-blue-500/10 rounded-lg sm:rounded-xl flex items-center justify-center">
+                <AppIcon icon="lucide:table" size="16" class="sm:w-5 sm:h-5 text-blue-500" />
               </div>
               <div>
-                <h3 class="text-xl font-bold text-foreground">{{ health?.database?.total_tables || 0 }}</h3>
-                <p class="text-xs text-muted-foreground">Total Tables</p>
+                <h3 class="text-lg sm:text-xl font-bold text-foreground">{{ health?.database?.total_tables || 0 }}</h3>
+                <p class="text-[10px] sm:text-xs text-muted-foreground">Total Tables</p>
               </div>
             </div>
-            <span class="text-xs font-semibold px-2.5 py-1 bg-blue-500/10 text-blue-500 rounded-full">
+            <span class="text-[10px] sm:text-xs font-semibold px-2 sm:px-2.5 py-0.5 sm:py-1 bg-blue-500/10 text-blue-500 rounded-full">
               {{ formatNumber(health?.database?.total_rows || 0) }} rows
             </span>
           </div>
           
-          <div class="grid grid-cols-2 gap-2 pt-3 border-t border-border">
+          <div class="grid grid-cols-2 gap-2 pt-2 sm:pt-3 border-t border-border">
             <div>
-              <p class="text-xs text-muted-foreground mb-0.5">Data Size</p>
-              <p class="text-base font-bold text-foreground">{{ formatBytes(health?.database?.total_data_size || 0) }}</p>
+              <p class="text-[10px] sm:text-xs text-muted-foreground mb-0.5">Data Size</p>
+              <p class="text-sm sm:text-base font-bold text-foreground">{{ formatBytes(health?.database?.total_data_size || 0) }}</p>
             </div>
             <div>
-              <p class="text-xs text-muted-foreground mb-0.5">Index Size</p>
-              <p class="text-base font-bold text-foreground">{{ formatBytes(health?.database?.total_index_size || 0) }}</p>
+              <p class="text-[10px] sm:text-xs text-muted-foreground mb-0.5">Index Size</p>
+              <p class="text-sm sm:text-base font-bold text-foreground">{{ formatBytes(health?.database?.total_index_size || 0) }}</p>
             </div>
           </div>
         </div>
@@ -164,10 +170,10 @@
     </div>
     
     <!-- Navigation Tabs -->
-    <div class="bg-card rounded-2xl border border-border overflow-hidden">
+    <div class="bg-card rounded-xl sm:rounded-2xl border border-border overflow-hidden">
       <!-- Tab Navigation -->
       <div class="bg-gradient-to-r from-muted to-muted/50 border-b border-border">
-        <nav class="flex space-x-1 p-2">
+        <nav class="flex space-x-1 p-1.5 sm:p-2 overflow-x-auto -mx-4 sm:mx-0 px-4 sm:px-0">
           <button
             v-for="tab in tabs"
             :key="tab.id"
@@ -176,16 +182,17 @@
               activeTab === tab.id
                 ? 'bg-background text-primary shadow-lg border border-border'
                 : 'text-muted-foreground hover:text-foreground hover:bg-background/50',
-              'flex items-center gap-2 px-4 py-3 rounded-lg font-medium text-sm transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2'
+              'flex items-center gap-1.5 sm:gap-2 px-3 sm:px-4 py-2 sm:py-3 rounded-lg font-medium text-xs sm:text-sm transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 whitespace-nowrap flex-shrink-0'
             ]"
           >
-            <AppIcon :icon="tab.icon" size="16" />
-            {{ tab.name }}
+            <AppIcon :icon="tab.icon" size="14" class="sm:w-4 sm:h-4" />
+            <span class="hidden sm:inline">{{ tab.name }}</span>
+            <span class="sm:hidden">{{ tab.name.split(' ')[0] }}</span>
           </button>
         </nav>
       </div>
 
-      <div class="p-8">
+      <div class="p-4 sm:p-6 lg:p-8">
         <!-- Tables Tab -->
         <div v-if="activeTab === 'tables'" class="space-y-6">
           <!-- Section Header -->
@@ -239,69 +246,71 @@
           </div>
 
           <!-- Tables Grid -->
-          <div v-else class="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6">
+          <div v-else class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-2 xl:grid-cols-3 gap-4 sm:gap-6">
             <div
               v-for="table in tables"
               :key="table.name"
               @click="viewTableData(table.name)"
-              class="group relative bg-card rounded-2xl overflow-hidden cursor-pointer transition-all hover:shadow-2xl hover:-translate-y-2 border border-border"
+              class="group relative bg-card rounded-xl sm:rounded-2xl overflow-hidden cursor-pointer transition-all hover:shadow-xl sm:hover:shadow-2xl hover:-translate-y-1 sm:hover:-translate-y-2 border border-border"
             >
               <!-- Table Header -->
-              <div class="p-6 space-y-4">
+              <div class="p-4 sm:p-6 space-y-3 sm:space-y-4">
                 <div class="flex items-center justify-between">
-                  <div class="flex items-center gap-3">
-                    <div class="w-12 h-12 bg-blue-500/10 rounded-xl flex items-center justify-center group-hover:bg-blue-500/20 transition-colors">
-                      <AppIcon icon="lucide:table" size="24" class="text-blue-500" />
+                  <div class="flex items-center gap-2 sm:gap-3 min-w-0 flex-1">
+                    <div class="w-10 h-10 sm:w-12 sm:h-12 bg-blue-500/10 rounded-lg sm:rounded-xl flex items-center justify-center group-hover:bg-blue-500/20 transition-colors flex-shrink-0">
+                      <AppIcon icon="lucide:table" size="20" class="sm:w-6 sm:h-6 text-blue-500" />
                     </div>
-                    <div>
-                      <h4 class="text-lg font-bold text-foreground">{{ table.name }}</h4>
-                      <p class="text-sm text-muted-foreground">{{ table.engine }}</p>
+                    <div class="min-w-0 flex-1">
+                      <h4 class="text-base sm:text-lg font-bold text-foreground truncate">{{ table.name }}</h4>
+                      <p class="text-xs sm:text-sm text-muted-foreground truncate">{{ table.engine }}</p>
                     </div>
                   </div>
-                  <div class="flex items-center gap-2">
-                    <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-emerald-100 dark:bg-emerald-900 text-emerald-800 dark:text-emerald-200">
+                  <div class="flex items-center gap-1.5 sm:gap-2 flex-shrink-0">
+                    <span class="inline-flex items-center px-2 sm:px-2.5 py-0.5 rounded-full text-[10px] sm:text-xs font-medium bg-emerald-100 dark:bg-emerald-900 text-emerald-800 dark:text-emerald-200">
                       {{ formatNumber(table.row_count) }} rows
                     </span>
                   </div>
                 </div>
                 
-                <div class="space-y-2">
+                <div class="space-y-1.5 sm:space-y-2">
                   <div class="flex items-center justify-between">
-                    <span class="text-sm text-muted-foreground">Size</span>
-                    <span class="text-sm font-semibold text-foreground">{{ formatBytes(table.total_size) }}</span>
+                    <span class="text-xs sm:text-sm text-muted-foreground">Size</span>
+                    <span class="text-xs sm:text-sm font-semibold text-foreground">{{ formatBytes(table.total_size) }}</span>
                   </div>
                   <div class="flex items-center justify-between">
-                    <span class="text-sm text-muted-foreground">Engine</span>
-                    <span class="text-sm font-semibold text-foreground">{{ table.engine }}</span>
+                    <span class="text-xs sm:text-sm text-muted-foreground">Engine</span>
+                    <span class="text-xs sm:text-sm font-semibold text-foreground truncate ml-2">{{ table.engine }}</span>
                   </div>
                 </div>
                 
                 <!-- Action Buttons -->
-                <div class="flex items-center gap-2 pt-2">
+                <div class="flex items-center gap-1.5 sm:gap-2 pt-2">
                   <Button
                     @click.stop="viewTableData(table.name)"
                     size="sm"
-                    class="flex-1 gap-2"
+                    class="flex-1 gap-1 sm:gap-2 text-xs sm:text-sm"
                   >
-                    <AppIcon icon="lucide:table" size="16" />
-                    View Data
+                    <AppIcon icon="lucide:table" size="12" class="sm:w-4 sm:h-4" />
+                    <span class="hidden sm:inline">View Data</span>
+                    <span class="sm:hidden">Data</span>
                   </Button>
                   <Button
                     @click.stop="viewTableStructure(table.name)"
                     size="sm"
                     variant="outline"
-                    class="flex-1 gap-2"
+                    class="flex-1 gap-1 sm:gap-2 text-xs sm:text-sm"
                   >
-                    <AppIcon icon="lucide:database" size="16" />
-                    View Structure
+                    <AppIcon icon="lucide:database" size="12" class="sm:w-4 sm:h-4" />
+                    <span class="hidden sm:inline">Structure</span>
+                    <span class="sm:hidden">Struct</span>
                   </Button>
                   <Button
                     @click.stop="confirmClearTable(table.name, table.row_count)"
                     variant="outline"
                     size="sm"
-                    class="text-red-600 hover:text-red-700 hover:bg-red-50 border-red-200 hover:border-red-300"
+                    class="text-red-600 hover:text-red-700 hover:bg-red-50 border-red-200 hover:border-red-300 p-2 sm:px-3"
                   >
-                    <AppIcon icon="lucide:trash-2" size="16" />
+                    <AppIcon icon="lucide:trash-2" size="12" class="sm:w-4 sm:h-4" />
                   </Button>
                 </div>
               </div>
@@ -340,45 +349,46 @@
           <!-- Data Viewer Content -->
           <div v-else class="space-y-6">
             <!-- Table Header -->
-            <div class="bg-card border border-border rounded-2xl p-6">
-              <div class="flex items-center justify-between mb-4">
-                <div class="flex items-center gap-3">
-                  <div class="w-12 h-12 bg-emerald-500/10 rounded-xl flex items-center justify-center">
-                    <AppIcon icon="lucide:table" size="24" class="text-emerald-500" />
+            <div class="bg-card border border-border rounded-xl sm:rounded-2xl p-4 sm:p-6">
+              <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 sm:gap-4 mb-4">
+                <div class="flex items-center gap-2 sm:gap-3 min-w-0 flex-1">
+                  <div class="w-10 h-10 sm:w-12 sm:h-12 bg-emerald-500/10 rounded-lg sm:rounded-xl flex items-center justify-center flex-shrink-0">
+                    <AppIcon icon="lucide:table" size="20" class="sm:w-6 sm:h-6 text-emerald-500" />
                   </div>
-                  <div>
-                    <h4 class="text-xl font-bold text-foreground">{{ selectedDataTable }}</h4>
-                    <p class="text-sm text-muted-foreground">Table Data Viewer</p>
+                  <div class="min-w-0 flex-1">
+                    <h4 class="text-lg sm:text-xl font-bold text-foreground truncate">{{ selectedDataTable }}</h4>
+                    <p class="text-xs sm:text-sm text-muted-foreground">Table Data Viewer</p>
                   </div>
                 </div>
-                <div class="flex items-center gap-3">
+                <div class="flex items-center gap-2 sm:gap-3 flex-shrink-0">
                   <Button
                     @click="loadTableData"
                     :disabled="loadingTableData"
                     variant="outline"
-                    class="gap-2"
+                    size="sm"
+                    class="gap-1.5 sm:gap-2 text-xs sm:text-sm"
                   >
-                    <AppIcon icon="lucide:refresh-cw" size="18" :class="{ 'animate-spin': loadingTableData }" />
-                    Refresh
+                    <AppIcon icon="lucide:refresh-cw" size="14" class="sm:w-4 sm:h-4" :class="{ 'animate-spin': loadingTableData }" />
+                    <span class="hidden sm:inline">Refresh</span>
                   </Button>
-                  <div class="flex items-center gap-2">
+                  <div class="flex items-center gap-1.5 sm:gap-2">
                     <Button
                       @click="exportTableData('csv')"
                       variant="outline"
                       size="sm"
-                      class="gap-2"
+                      class="gap-1.5 sm:gap-2 text-xs sm:text-sm p-2 sm:px-3"
                     >
-                      <AppIcon icon="lucide:download" size="16" />
-                      CSV
+                      <AppIcon icon="lucide:download" size="12" class="sm:w-4 sm:h-4" />
+                      <span class="hidden sm:inline">CSV</span>
                     </Button>
                     <Button
                       @click="exportTableData('json')"
                       variant="outline"
                       size="sm"
-                      class="gap-2"
+                      class="gap-1.5 sm:gap-2 text-xs sm:text-sm p-2 sm:px-3"
                     >
-                      <AppIcon icon="lucide:download" size="16" />
-                      JSON
+                      <AppIcon icon="lucide:download" size="12" class="sm:w-4 sm:h-4" />
+                      <span class="hidden sm:inline">JSON</span>
                     </Button>
                   </div>
                 </div>
@@ -386,12 +396,12 @@
             </div>
 
             <!-- Search and Controls -->
-            <div class="bg-card border border-border rounded-2xl p-6">
-              <div class="flex flex-col sm:flex-row gap-4">
-                <div class="flex-1">
-                  <label class="block text-sm font-semibold text-foreground mb-2">
-                    <div class="flex items-center gap-2">
-                      <AppIcon icon="lucide:search" size="16" />
+            <div class="bg-card border border-border rounded-xl sm:rounded-2xl p-4 sm:p-6">
+              <div class="flex flex-col sm:flex-row gap-3 sm:gap-4">
+                <div class="flex-1 min-w-0">
+                  <label class="block text-xs sm:text-sm font-semibold text-foreground mb-1.5 sm:mb-2">
+                    <div class="flex items-center gap-1.5 sm:gap-2">
+                      <AppIcon icon="lucide:search" size="12" class="sm:w-4 sm:h-4" />
                       Search Data
                     </div>
                   </label>
@@ -401,27 +411,28 @@
                       @keyup.enter="searchTableData"
                       type="text"
                       placeholder="Search across all columns..."
-                      class="flex-1 px-4 py-3 border border-input rounded-l-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-ring focus:border-ring bg-background text-foreground"
+                      class="flex-1 px-3 sm:px-4 py-2 sm:py-3 text-xs sm:text-sm border border-input rounded-l-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-ring focus:border-ring bg-background text-foreground"
                     />
                     <Button
                       @click="searchTableData"
-                      class="rounded-l-none"
+                      size="sm"
+                      class="rounded-l-none p-2 sm:px-3"
                     >
-                      <AppIcon icon="lucide:search" size="18" />
+                      <AppIcon icon="lucide:search" size="14" class="sm:w-4 sm:h-4" />
                     </Button>
                   </div>
                 </div>
-                <div class="sm:w-48">
-                  <label class="block text-sm font-semibold text-foreground mb-2">
-                    <div class="flex items-center gap-2">
-                      <AppIcon icon="lucide:sliders-horizontal" size="16" />
+                <div class="w-full sm:w-48">
+                  <label class="block text-xs sm:text-sm font-semibold text-foreground mb-1.5 sm:mb-2">
+                    <div class="flex items-center gap-1.5 sm:gap-2">
+                      <AppIcon icon="lucide:sliders-horizontal" size="12" class="sm:w-4 sm:h-4" />
                       Rows per page
                     </div>
                   </label>
                   <select
                     v-model="dataLimit"
                     @change="loadTableData"
-                    class="w-full px-3 py-3 border border-input rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-ring focus:border-ring bg-background text-foreground"
+                    class="w-full px-3 py-2 sm:py-3 text-xs sm:text-sm border border-input rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-ring focus:border-ring bg-background text-foreground"
                   >
                     <option value="25">25</option>
                     <option value="50">50</option>
@@ -455,26 +466,26 @@
 
             <div v-else-if="tableData" class="space-y-6">
               <!-- Data Info -->
-              <div class="bg-card border border-border rounded-2xl p-4">
-                <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-                  <div class="flex items-center gap-3">
-                    <AppIcon icon="lucide:info" size="20" class="text-blue-500" />
-                    <span class="text-sm font-medium text-foreground">
+              <div class="bg-card border border-border rounded-xl sm:rounded-2xl p-3 sm:p-4">
+                <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 sm:gap-4">
+                  <div class="flex items-center gap-2 sm:gap-3 min-w-0">
+                    <AppIcon icon="lucide:info" size="16" class="sm:w-5 sm:h-5 text-blue-500 flex-shrink-0" />
+                    <span class="text-xs sm:text-sm font-medium text-foreground">
                       Showing {{ ((tableData.page - 1) * tableData.limit) + 1 }} to 
                       {{ Math.min(tableData.page * tableData.limit, tableData.total) }} of 
                       {{ tableData.total }} rows
                     </span>
                   </div>
-                  <div v-if="dataSearch" class="flex items-center gap-2 text-sm text-muted-foreground">
-                    <AppIcon icon="lucide:filter" size="16" />
-                    <span>Filtered by "{{ dataSearch }}"</span>
+                  <div v-if="dataSearch" class="flex items-center gap-1.5 sm:gap-2 text-xs sm:text-sm text-muted-foreground">
+                    <AppIcon icon="lucide:filter" size="12" class="sm:w-4 sm:h-4 flex-shrink-0" />
+                    <span class="truncate">Filtered by "{{ dataSearch }}"</span>
                   </div>
                 </div>
               </div>
 
               <!-- Data Table -->
-              <div class="bg-card border border-border rounded-2xl overflow-hidden">
-                <div class="overflow-x-auto">
+              <div class="bg-card border border-border rounded-xl sm:rounded-2xl overflow-hidden">
+                <div class="overflow-x-auto -mx-4 sm:mx-0 px-4 sm:px-0">
                   <table class="min-w-full divide-y divide-border">
                     <thead class="bg-muted">
                       <tr>
@@ -482,15 +493,16 @@
                           v-for="column in dataColumns"
                           :key="column"
                           @click="sortTableData(column)"
-                          class="px-6 py-3 text-left text-xs font-semibold text-foreground uppercase tracking-wider cursor-pointer hover:bg-muted/80 transition-colors"
+                          class="px-3 sm:px-6 py-2 sm:py-3 text-left text-[10px] sm:text-xs font-semibold text-foreground uppercase tracking-wider cursor-pointer hover:bg-muted/80 transition-colors"
                         >
-                          <div class="flex items-center space-x-2">
-                            <AppIcon icon="lucide:tag" size="12" />
-                            <span>{{ column }}</span>
+                          <div class="flex items-center space-x-1 sm:space-x-2">
+                            <AppIcon icon="lucide:tag" size="10" class="sm:w-3 sm:h-3" />
+                            <span class="truncate max-w-[100px] sm:max-w-none">{{ column }}</span>
                             <AppIcon
                               v-if="dataSortBy === column"
                               :icon="dataSortOrder === 'ASC' ? 'lucide:chevron-up' : 'lucide:chevron-down'"
-                              size="12"
+                              size="10"
+                              class="sm:w-3 sm:h-3 flex-shrink-0"
                             />
                           </div>
                         </th>
@@ -501,9 +513,9 @@
                         <td
                           v-for="column in dataColumns"
                           :key="column"
-                          class="px-6 py-4 text-sm text-foreground font-mono"
+                          class="px-3 sm:px-6 py-2 sm:py-4 text-xs sm:text-sm text-foreground font-mono"
                         >
-                          <span class="truncate block max-w-xs" :title="formatValue(row[column])">
+                          <span class="truncate block max-w-[120px] sm:max-w-xs" :title="formatValue(row[column])">
                             {{ formatValue(row[column]) }}
                           </span>
                         </td>
@@ -514,17 +526,17 @@
               </div>
 
               <!-- Pagination -->
-              <div v-if="tableData.totalPages > 1" class="flex flex-col sm:flex-row items-center justify-between gap-4">
-                <div class="flex items-center space-x-2">
+              <div v-if="tableData.totalPages > 1" class="flex flex-col sm:flex-row items-center justify-between gap-3 sm:gap-4">
+                <div class="flex items-center space-x-1 sm:space-x-2">
                   <Button
                     @click="changeDataPage(tableData.page - 1)"
                     :disabled="tableData.page <= 1"
                     variant="outline"
                     size="sm"
-                    class="gap-2"
+                    class="gap-1 sm:gap-2 text-xs sm:text-sm h-8 w-8 sm:h-9 sm:w-auto sm:px-3 p-0"
                   >
-                    <AppIcon icon="lucide:chevron-left" size="16" />
-                    Previous
+                    <AppIcon icon="lucide:chevron-left" size="12" class="sm:w-4 sm:h-4" />
+                    <span class="hidden sm:inline">Previous</span>
                   </Button>
                   
                   <div class="flex space-x-1">
@@ -534,6 +546,7 @@
                       @click="changeDataPage(page)"
                       :variant="page === tableData.page ? 'default' : 'outline'"
                       size="sm"
+                      class="h-8 w-8 sm:h-9 sm:w-9 text-xs sm:text-sm"
                     >
                       {{ page }}
                     </Button>
@@ -544,14 +557,14 @@
                     :disabled="tableData.page >= tableData.totalPages"
                     variant="outline"
                     size="sm"
-                    class="gap-2"
+                    class="gap-1 sm:gap-2 text-xs sm:text-sm h-8 w-8 sm:h-9 sm:w-auto sm:px-3 p-0"
                   >
-                    Next
-                    <AppIcon icon="lucide:chevron-right" size="16" />
+                    <span class="hidden sm:inline">Next</span>
+                    <AppIcon icon="lucide:chevron-right" size="12" class="sm:w-4 sm:h-4" />
                   </Button>
                 </div>
                 
-                <div class="text-sm text-muted-foreground">
+                <div class="text-xs sm:text-sm text-muted-foreground whitespace-nowrap">
                   Page {{ tableData.page }} of {{ tableData.totalPages }}
                 </div>
               </div>
@@ -563,7 +576,7 @@
         <div v-if="activeTab === 'query'" class="space-y-6">
           <!-- Section Header -->
           <div class="flex items-center gap-3">
-            <div class="p-2 bg-gradient-to-br from-purple-500 to-pink-600 rounded-lg">
+            <div class="p-2 bg-gradient-to-br from-primary to-primary/70 rounded-lg">
               <AppIcon icon="lucide:code" size="20" class="text-white" />
             </div>
             <div>
@@ -573,17 +586,17 @@
           </div>
 
           <!-- Query Input Section -->
-          <div class="bg-card border border-border rounded-2xl p-6 shadow-lg">
-            <div class="space-y-4">
+          <div class="bg-card border border-border rounded-xl sm:rounded-2xl p-4 sm:p-6 shadow-lg">
+            <div class="space-y-3 sm:space-y-4">
               <div class="flex items-center justify-between">
-                <label class="block text-sm font-semibold text-foreground">
-                  <div class="flex items-center gap-2">
-                    <AppIcon icon="lucide:code" size="16" />
+                <label class="block text-xs sm:text-sm font-semibold text-foreground">
+                  <div class="flex items-center gap-1.5 sm:gap-2">
+                    <AppIcon icon="lucide:code" size="12" class="sm:w-4 sm:h-4" />
                     SQL Query
                   </div>
                 </label>
-                <div class="text-xs text-muted-foreground">
-                  {{ queryText.length }} characters
+                <div class="text-[10px] sm:text-xs text-muted-foreground">
+                  {{ queryText.length }} chars
                 </div>
               </div>
               
@@ -591,39 +604,42 @@
                 v-model="queryText"
                 rows="6"
                 placeholder="Enter your SQL query here..."
-                class="w-full px-4 py-3 border border-input rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-ring focus:border-ring bg-background text-foreground font-mono text-sm resize-none"
+                class="w-full px-3 sm:px-4 py-2 sm:py-3 border border-input rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-ring focus:border-ring bg-background text-foreground font-mono text-xs sm:text-sm resize-none"
               ></textarea>
               
-              <div class="flex items-center justify-between">
-                <div class="flex items-center gap-4">
-                  <div class="flex items-center gap-2">
-                    <label class="text-sm font-medium text-foreground">Limit Results:</label>
+              <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 sm:gap-4">
+                <div class="flex items-center gap-2 sm:gap-4">
+                  <div class="flex items-center gap-1.5 sm:gap-2">
+                    <label class="text-xs sm:text-sm font-medium text-foreground">Limit:</label>
                     <input
                       v-model.number="queryLimit"
                       type="number"
                       min="1"
                       max="1000"
-                      class="w-20 px-3 py-1 border border-input rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-ring focus:border-ring bg-background text-foreground text-sm"
+                      class="w-16 sm:w-20 px-2 sm:px-3 py-1 text-xs sm:text-sm border border-input rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-ring focus:border-ring bg-background text-foreground"
                     />
                   </div>
                 </div>
                 
-                <div class="flex items-center gap-3">
+                <div class="flex items-center gap-2 sm:gap-3">
                   <Button
                     @click="clearQuery"
                     variant="outline"
-                    class="gap-2"
+                    size="sm"
+                    class="gap-1.5 sm:gap-2 text-xs sm:text-sm"
                   >
-                    <AppIcon icon="lucide:x" size="16" />
+                    <AppIcon icon="lucide:x" size="12" class="sm:w-4 sm:h-4" />
                     Clear
                   </Button>
                   <Button
                     @click="executeQuery"
                     :disabled="!queryText.trim() || executingQuery"
-                    class="gap-2"
+                    size="sm"
+                    class="gap-1.5 sm:gap-2 text-xs sm:text-sm"
                   >
-                    <AppIcon icon="lucide:play" size="16" :class="{ 'animate-pulse': executingQuery }" />
-                    {{ executingQuery ? 'Executing...' : 'Execute Query' }}
+                    <AppIcon icon="lucide:play" size="12" class="sm:w-4 sm:h-4" :class="{ 'animate-pulse': executingQuery }" />
+                    <span class="hidden sm:inline">{{ executingQuery ? 'Executing...' : 'Execute Query' }}</span>
+                    <span class="sm:hidden">{{ executingQuery ? 'Executing...' : 'Execute' }}</span>
                   </Button>
                 </div>
               </div>
@@ -631,40 +647,40 @@
           </div>
 
           <!-- Query Results Section -->
-          <div v-if="queryResult" class="bg-card border border-border rounded-2xl overflow-hidden shadow-lg">
+          <div v-if="queryResult" class="bg-card border border-border rounded-xl sm:rounded-2xl overflow-hidden shadow-lg">
             <!-- Results Header -->
-            <div class="bg-gradient-to-r from-muted to-muted/50 border-b border-border px-6 py-4">
-              <div class="flex items-center justify-between">
-                <div class="flex items-center gap-3">
-                  <AppIcon icon="lucide:chart-bar" size="20" class="text-emerald-500" />
-                  <h4 class="text-lg font-semibold text-foreground">
+            <div class="bg-gradient-to-r from-muted to-muted/50 border-b border-border px-4 sm:px-6 py-3 sm:py-4">
+              <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 sm:gap-4">
+                <div class="flex items-center gap-2 sm:gap-3">
+                  <AppIcon icon="lucide:chart-bar" size="16" class="sm:w-5 sm:h-5 text-emerald-500" />
+                  <h4 class="text-base sm:text-lg font-semibold text-foreground">
                     Query Results
                   </h4>
                 </div>
-                <div class="flex items-center gap-4 text-sm">
+                <div class="flex items-center gap-2 sm:gap-4 text-xs sm:text-sm flex-wrap">
                   <span class="text-muted-foreground">
-                    <span class="font-semibold">{{ queryResult.rowCount }}</span> rows returned
+                    <span class="font-semibold">{{ queryResult.rowCount }}</span> rows
                   </span>
                   <span class="text-muted-foreground">
-                    Executed in <span class="font-semibold">{{ queryResult.executionTime }}ms</span>
+                    <span class="hidden sm:inline">Executed in </span><span class="font-semibold">{{ queryResult.executionTime }}ms</span>
                   </span>
                 </div>
               </div>
             </div>
 
             <!-- Results Table -->
-            <div v-if="queryResult.data && queryResult.data.length > 0" class="overflow-x-auto">
+            <div v-if="queryResult.data && queryResult.data.length > 0" class="overflow-x-auto -mx-4 sm:mx-0 px-4 sm:px-0">
               <table class="min-w-full divide-y divide-border">
                 <thead class="bg-muted">
                   <tr>
                     <th
                       v-for="column in queryResult.columns"
                       :key="column"
-                      class="px-6 py-3 text-left text-xs font-semibold text-foreground uppercase tracking-wider"
+                      class="px-3 sm:px-6 py-2 sm:py-3 text-left text-[10px] sm:text-xs font-semibold text-foreground uppercase tracking-wider"
                     >
-                      <div class="flex items-center gap-2">
-                        <AppIcon icon="lucide:tag" size="12" />
-                        {{ column }}
+                      <div class="flex items-center gap-1 sm:gap-2">
+                        <AppIcon icon="lucide:tag" size="10" class="sm:w-3 sm:h-3" />
+                        <span class="truncate max-w-[100px] sm:max-w-none">{{ column }}</span>
                       </div>
                     </th>
                   </tr>
@@ -674,9 +690,9 @@
                     <td
                       v-for="column in queryResult.columns"
                       :key="column"
-                      class="px-6 py-4 text-sm text-foreground font-mono"
+                      class="px-3 sm:px-6 py-2 sm:py-4 text-xs sm:text-sm text-foreground font-mono"
                     >
-                      <span class="truncate block max-w-xs" :title="formatValue(row[column])">
+                      <span class="truncate block max-w-[120px] sm:max-w-xs" :title="formatValue(row[column])">
                         {{ formatValue(row[column]) }}
                       </span>
                     </td>
@@ -713,59 +729,59 @@
 
     <!-- Clear Table Modal -->
     <div v-if="showClearTableModal" class="fixed inset-0 z-50 overflow-y-auto">
-      <div class="flex min-h-full items-center justify-center p-4">
+      <div class="flex min-h-full items-center justify-center p-3 sm:p-4">
         <!-- Backdrop -->
         <div class="fixed inset-0 bg-gray-900/50 backdrop-blur-sm transition-opacity" @click="showClearTableModal = false"></div>
         
         <!-- Modal panel -->
-        <div class="relative bg-card rounded-2xl shadow-xl border border-border max-w-md w-full transform transition-all">
+        <div class="relative bg-card rounded-xl sm:rounded-2xl shadow-xl border border-border max-w-md w-full transform transition-all max-h-[90vh] overflow-y-auto">
           <!-- Modal header -->
-          <div class="p-6 border-b border-border">
-            <div class="flex items-center justify-between">
-              <div class="flex items-center gap-3">
-                <div class="w-12 h-12 bg-red-500/10 rounded-xl flex items-center justify-center">
-                  <AppIcon icon="lucide:alert-triangle" size="24" class="text-red-500" />
+          <div class="p-4 sm:p-6 border-b border-border">
+            <div class="flex items-center justify-between gap-3">
+              <div class="flex items-center gap-2 sm:gap-3 min-w-0 flex-1">
+                <div class="w-10 h-10 sm:w-12 sm:h-12 bg-red-500/10 rounded-lg sm:rounded-xl flex items-center justify-center flex-shrink-0">
+                  <AppIcon icon="lucide:alert-triangle" size="20" class="sm:w-6 sm:h-6 text-red-500" />
                 </div>
-                <div>
-                  <h3 class="text-xl font-bold text-foreground">Clear Table</h3>
-                  <p class="text-sm text-muted-foreground">This action cannot be undone</p>
+                <div class="min-w-0 flex-1">
+                  <h3 class="text-lg sm:text-xl font-bold text-foreground">Clear Table</h3>
+                  <p class="text-xs sm:text-sm text-muted-foreground">This action cannot be undone</p>
                 </div>
               </div>
-              <Button @click="showClearTableModal = false" variant="ghost" class="p-2">
-                <AppIcon icon="lucide:x" size="20" />
+              <Button @click="showClearTableModal = false" variant="ghost" size="sm" class="p-1.5 sm:p-2 flex-shrink-0">
+                <AppIcon icon="lucide:x" size="16" class="sm:w-5 sm:h-5" />
               </Button>
             </div>
           </div>
           
           <!-- Modal body -->
-          <div class="p-6 space-y-4">
-            <p class="text-foreground">
-              Are you sure you want to clear all data from the table <span class="font-semibold text-red-500">{{ selectedTableName }}</span>?
+          <div class="p-4 sm:p-6 space-y-3 sm:space-y-4">
+            <p class="text-sm sm:text-base text-foreground">
+              Are you sure you want to clear all data from the table <span class="font-semibold text-red-500 break-words">{{ selectedTableName }}</span>?
             </p>
-            <p class="text-sm text-muted-foreground">
+            <p class="text-xs sm:text-sm text-muted-foreground">
               This will permanently delete all data from this table and cannot be undone.
             </p>
             
             <div class="space-y-2">
-              <label class="block text-sm font-semibold text-foreground">
+              <label class="block text-xs sm:text-sm font-semibold text-foreground">
                 Type <span class="font-mono text-red-500">CLEAR</span> to confirm:
               </label>
               <input
                 v-model="clearTableConfirmText"
                 type="text"
                 placeholder="Enter CLEAR to confirm"
-                class="w-full px-4 py-3 border border-input rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-red-500 bg-background text-foreground"
+                class="w-full px-3 sm:px-4 py-2 sm:py-3 text-xs sm:text-sm border border-input rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-red-500 bg-background text-foreground"
                 @keyup.enter="handleClearTableEnter"
               />
             </div>
           </div>
           
           <!-- Modal footer -->
-          <div class="p-6 border-t border-border flex items-center gap-3">
+          <div class="p-4 sm:p-6 border-t border-border flex flex-col sm:flex-row items-stretch sm:items-center gap-2 sm:gap-3">
             <Button
               @click="showClearTableModal = false"
               variant="outline"
-              class="flex-1"
+              class="flex-1 sm:flex-1 text-xs sm:text-sm"
             >
               Cancel
             </Button>
@@ -773,10 +789,10 @@
               @click="clearTable()"
               :disabled="clearTableConfirmText !== 'CLEAR' || clearingTable"
               variant="destructive"
-              class="flex-1 gap-2"
+              class="flex-1 sm:flex-1 gap-1.5 sm:gap-2 text-xs sm:text-sm"
             >
-              <AppIcon v-if="clearingTable" icon="lucide:loader-2" size="18" class="animate-spin" />
-              <AppIcon v-else icon="lucide:trash-2" size="18" />
+              <AppIcon v-if="clearingTable" icon="lucide:loader-2" size="14" class="sm:w-4 sm:h-4 animate-spin" />
+              <AppIcon v-else icon="lucide:trash-2" size="14" class="sm:w-4 sm:h-4" />
               {{ clearingTable ? 'Clearing...' : 'Clear Table' }}
             </Button>
           </div>
@@ -786,59 +802,59 @@
 
     <!-- Clear Database Modal -->
     <div v-if="showClearDatabaseModal" class="fixed inset-0 z-50 overflow-y-auto">
-      <div class="flex min-h-full items-center justify-center p-4">
+      <div class="flex min-h-full items-center justify-center p-3 sm:p-4">
         <!-- Backdrop -->
         <div class="fixed inset-0 bg-gray-900/50 backdrop-blur-sm transition-opacity" @click="showClearDatabaseModal = false"></div>
         
         <!-- Modal panel -->
-        <div class="relative bg-card rounded-2xl shadow-xl border border-border max-w-md w-full transform transition-all">
+        <div class="relative bg-card rounded-xl sm:rounded-2xl shadow-xl border border-border max-w-md w-full transform transition-all max-h-[90vh] overflow-y-auto">
           <!-- Modal header -->
-          <div class="p-6 border-b border-border">
-            <div class="flex items-center justify-between">
-              <div class="flex items-center gap-3">
-                <div class="w-12 h-12 bg-red-500/10 rounded-xl flex items-center justify-center">
-                  <AppIcon icon="lucide:alert-triangle" size="24" class="text-red-500" />
+          <div class="p-4 sm:p-6 border-b border-border">
+            <div class="flex items-center justify-between gap-3">
+              <div class="flex items-center gap-2 sm:gap-3 min-w-0 flex-1">
+                <div class="w-10 h-10 sm:w-12 sm:h-12 bg-red-500/10 rounded-lg sm:rounded-xl flex items-center justify-center flex-shrink-0">
+                  <AppIcon icon="lucide:alert-triangle" size="20" class="sm:w-6 sm:h-6 text-red-500" />
                 </div>
-                <div>
-                  <h3 class="text-xl font-bold text-foreground">Clear Database</h3>
-                  <p class="text-sm text-muted-foreground">This action cannot be undone</p>
+                <div class="min-w-0 flex-1">
+                  <h3 class="text-lg sm:text-xl font-bold text-foreground">Clear Database</h3>
+                  <p class="text-xs sm:text-sm text-muted-foreground">This action cannot be undone</p>
                 </div>
               </div>
-              <Button @click="showClearDatabaseModal = false" variant="ghost" class="p-2">
-                <AppIcon icon="lucide:x" size="20" />
+              <Button @click="showClearDatabaseModal = false" variant="ghost" size="sm" class="p-1.5 sm:p-2 flex-shrink-0">
+                <AppIcon icon="lucide:x" size="16" class="sm:w-5 sm:h-5" />
               </Button>
             </div>
           </div>
           
           <!-- Modal body -->
-          <div class="p-6 space-y-4">
-            <p class="text-foreground font-semibold">
+          <div class="p-4 sm:p-6 space-y-3 sm:space-y-4">
+            <p class="text-sm sm:text-base text-foreground font-semibold">
               ⚠️ DANGER: This will clear ALL data from ALL tables in the database!
             </p>
-            <p class="text-sm text-muted-foreground">
+            <p class="text-xs sm:text-sm text-muted-foreground">
               This will permanently delete all data from the entire database and cannot be undone. All tables will be emptied.
             </p>
             
             <div class="space-y-2">
-              <label class="block text-sm font-semibold text-foreground">
+              <label class="block text-xs sm:text-sm font-semibold text-foreground">
                 Type <span class="font-mono text-red-500">WIPE_DATABASE</span> to confirm:
               </label>
               <input
                 v-model="clearDatabaseConfirmText"
                 type="text"
                 placeholder="Enter WIPE_DATABASE to confirm"
-                class="w-full px-4 py-3 border border-input rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-red-500 bg-background text-foreground"
+                class="w-full px-3 sm:px-4 py-2 sm:py-3 text-xs sm:text-sm border border-input rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-red-500 bg-background text-foreground"
                 @keyup.enter="handleClearDatabaseEnter"
               />
             </div>
           </div>
           
           <!-- Modal footer -->
-          <div class="p-6 border-t border-border flex items-center gap-3">
+          <div class="p-4 sm:p-6 border-t border-border flex flex-col sm:flex-row items-stretch sm:items-center gap-2 sm:gap-3">
             <Button
               @click="showClearDatabaseModal = false"
               variant="outline"
-              class="flex-1"
+              class="flex-1 sm:flex-1 text-xs sm:text-sm"
             >
               Cancel
             </Button>
@@ -846,10 +862,10 @@
               @click="clearDatabase()"
               :disabled="clearDatabaseConfirmText !== 'WIPE_DATABASE' || clearingDatabase"
               variant="destructive"
-              class="flex-1 gap-2"
+              class="flex-1 sm:flex-1 gap-1.5 sm:gap-2 text-xs sm:text-sm"
             >
-              <AppIcon v-if="clearingDatabase" icon="lucide:loader-2" size="18" class="animate-spin" />
-              <AppIcon v-else icon="lucide:trash-2" size="18" />
+              <AppIcon v-if="clearingDatabase" icon="lucide:loader-2" size="14" class="sm:w-4 sm:h-4 animate-spin" />
+              <AppIcon v-else icon="lucide:trash-2" size="14" class="sm:w-4 sm:h-4" />
               {{ clearingDatabase ? 'Clearing...' : 'Clear Database' }}
             </Button>
           </div>
@@ -859,39 +875,39 @@
 
     <!-- Table Structure Modal -->
     <div v-if="showStructureModal" class="fixed inset-0 z-50 overflow-y-auto">
-      <div class="flex min-h-full items-center justify-center p-4">
+      <div class="flex min-h-full items-center justify-center p-3 sm:p-4">
         <!-- Backdrop -->
         <div class="fixed inset-0 bg-gray-900/50 backdrop-blur-sm transition-opacity" @click="showStructureModal = false"></div>
         
         <!-- Modal panel -->
-        <div class="relative bg-card rounded-2xl shadow-xl border border-border max-w-4xl w-full transform transition-all max-h-[90vh] overflow-hidden flex flex-col">
+        <div class="relative bg-card rounded-xl sm:rounded-2xl shadow-xl border border-border max-w-4xl w-full transform transition-all max-h-[90vh] overflow-hidden flex flex-col">
           <!-- Modal header -->
-          <div class="p-6 border-b border-border flex-shrink-0">
-            <div class="flex items-center justify-between">
-              <div class="flex items-center gap-3">
-                <div class="w-12 h-12 bg-blue-500/10 rounded-xl flex items-center justify-center">
-                  <AppIcon icon="lucide:database" size="24" class="text-blue-500" />
+          <div class="p-4 sm:p-6 border-b border-border flex-shrink-0">
+            <div class="flex items-center justify-between gap-3">
+              <div class="flex items-center gap-2 sm:gap-3 min-w-0 flex-1">
+                <div class="w-10 h-10 sm:w-12 sm:h-12 bg-blue-500/10 rounded-lg sm:rounded-xl flex items-center justify-center flex-shrink-0">
+                  <AppIcon icon="lucide:database" size="20" class="sm:w-6 sm:h-6 text-blue-500" />
                 </div>
-                <div>
-                  <h3 class="text-xl font-bold text-foreground">Table Structure</h3>
-                  <p class="text-sm text-muted-foreground">{{ selectedStructureTable }}</p>
+                <div class="min-w-0 flex-1">
+                  <h3 class="text-lg sm:text-xl font-bold text-foreground">Table Structure</h3>
+                  <p class="text-xs sm:text-sm text-muted-foreground truncate">{{ selectedStructureTable }}</p>
                 </div>
               </div>
-              <Button @click="showStructureModal = false" variant="ghost" class="p-2">
-                <AppIcon icon="lucide:x" size="20" />
+              <Button @click="showStructureModal = false" variant="ghost" size="sm" class="p-1.5 sm:p-2 flex-shrink-0">
+                <AppIcon icon="lucide:x" size="16" class="sm:w-5 sm:h-5" />
               </Button>
             </div>
           </div>
           
           <!-- Modal body -->
-          <div class="p-6 overflow-y-auto flex-1">
+          <div class="p-4 sm:p-6 overflow-y-auto flex-1">
             <!-- Loading State -->
-            <div v-if="loadingStructure" class="flex items-center justify-center py-12">
+            <div v-if="loadingStructure" class="flex items-center justify-center py-8 sm:py-12">
               <div class="text-center">
-                <div class="w-16 h-16 mx-auto mb-4 bg-primary/10 rounded-2xl flex items-center justify-center">
-                  <AppIcon icon="lucide:loader-2" size="32" class="text-primary animate-spin" />
+                <div class="w-12 h-12 sm:w-16 sm:h-16 mx-auto mb-3 sm:mb-4 bg-primary/10 rounded-xl sm:rounded-2xl flex items-center justify-center">
+                  <AppIcon icon="lucide:loader-2" size="24" class="sm:w-8 sm:h-8 text-primary animate-spin" />
                 </div>
-                <p class="text-sm text-muted-foreground">Loading table structure...</p>
+                <p class="text-xs sm:text-sm text-muted-foreground">Loading table structure...</p>
               </div>
             </div>
 
@@ -906,58 +922,58 @@
                 </div>
                 
                 <div class="bg-background border border-border rounded-xl overflow-hidden">
-                  <div class="overflow-x-auto">
+                  <div class="overflow-x-auto -mx-4 sm:mx-0 px-4 sm:px-0">
                     <table class="min-w-full divide-y divide-border">
                       <thead class="bg-muted">
                         <tr>
-                          <th class="px-4 py-3 text-left text-xs font-semibold text-foreground uppercase tracking-wider">Name</th>
-                          <th class="px-4 py-3 text-left text-xs font-semibold text-foreground uppercase tracking-wider">Type</th>
-                          <th class="px-4 py-3 text-left text-xs font-semibold text-foreground uppercase tracking-wider">Nullable</th>
-                          <th class="px-4 py-3 text-left text-xs font-semibold text-foreground uppercase tracking-wider">Default</th>
-                          <th class="px-4 py-3 text-left text-xs font-semibold text-foreground uppercase tracking-wider">Key</th>
-                          <th class="px-4 py-3 text-left text-xs font-semibold text-foreground uppercase tracking-wider">Extra</th>
-                          <th class="px-4 py-3 text-left text-xs font-semibold text-foreground uppercase tracking-wider">Comment</th>
+                          <th class="px-2 sm:px-4 py-2 sm:py-3 text-left text-[10px] sm:text-xs font-semibold text-foreground uppercase tracking-wider">Name</th>
+                          <th class="px-2 sm:px-4 py-2 sm:py-3 text-left text-[10px] sm:text-xs font-semibold text-foreground uppercase tracking-wider">Type</th>
+                          <th class="px-2 sm:px-4 py-2 sm:py-3 text-left text-[10px] sm:text-xs font-semibold text-foreground uppercase tracking-wider">Nullable</th>
+                          <th class="px-2 sm:px-4 py-2 sm:py-3 text-left text-[10px] sm:text-xs font-semibold text-foreground uppercase tracking-wider">Default</th>
+                          <th class="px-2 sm:px-4 py-2 sm:py-3 text-left text-[10px] sm:text-xs font-semibold text-foreground uppercase tracking-wider">Key</th>
+                          <th class="px-2 sm:px-4 py-2 sm:py-3 text-left text-[10px] sm:text-xs font-semibold text-foreground uppercase tracking-wider">Extra</th>
+                          <th class="px-2 sm:px-4 py-2 sm:py-3 text-left text-[10px] sm:text-xs font-semibold text-foreground uppercase tracking-wider">Comment</th>
                         </tr>
                       </thead>
                       <tbody class="bg-card divide-y divide-border">
                         <tr v-for="(column, index) in tableStructure.columns" :key="index" class="hover:bg-muted/50 transition-colors">
-                          <td class="px-4 py-3 text-sm font-semibold text-foreground font-mono">{{ column.name }}</td>
-                          <td class="px-4 py-3 text-sm text-foreground">
+                          <td class="px-2 sm:px-4 py-2 sm:py-3 text-xs sm:text-sm font-semibold text-foreground font-mono">{{ column.name }}</td>
+                          <td class="px-2 sm:px-4 py-2 sm:py-3 text-xs sm:text-sm text-foreground">
                             <span class="font-mono">{{ column.type }}</span>
                             <span v-if="column.max_length" class="text-muted-foreground">({{ column.max_length }})</span>
                             <span v-else-if="column.precision && column.scale" class="text-muted-foreground">
                               ({{ column.precision }},{{ column.scale }})
                             </span>
                           </td>
-                          <td class="px-4 py-3 text-sm text-foreground">
+                          <td class="px-2 sm:px-4 py-2 sm:py-3 text-xs sm:text-sm text-foreground">
                             <span :class="column.nullable === 'YES' ? 'text-amber-500' : 'text-emerald-500'">
                               {{ column.nullable === 'YES' ? 'YES' : 'NO' }}
                             </span>
                           </td>
-                          <td class="px-4 py-3 text-sm text-foreground font-mono">
-                            <span v-if="column.default_value !== null && column.default_value !== undefined">
+                          <td class="px-2 sm:px-4 py-2 sm:py-3 text-xs sm:text-sm text-foreground font-mono">
+                            <span v-if="column.default_value !== null && column.default_value !== undefined" class="truncate block max-w-[100px] sm:max-w-none">
                               {{ column.default_value }}
                             </span>
                             <span v-else class="text-muted-foreground">—</span>
                           </td>
-                          <td class="px-4 py-3 text-sm text-foreground">
-                            <span v-if="column.key === 'PRI'" class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-emerald-100 dark:bg-emerald-900 text-emerald-800 dark:text-emerald-200">
+                          <td class="px-2 sm:px-4 py-2 sm:py-3 text-xs sm:text-sm text-foreground">
+                            <span v-if="column.key === 'PRI'" class="inline-flex items-center px-1.5 sm:px-2 py-0.5 rounded-full text-[10px] sm:text-xs font-medium bg-emerald-100 dark:bg-emerald-900 text-emerald-800 dark:text-emerald-200">
                               PRIMARY
                             </span>
-                            <span v-else-if="column.key === 'UNI'" class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-blue-100 dark:bg-blue-900 text-blue-800 dark:text-blue-200">
+                            <span v-else-if="column.key === 'UNI'" class="inline-flex items-center px-1.5 sm:px-2 py-0.5 rounded-full text-[10px] sm:text-xs font-medium bg-blue-100 dark:bg-blue-900 text-blue-800 dark:text-blue-200">
                               UNIQUE
                             </span>
-                            <span v-else-if="column.key === 'MUL'" class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-purple-100 dark:bg-purple-900 text-purple-800 dark:text-purple-200">
+                            <span v-else-if="column.key === 'MUL'" class="inline-flex items-center px-1.5 sm:px-2 py-0.5 rounded-full text-[10px] sm:text-xs font-medium bg-primary/10 text-primary">
                               INDEX
                             </span>
                             <span v-else class="text-muted-foreground">—</span>
                           </td>
-                          <td class="px-4 py-3 text-sm text-foreground">
-                            <span v-if="column.extra" class="text-amber-500 font-mono">{{ column.extra }}</span>
+                          <td class="px-2 sm:px-4 py-2 sm:py-3 text-xs sm:text-sm text-foreground">
+                            <span v-if="column.extra" class="text-amber-500 font-mono truncate block max-w-[80px] sm:max-w-none">{{ column.extra }}</span>
                             <span v-else class="text-muted-foreground">—</span>
                           </td>
-                          <td class="px-4 py-3 text-sm text-muted-foreground">
-                            {{ column.comment || '—' }}
+                          <td class="px-2 sm:px-4 py-2 sm:py-3 text-xs sm:text-sm text-muted-foreground">
+                            <span class="truncate block max-w-[100px] sm:max-w-none">{{ column.comment || '—' }}</span>
                           </td>
                         </tr>
                       </tbody>
@@ -969,34 +985,34 @@
               <!-- Indexes Section -->
               <div v-if="tableStructure.indexes && tableStructure.indexes.length > 0" class="space-y-4">
                 <div class="flex items-center gap-2">
-                  <AppIcon icon="lucide:key" size="20" class="text-purple-500" />
+                  <AppIcon icon="lucide:key" size="20" class="text-primary" />
                   <h4 class="text-lg font-semibold text-foreground">Indexes</h4>
                   <span class="text-sm text-muted-foreground">({{ tableStructure.indexes.length }})</span>
                 </div>
                 
                 <div class="bg-background border border-border rounded-xl overflow-hidden">
-                  <div class="overflow-x-auto">
+                  <div class="overflow-x-auto -mx-4 sm:mx-0 px-4 sm:px-0">
                     <table class="min-w-full divide-y divide-border">
                       <thead class="bg-muted">
                         <tr>
-                          <th class="px-4 py-3 text-left text-xs font-semibold text-foreground uppercase tracking-wider">Index Name</th>
-                          <th class="px-4 py-3 text-left text-xs font-semibold text-foreground uppercase tracking-wider">Column</th>
-                          <th class="px-4 py-3 text-left text-xs font-semibold text-foreground uppercase tracking-wider">Unique</th>
-                          <th class="px-4 py-3 text-left text-xs font-semibold text-foreground uppercase tracking-wider">Type</th>
-                          <th class="px-4 py-3 text-left text-xs font-semibold text-foreground uppercase tracking-wider">Cardinality</th>
+                          <th class="px-2 sm:px-4 py-2 sm:py-3 text-left text-[10px] sm:text-xs font-semibold text-foreground uppercase tracking-wider">Index Name</th>
+                          <th class="px-2 sm:px-4 py-2 sm:py-3 text-left text-[10px] sm:text-xs font-semibold text-foreground uppercase tracking-wider">Column</th>
+                          <th class="px-2 sm:px-4 py-2 sm:py-3 text-left text-[10px] sm:text-xs font-semibold text-foreground uppercase tracking-wider">Unique</th>
+                          <th class="px-2 sm:px-4 py-2 sm:py-3 text-left text-[10px] sm:text-xs font-semibold text-foreground uppercase tracking-wider">Type</th>
+                          <th class="px-2 sm:px-4 py-2 sm:py-3 text-left text-[10px] sm:text-xs font-semibold text-foreground uppercase tracking-wider">Cardinality</th>
                         </tr>
                       </thead>
                       <tbody class="bg-card divide-y divide-border">
                         <tr v-for="(index, indexIdx) in tableStructure.indexes" :key="indexIdx" class="hover:bg-muted/50 transition-colors">
-                          <td class="px-4 py-3 text-sm font-semibold text-foreground font-mono">{{ index.name }}</td>
-                          <td class="px-4 py-3 text-sm text-foreground font-mono">{{ index.column_name }}</td>
-                          <td class="px-4 py-3 text-sm text-foreground">
+                          <td class="px-2 sm:px-4 py-2 sm:py-3 text-xs sm:text-sm font-semibold text-foreground font-mono">{{ index.name }}</td>
+                          <td class="px-2 sm:px-4 py-2 sm:py-3 text-xs sm:text-sm text-foreground font-mono">{{ index.column_name }}</td>
+                          <td class="px-2 sm:px-4 py-2 sm:py-3 text-xs sm:text-sm text-foreground">
                             <span :class="index.non_unique === 0 ? 'text-emerald-500' : 'text-muted-foreground'">
                               {{ index.non_unique === 0 ? 'YES' : 'NO' }}
                             </span>
                           </td>
-                          <td class="px-4 py-3 text-sm text-foreground font-mono">{{ index.type }}</td>
-                          <td class="px-4 py-3 text-sm text-foreground">
+                          <td class="px-2 sm:px-4 py-2 sm:py-3 text-xs sm:text-sm text-foreground font-mono">{{ index.type }}</td>
+                          <td class="px-2 sm:px-4 py-2 sm:py-3 text-xs sm:text-sm text-foreground">
                             {{ index.cardinality ? formatNumber(index.cardinality) : '—' }}
                           </td>
                         </tr>
@@ -1025,10 +1041,12 @@
           </div>
           
           <!-- Modal footer -->
-          <div class="p-6 border-t border-border flex-shrink-0 flex items-center justify-end gap-3">
+          <div class="p-4 sm:p-6 border-t border-border flex-shrink-0 flex items-center justify-end gap-2 sm:gap-3">
             <Button
               @click="showStructureModal = false"
               variant="outline"
+              size="sm"
+              class="text-xs sm:text-sm"
             >
               Close
             </Button>

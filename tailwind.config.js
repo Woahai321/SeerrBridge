@@ -11,6 +11,9 @@ export default {
   darkMode: 'class',
   theme: {
     extend: {
+      fontFamily: {
+        sans: ['Titillium Web', 'system-ui', '-apple-system', 'BlinkMacSystemFont', 'Segoe UI', 'Roboto', 'Helvetica Neue', 'Arial', 'sans-serif'],
+      },
       colors: {
         border: 'hsl(var(--border))',
         input: 'hsl(var(--input))',
@@ -57,9 +60,16 @@ export default {
       animation: {
         'gradient': 'gradient 15s ease infinite',
         'fade-in': 'fadeIn 0.5s ease-in-out',
+        'fade-in-up': 'fadeInUp 0.6s cubic-bezier(0.4, 0, 0.2, 1) forwards',
         'pulse-soft': 'pulseSoft 4s cubic-bezier(0.4, 0, 0.6, 1) infinite',
         'shimmer': 'shimmer 5.5s infinite',
-        'shimmer-subtle': 'shimmerSubtle 60s cubic-bezier(0.4, 0.0, 0.2, 1) infinite'
+        'shimmer-fast': 'shimmerFast 1.5s infinite',
+        'shimmer-subtle': 'shimmerSubtle 60s cubic-bezier(0.4, 0.0, 0.2, 1) infinite',
+        'card-float': 'cardFloat 6s ease-in-out infinite',
+        'glow-pulse': 'glowPulse 2s ease-in-out infinite',
+        'badge-bounce': 'badgeBounce 2s ease-in-out infinite',
+        'scale-in': 'scaleIn 0.4s cubic-bezier(0.4, 0, 0.2, 1) forwards',
+        'rotate-glow': 'rotateGlow 3s linear infinite'
       },
       keyframes: {
         gradient: {

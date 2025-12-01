@@ -1,88 +1,126 @@
 <template>
-  <div class="container mx-auto px-4 py-8">
+  <div class="container mx-auto px-3 sm:px-4 py-4 sm:py-6 lg:py-8">
     <!-- Breadcrumb -->
-    <nav class="flex items-center space-x-2 text-sm text-muted-foreground mb-6">
-      <NuxtLink to="/" class="hover:text-foreground transition-colors">Home</NuxtLink>
-      <AppIcon icon="lucide:chevron-right" size="16" />
-      <NuxtLink to="/dashboard" class="hover:text-foreground transition-colors">Dashboard</NuxtLink>
-      <AppIcon icon="lucide:chevron-right" size="16" />
-      <span class="text-foreground">Settings</span>
+    <nav class="flex items-center space-x-1 sm:space-x-2 text-xs sm:text-sm text-muted-foreground mb-4 sm:mb-6 overflow-x-auto -mx-3 sm:mx-0 px-3 sm:px-0">
+      <NuxtLink to="/" class="hover:text-foreground transition-colors whitespace-nowrap">Home</NuxtLink>
+      <AppIcon icon="lucide:chevron-right" size="12" class="sm:w-4 sm:h-4 flex-shrink-0" />
+      <NuxtLink to="/dashboard" class="hover:text-foreground transition-colors whitespace-nowrap">Dashboard</NuxtLink>
+      <AppIcon icon="lucide:chevron-right" size="12" class="sm:w-4 sm:h-4 flex-shrink-0" />
+      <span class="text-foreground whitespace-nowrap">Settings</span>
     </nav>
 
-    <div class="flex justify-between items-center mb-8">
-      <h1 class="text-3xl font-bold text-foreground flex items-center">
-        <AppIcon icon="lucide:settings" size="28" class="mr-3 text-primary" />
+    <div class="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-3 sm:gap-4 mb-6 sm:mb-8">
+      <h1 class="text-2xl sm:text-3xl font-bold text-foreground flex items-center">
+        <AppIcon icon="lucide:settings" size="24" class="sm:w-7 sm:h-7 mr-2 sm:mr-3 text-primary" />
         Settings
       </h1>
       
-      <div class="flex items-center gap-3">
-        <button 
-          @click="toggleTheme"
-          class="glass-button flex items-center px-4 py-2 shadow-sm"
-          :title="colorMode.value === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'"
-        >
-          <AppIcon 
-            :icon="colorMode.value === 'dark' ? 'lucide:sun' : 'lucide:moon'" 
-            size="16" 
-            class="mr-2" 
-          />
-          {{ colorMode.value === 'dark' ? 'Light' : 'Dark' }}
-        </button>
+      <div class="flex items-center gap-2 sm:gap-3">
+        <!-- Theme Selector -->
+        <div class="relative">
+          <button 
+            @click="showThemeMenu = !showThemeMenu"
+            class="glass-button flex items-center px-3 sm:px-4 py-1.5 sm:py-2 shadow-sm text-xs sm:text-sm"
+            :title="`Current theme: ${getThemeName(colorMode.value)}`"
+          >
+            <AppIcon 
+              :icon="getThemeIcon(colorMode.value)" 
+              size="14" 
+              class="sm:w-4 sm:h-4 mr-1.5 sm:mr-2" 
+            />
+            <span class="hidden sm:inline">{{ getThemeName(colorMode.value) }}</span>
+            <span class="sm:hidden">{{ getThemeName(colorMode.value).charAt(0) }}</span>
+            <AppIcon 
+              icon="lucide:chevron-down" 
+              size="12" 
+              class="ml-1.5 sm:ml-2" 
+            />
+          </button>
+          
+          <!-- Theme Dropdown Menu -->
+          <div 
+            v-if="showThemeMenu"
+            ref="themeMenuRef"
+            class="absolute right-0 mt-2 w-48 glass-card p-2 z-50 shadow-lg"
+          >
+            <button
+              v-for="theme in themes"
+              :key="theme.value"
+              @click="selectTheme(theme.value)"
+              class="w-full flex items-center px-3 py-2 rounded-lg hover:bg-muted/50 transition-colors text-left"
+              :class="{ 'bg-primary/20 text-primary': colorMode.value === theme.value }"
+            >
+              <AppIcon 
+                :icon="theme.icon" 
+                size="16" 
+                class="mr-2" 
+              />
+              <span class="text-sm font-medium">{{ theme.name }}</span>
+              <AppIcon 
+                v-if="colorMode.value === theme.value"
+                icon="lucide:check" 
+                size="16" 
+                class="ml-auto" 
+              />
+            </button>
+          </div>
+        </div>
         
         <button 
           @click="saveAllSettings"
           :disabled="pending"
-          class="glass-button flex items-center px-4 py-2 shadow-sm"
+          class="glass-button flex items-center px-3 sm:px-4 py-1.5 sm:py-2 shadow-sm text-xs sm:text-sm"
         >
-          <AppIcon icon="lucide:save" size="16" class="mr-2" />
-          Save All Changes
+          <AppIcon icon="lucide:save" size="14" class="sm:w-4 sm:h-4 mr-1.5 sm:mr-2" />
+          <span class="hidden sm:inline">Save All Changes</span>
+          <span class="sm:hidden">Save All</span>
         </button>
       </div>
     </div>
 
     <!-- Setup Status Banner -->
-    <div v-if="!setupCompleted" class="glass-card p-6 mb-8 border-l-4 border-l-orange-500">
-      <div class="flex items-center justify-between">
-        <div class="flex items-center">
-          <AppIcon icon="lucide:alert-triangle" size="20" class="mr-3 text-orange-500" />
-          <div>
-            <h3 class="text-lg font-semibold text-foreground">Setup Incomplete</h3>
-            <p class="text-sm text-muted-foreground">Complete the initial setup to configure your SeerrBridge instance.</p>
+    <div v-if="!setupCompleted" class="glass-card p-4 sm:p-6 mb-6 sm:mb-8 border-l-4 border-l-orange-500">
+      <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 sm:gap-4">
+        <div class="flex items-start sm:items-center gap-2 sm:gap-3 min-w-0 flex-1">
+          <AppIcon icon="lucide:alert-triangle" size="18" class="sm:w-5 sm:h-5 mr-1 sm:mr-3 text-orange-500 flex-shrink-0 mt-0.5 sm:mt-0" />
+          <div class="min-w-0 flex-1">
+            <h3 class="text-base sm:text-lg font-semibold text-foreground">Setup Incomplete</h3>
+            <p class="text-xs sm:text-sm text-muted-foreground">Complete the initial setup to configure your SeerrBridge instance.</p>
           </div>
         </div>
         <NuxtLink 
           to="/setup"
-          class="glass-button flex items-center px-4 py-2"
+          class="glass-button flex items-center justify-center px-3 sm:px-4 py-2 text-xs sm:text-sm whitespace-nowrap flex-shrink-0"
         >
-          <AppIcon icon="lucide:arrow-right" size="16" class="mr-2" />
+          <AppIcon icon="lucide:arrow-right" size="14" class="sm:w-4 sm:h-4 mr-1.5 sm:mr-2" />
           Complete Setup
         </NuxtLink>
       </div>
     </div>
 
-    <div class="grid grid-cols-1 xl:grid-cols-2 gap-8 animate-fade-in">
+    <div class="grid grid-cols-1 xl:grid-cols-2 gap-4 sm:gap-6 lg:gap-8 animate-fade-in">
       <!-- API Credentials Section -->
-      <div class="glass-card p-6 hover:shadow-lg transition-all duration-300">
-        <h2 class="text-xl font-semibold mb-6 flex items-center">
-          <AppIcon icon="lucide:key" size="20" class="mr-2 text-primary" />
+      <div class="glass-card p-4 sm:p-6 hover:shadow-lg transition-all duration-300">
+        <h2 class="text-lg sm:text-xl font-semibold mb-4 sm:mb-6 flex items-center">
+          <AppIcon icon="lucide:key" size="18" class="sm:w-5 sm:h-5 mr-2 text-primary" />
           API Credentials
         </h2>
-        <div class="space-y-10">
+        <div class="space-y-6 sm:space-y-8 lg:space-y-10">
 
 
           <!-- Real-Debrid Configuration -->
-          <div class="space-y-4">
-            <div class="flex items-center justify-between">
-              <h3 class="text-lg font-medium text-foreground">Real-Debrid</h3>
-              <div class="flex items-center space-x-3">
-                <div class="flex items-center space-x-2">
+          <div class="space-y-3 sm:space-y-4">
+            <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 sm:gap-3">
+              <h3 class="text-base sm:text-lg font-medium text-foreground">Real-Debrid</h3>
+              <div class="flex items-center space-x-2 sm:space-x-3">
+                <div class="flex items-center space-x-1.5 sm:space-x-2">
                   <div :class="[
-                    'w-2 h-2 rounded-full',
+                    'w-1.5 h-1.5 sm:w-2 sm:h-2 rounded-full',
                     configStatus.rd_client_id && configStatus.rd_client_secret && configStatus.rd_access_token && configStatus.rd_refresh_token 
                       ? 'bg-green-500' 
                       : 'bg-red-500'
                   ]"></div>
-                  <span class="text-xs text-muted-foreground">
+                  <span class="text-[10px] sm:text-xs text-muted-foreground whitespace-nowrap">
                     {{ configStatus.rd_client_id && configStatus.rd_client_secret && configStatus.rd_access_token && configStatus.rd_refresh_token ? 'Configured' : 'Not Configured' }}
                   </span>
                 </div>
@@ -90,7 +128,7 @@
                   @click="saveSection('realdebrid')"
                   :disabled="pendingSections.realdebrid || !hasSectionChanges('realdebrid')"
                   :class="[
-                    'px-3 py-1 text-xs rounded transition-colors',
+                    'px-2 sm:px-3 py-1 text-[10px] sm:text-xs rounded transition-colors flex items-center gap-1',
                     hasSectionChanges('realdebrid') 
                       ? 'bg-primary text-primary-foreground hover:bg-primary/90' 
                       : 'bg-muted text-muted-foreground cursor-not-allowed'
@@ -98,8 +136,8 @@
                 >
                   <AppIcon 
                     :icon="pendingSections.realdebrid ? 'lucide:loader-2' : 'lucide:save'" 
-                    size="12" 
-                    class="mr-1"
+                    size="10" 
+                    class="sm:w-3 sm:h-3"
                     :class="{ 'animate-spin': pendingSections.realdebrid }"
                   />
                   {{ pendingSections.realdebrid ? 'Saving...' : 'Save' }}
@@ -107,52 +145,52 @@
               </div>
             </div>
             
-            <div class="grid grid-cols-1 gap-4">
+            <div class="grid grid-cols-1 gap-3 sm:gap-4">
               <div>
-                <label class="block text-sm font-medium text-foreground mb-2">Client ID</label>
+                <label class="block text-xs sm:text-sm font-medium text-foreground mb-1.5 sm:mb-2">Client ID</label>
                 <input
                   v-model="config.rd_client_id"
                   type="text"
                   :placeholder="configStatus.rd_client_id ? 'Client ID is configured (enter new value to update)' : 'Enter your Real-Debrid Client ID'"
                   :class="[
-                    'w-full px-3 py-2 glass-input rounded-lg',
-                    config.rd_client_id && config.rd_client_id.includes('*') ? 'font-mono text-sm' : ''
+                    'w-full px-3 py-2 text-xs sm:text-sm glass-input rounded-lg',
+                    config.rd_client_id && config.rd_client_id.includes('*') ? 'font-mono' : ''
                   ]"
                 />
               </div>
               <div>
-                <label class="block text-sm font-medium text-foreground mb-2">Client Secret</label>
+                <label class="block text-xs sm:text-sm font-medium text-foreground mb-1.5 sm:mb-2">Client Secret</label>
                 <input
                   v-model="config.rd_client_secret"
                   type="text"
                   :placeholder="configStatus.rd_client_secret ? 'Client Secret is configured (enter new value to update)' : 'Enter your Real-Debrid Client Secret'"
                   :class="[
-                    'w-full px-3 py-2 glass-input rounded-lg',
-                    config.rd_client_secret && config.rd_client_secret.includes('*') ? 'font-mono text-sm' : ''
+                    'w-full px-3 py-2 text-xs sm:text-sm glass-input rounded-lg',
+                    config.rd_client_secret && config.rd_client_secret.includes('*') ? 'font-mono' : ''
                   ]"
                 />
               </div>
               <div>
-                <label class="block text-sm font-medium text-foreground mb-2">Access Token</label>
+                <label class="block text-xs sm:text-sm font-medium text-foreground mb-1.5 sm:mb-2">Access Token</label>
                 <input
                   v-model="config.rd_access_token"
                   type="text"
                   :placeholder="configStatus.rd_access_token ? 'Access Token is configured (enter new value to update)' : 'Enter your Real-Debrid Access Token'"
                   :class="[
-                    'w-full px-3 py-2 glass-input rounded-lg',
-                    config.rd_access_token && config.rd_access_token.includes('*') ? 'font-mono text-sm' : ''
+                    'w-full px-3 py-2 text-xs sm:text-sm glass-input rounded-lg',
+                    config.rd_access_token && config.rd_access_token.includes('*') ? 'font-mono' : ''
                   ]"
                 />
               </div>
               <div>
-                <label class="block text-sm font-medium text-foreground mb-2">Refresh Token</label>
+                <label class="block text-xs sm:text-sm font-medium text-foreground mb-1.5 sm:mb-2">Refresh Token</label>
                 <input
                   v-model="config.rd_refresh_token"
                   type="text"
                   :placeholder="configStatus.rd_refresh_token ? 'Refresh Token is configured (enter new value to update)' : 'Enter your Real-Debrid Refresh Token'"
                   :class="[
-                    'w-full px-3 py-2 glass-input rounded-lg',
-                    config.rd_refresh_token && config.rd_refresh_token.includes('*') ? 'font-mono text-sm' : ''
+                    'w-full px-3 py-2 text-xs sm:text-sm glass-input rounded-lg',
+                    config.rd_refresh_token && config.rd_refresh_token.includes('*') ? 'font-mono' : ''
                   ]"
                 />
               </div>
@@ -160,18 +198,18 @@
           </div>
 
           <!-- Overseerr Configuration -->
-          <div class="space-y-4 pt-4 border-t border-border">
-            <div class="flex items-center justify-between">
-              <h3 class="text-lg font-medium text-foreground">Overseerr</h3>
-              <div class="flex items-center space-x-3">
-                <div class="flex items-center space-x-2">
+          <div class="space-y-3 sm:space-y-4 pt-3 sm:pt-4 border-t border-border">
+            <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 sm:gap-3">
+              <h3 class="text-base sm:text-lg font-medium text-foreground">Overseerr</h3>
+              <div class="flex items-center space-x-2 sm:space-x-3">
+                <div class="flex items-center space-x-1.5 sm:space-x-2">
                   <div :class="[
-                    'w-2 h-2 rounded-full',
+                    'w-1.5 h-1.5 sm:w-2 sm:h-2 rounded-full',
                     configStatus.overseerr_base && configStatus.overseerr_api_key 
                       ? 'bg-green-500' 
                       : 'bg-red-500'
                   ]"></div>
-                  <span class="text-xs text-muted-foreground">
+                  <span class="text-[10px] sm:text-xs text-muted-foreground whitespace-nowrap">
                     {{ configStatus.overseerr_base && configStatus.overseerr_api_key ? 'Configured' : 'Not Configured' }}
                   </span>
                 </div>
@@ -179,7 +217,7 @@
                   @click="saveSection('overseerr')"
                   :disabled="pendingSections.overseerr || !hasSectionChanges('overseerr')"
                   :class="[
-                    'px-3 py-1 text-xs rounded transition-colors',
+                    'px-2 sm:px-3 py-1 text-[10px] sm:text-xs rounded transition-colors flex items-center gap-1',
                     hasSectionChanges('overseerr') 
                       ? 'bg-primary text-primary-foreground hover:bg-primary/90' 
                       : 'bg-muted text-muted-foreground cursor-not-allowed'
@@ -187,8 +225,8 @@
                 >
                   <AppIcon 
                     :icon="pendingSections.overseerr ? 'lucide:loader-2' : 'lucide:save'" 
-                    size="12" 
-                    class="mr-1"
+                    size="10" 
+                    class="sm:w-3 sm:h-3"
                     :class="{ 'animate-spin': pendingSections.overseerr }"
                   />
                   {{ pendingSections.overseerr ? 'Saving...' : 'Save' }}
@@ -196,28 +234,28 @@
               </div>
             </div>
             
-            <div class="space-y-4">
+            <div class="space-y-3 sm:space-y-4">
               <div>
-                <label class="block text-sm font-medium text-foreground mb-2">Base URL</label>
+                <label class="block text-xs sm:text-sm font-medium text-foreground mb-1.5 sm:mb-2">Base URL</label>
                 <input
                   v-model="config.overseerr_base"
                   type="url"
                   :placeholder="configStatus.overseerr_base ? 'Overseerr URL is configured' : 'https://your-overseerr-instance.com'"
                   :class="[
-                    'w-full px-3 py-2 glass-input rounded-lg',
-                    config.overseerr_base && config.overseerr_base.includes('*') ? 'font-mono text-sm' : ''
+                    'w-full px-3 py-2 text-xs sm:text-sm glass-input rounded-lg',
+                    config.overseerr_base && config.overseerr_base.includes('*') ? 'font-mono' : ''
                   ]"
                 />
               </div>
               <div>
-                <label class="block text-sm font-medium text-foreground mb-2">API Key</label>
+                <label class="block text-xs sm:text-sm font-medium text-foreground mb-1.5 sm:mb-2">API Key</label>
                 <input
                   v-model="config.overseerr_api_key"
                   type="text"
                   :placeholder="configStatus.overseerr_api_key ? 'API Key is configured' : 'Enter your Overseerr API Key'"
                   :class="[
-                    'w-full px-3 py-2 glass-input rounded-lg',
-                    config.overseerr_api_key && config.overseerr_api_key.includes('*') ? 'font-mono text-sm' : ''
+                    'w-full px-3 py-2 text-xs sm:text-sm glass-input rounded-lg',
+                    config.overseerr_api_key && config.overseerr_api_key.includes('*') ? 'font-mono' : ''
                   ]"
                 />
               </div>
@@ -225,16 +263,16 @@
           </div>
 
           <!-- Trakt Configuration -->
-          <div class="space-y-4 pt-4 border-t border-border">
-            <div class="flex items-center justify-between">
-              <h3 class="text-lg font-medium text-foreground">Trakt</h3>
-              <div class="flex items-center space-x-3">
-                <div class="flex items-center space-x-2">
+          <div class="space-y-3 sm:space-y-4 pt-3 sm:pt-4 border-t border-border">
+            <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 sm:gap-3">
+              <h3 class="text-base sm:text-lg font-medium text-foreground">Trakt</h3>
+              <div class="flex items-center space-x-2 sm:space-x-3">
+                <div class="flex items-center space-x-1.5 sm:space-x-2">
                   <div :class="[
-                    'w-2 h-2 rounded-full',
+                    'w-1.5 h-1.5 sm:w-2 sm:h-2 rounded-full',
                     configStatus.trakt_api_key ? 'bg-green-500' : 'bg-red-500'
                   ]"></div>
-                  <span class="text-xs text-muted-foreground">
+                  <span class="text-[10px] sm:text-xs text-muted-foreground whitespace-nowrap">
                     {{ configStatus.trakt_api_key ? 'Configured' : 'Not Configured' }}
                   </span>
                 </div>
@@ -242,7 +280,7 @@
                   @click="saveSection('trakt')"
                   :disabled="pendingSections.trakt || !hasSectionChanges('trakt')"
                   :class="[
-                    'px-3 py-1 text-xs rounded transition-colors',
+                    'px-2 sm:px-3 py-1 text-[10px] sm:text-xs rounded transition-colors flex items-center gap-1',
                     hasSectionChanges('trakt') 
                       ? 'bg-primary text-primary-foreground hover:bg-primary/90' 
                       : 'bg-muted text-muted-foreground cursor-not-allowed'
@@ -250,8 +288,8 @@
                 >
                   <AppIcon 
                     :icon="pendingSections.trakt ? 'lucide:loader-2' : 'lucide:save'" 
-                    size="12" 
-                    class="mr-1"
+                    size="10" 
+                    class="sm:w-3 sm:h-3"
                     :class="{ 'animate-spin': pendingSections.trakt }"
                   />
                   {{ pendingSections.trakt ? 'Saving...' : 'Save' }}
@@ -260,17 +298,17 @@
             </div>
             
             <div>
-              <label class="block text-sm font-medium text-foreground mb-2">API Key</label>
+              <label class="block text-xs sm:text-sm font-medium text-foreground mb-1.5 sm:mb-2">API Key</label>
               <input
                 v-model="config.trakt_api_key"
                 type="text"
                 :placeholder="configStatus.trakt_api_key ? 'Trakt API Key is configured' : 'Enter your Trakt API Key'"
                 :class="[
-                  'w-full px-3 py-2 glass-input rounded-lg',
-                  config.trakt_api_key && config.trakt_api_key.includes('*') ? 'font-mono text-sm' : ''
+                  'w-full px-3 py-2 text-xs sm:text-sm glass-input rounded-lg',
+                  config.trakt_api_key && config.trakt_api_key.includes('*') ? 'font-mono' : ''
                 ]"
               />
-              <p class="text-xs text-muted-foreground mt-1">
+              <p class="text-[10px] sm:text-xs text-muted-foreground mt-1">
                 Get your API key from <a href="https://trakt.tv/oauth/applications" target="_blank" class="text-primary hover:text-primary/80 underline">Trakt.tv</a>
               </p>
             </div>
@@ -279,17 +317,17 @@
       </div>
 
       <!-- System Configuration Section -->
-      <div class="glass-card p-6 hover:shadow-lg transition-all duration-300">
-        <div class="flex items-center justify-between mb-6">
-          <h2 class="text-xl font-semibold flex items-center">
-            <AppIcon icon="lucide:cog" size="20" class="mr-2 text-primary" />
+      <div class="glass-card p-4 sm:p-6 hover:shadow-lg transition-all duration-300">
+        <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 sm:gap-4 mb-4 sm:mb-6">
+          <h2 class="text-lg sm:text-xl font-semibold flex items-center">
+            <AppIcon icon="lucide:cog" size="18" class="sm:w-5 sm:h-5 mr-2 text-primary" />
             System Configuration
           </h2>
           <button 
             @click="saveSection('system')"
             :disabled="pendingSections.system || !hasSectionChanges('system')"
             :class="[
-              'px-3 py-1 text-xs rounded transition-colors',
+              'px-2 sm:px-3 py-1 text-[10px] sm:text-xs rounded transition-colors flex items-center gap-1',
               hasSectionChanges('system') 
                 ? 'bg-primary text-primary-foreground hover:bg-primary/90' 
                 : 'bg-muted text-muted-foreground cursor-not-allowed'
@@ -297,25 +335,25 @@
           >
             <AppIcon 
               :icon="pendingSections.system ? 'lucide:loader-2' : 'lucide:save'" 
-              size="12" 
-              class="mr-1"
+              size="10" 
+              class="sm:w-3 sm:h-3"
               :class="{ 'animate-spin': pendingSections.system }"
             />
             {{ pendingSections.system ? 'Saving...' : 'Save' }}
           </button>
         </div>
         
-        <div class="space-y-6">
+        <div class="space-y-4 sm:space-y-6">
           <!-- General Settings -->
-          <div class="space-y-4">
-            <h3 class="text-lg font-medium text-foreground">General Settings</h3>
+          <div class="space-y-3 sm:space-y-4">
+            <h3 class="text-base sm:text-lg font-medium text-foreground">General Settings</h3>
             
-            <div class="flex items-center justify-between p-4 bg-muted/50 rounded-lg">
-              <div>
-                <label class="text-sm font-medium text-foreground">Headless Mode</label>
-                <p class="text-xs text-muted-foreground">Run browser in headless mode (recommended for servers)</p>
+            <div class="flex items-center justify-between p-3 sm:p-4 bg-muted/50 rounded-lg">
+              <div class="min-w-0 flex-1 pr-3">
+                <label class="text-xs sm:text-sm font-medium text-foreground block">Headless Mode</label>
+                <p class="text-[10px] sm:text-xs text-muted-foreground">Run browser in headless mode (recommended for servers)</p>
               </div>
-              <div class="flex items-center space-x-2">
+              <div class="flex items-center space-x-2 flex-shrink-0">
                 <input
                   v-model="config.headless_mode"
                   type="checkbox"
@@ -325,7 +363,7 @@
             </div>
             
             <div>
-              <label class="block text-sm font-medium text-foreground mb-2">
+              <label class="block text-xs sm:text-sm font-medium text-foreground mb-1.5 sm:mb-2">
                 Refresh Interval (minutes)
               </label>
               <input
@@ -333,38 +371,38 @@
                 type="number"
                 min="1"
                 max="1440"
-                class="w-full px-3 py-2 glass-input rounded-lg"
+                class="w-full px-3 py-2 text-xs sm:text-sm glass-input rounded-lg"
               />
-              <p class="text-xs text-muted-foreground mt-1">How often to check for new requests</p>
+              <p class="text-[10px] sm:text-xs text-muted-foreground mt-1">How often to check for new requests</p>
             </div>
             
             <div>
-              <label class="block text-sm font-medium text-foreground mb-2">
+              <label class="block text-xs sm:text-sm font-medium text-foreground mb-1.5 sm:mb-2">
                 Torrent Filter Regex
               </label>
               <input
                 v-model="config.torrent_filter_regex"
                 type="text"
                 placeholder="^(?!.*【.*?】)(?!.*[\u0400-\u04FF])(?!.*\[esp\]).*"
-                class="w-full px-3 py-2 glass-input rounded-lg font-mono text-sm"
+                class="w-full px-3 py-2 text-xs sm:text-sm glass-input rounded-lg font-mono"
               />
-              <p class="text-xs text-muted-foreground mt-1">Regex pattern to filter torrents (advanced users only)</p>
+              <p class="text-[10px] sm:text-xs text-muted-foreground mt-1">Regex pattern to filter torrents (advanced users only)</p>
             </div>
           </div>
 
           <!-- Size Limits -->
-          <div class="space-y-4 pt-4 border-t border-border">
-            <h3 class="text-lg font-medium text-foreground">Size Limits</h3>
+          <div class="space-y-3 sm:space-y-4 pt-3 sm:pt-4 border-t border-border">
+            <h3 class="text-base sm:text-lg font-medium text-foreground">Size Limits</h3>
             
-            <div class="grid grid-cols-2 gap-4">
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
               <div>
-                <label class="block text-sm font-medium text-foreground mb-2">
+                <label class="block text-xs sm:text-sm font-medium text-foreground mb-1.5 sm:mb-2">
                   Max Movie Size
                 </label>
                 <select
                   v-model.number="config.max_movie_size"
                   :key="`movie-size-${config.max_movie_size}`"
-                  class="w-full px-3 py-2 glass-input rounded-lg focus:ring-2 focus:ring-primary focus:border-primary"
+                  class="w-full px-3 py-2 text-xs sm:text-sm glass-input rounded-lg focus:ring-2 focus:ring-primary focus:border-primary"
                 >
                   <option 
                     v-for="option in movieSizeOptions" 
@@ -374,19 +412,19 @@
                     {{ option.label }}
                   </option>
                 </select>
-                <p class="text-xs text-muted-foreground mt-1">
+                <p class="text-[10px] sm:text-xs text-muted-foreground mt-1">
                   {{ movieSizeOptions.find(opt => opt.value === config.max_movie_size)?.description || 'Select a size limit' }}
                 </p>
               </div>
               
               <div>
-                <label class="block text-sm font-medium text-foreground mb-2">
+                <label class="block text-xs sm:text-sm font-medium text-foreground mb-1.5 sm:mb-2">
                   Max Episode Size
                 </label>
                 <select
                   v-model.number="config.max_episode_size"
                   :key="`episode-size-${config.max_episode_size}`"
-                  class="w-full px-3 py-2 glass-input rounded-lg focus:ring-2 focus:ring-primary focus:border-primary"
+                  class="w-full px-3 py-2 text-xs sm:text-sm glass-input rounded-lg focus:ring-2 focus:ring-primary focus:border-primary"
                 >
                   <option 
                     v-for="option in episodeSizeOptions" 
@@ -396,7 +434,7 @@
                     {{ option.label }}
                   </option>
                 </select>
-                <p class="text-xs text-muted-foreground mt-1">
+                <p class="text-[10px] sm:text-xs text-muted-foreground mt-1">
                   {{ episodeSizeOptions.find(opt => opt.value === config.max_episode_size)?.description || 'Select a size limit' }}
                 </p>
               </div>
@@ -404,19 +442,19 @@
           </div>
 
           <!-- Quick Actions -->
-          <div class="pt-4 border-t border-border space-y-3">
-            <h3 class="text-lg font-medium text-foreground">Quick Actions</h3>
+          <div class="pt-3 sm:pt-4 border-t border-border space-y-2 sm:space-y-3">
+            <h3 class="text-base sm:text-lg font-medium text-foreground">Quick Actions</h3>
             
-            <div class="flex gap-3">
+            <div class="flex flex-col sm:flex-row gap-2 sm:gap-3">
               <button 
                 @click="testConnections"
                 :disabled="testingConnections"
-                class="glass-button flex items-center px-4 py-2 text-sm disabled:opacity-50 disabled:cursor-not-allowed"
+                class="glass-button flex items-center justify-center px-3 sm:px-4 py-2 text-xs sm:text-sm disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 <AppIcon 
                   :icon="testingConnections ? 'lucide:loader-2' : 'lucide:network'" 
-                  size="16" 
-                  class="mr-2"
+                  size="14" 
+                  class="sm:w-4 sm:h-4 mr-1.5 sm:mr-2"
                   :class="{ 'animate-spin': testingConnections }"
                 />
                 {{ testingConnections ? 'Testing...' : 'Test Connections' }}
@@ -424,9 +462,9 @@
               
               <button 
                 @click="resetToDefaults"
-                class="glass-button flex items-center px-4 py-2 text-sm"
+                class="glass-button flex items-center justify-center px-3 sm:px-4 py-2 text-xs sm:text-sm"
               >
-                <AppIcon icon="lucide:rotate-ccw" size="16" class="mr-2" />
+                <AppIcon icon="lucide:rotate-ccw" size="14" class="sm:w-4 sm:h-4 mr-1.5 sm:mr-2" />
                 Reset to Defaults
               </button>
             </div>
@@ -435,37 +473,38 @@
       </div>
 
       <!-- Background Tasks Configuration -->
-      <div class="glass-card p-6 hover:shadow-lg transition-all duration-300">
-        <div class="flex items-center justify-between mb-6">
-          <h2 class="text-xl font-semibold flex items-center">
+      <div class="glass-card p-4 sm:p-6 hover:shadow-lg transition-all duration-300">
+        <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 sm:gap-4 mb-4 sm:mb-6">
+          <h2 class="text-lg sm:text-xl font-semibold flex items-center">
             <AppIcon 
               :icon="refreshingTasks ? 'lucide:loader-2' : 'lucide:clock'" 
-              size="20" 
-              class="mr-2 text-primary"
+              size="18" 
+              class="sm:w-5 sm:h-5 mr-2 text-primary"
               :class="{ 'animate-spin': refreshingTasks }"
             />
             Background Tasks
-            <span v-if="refreshingTasks" class="ml-2 text-sm text-muted-foreground">(Refreshing...)</span>
+            <span v-if="refreshingTasks" class="ml-2 text-xs sm:text-sm text-muted-foreground">(Refreshing...)</span>
           </h2>
           <div class="flex items-center gap-2">
             <button 
               @click="refreshTaskConfiguration"
               :disabled="refreshingTasks"
-              class="px-3 py-1 text-xs rounded transition-colors bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
+              class="px-2 sm:px-3 py-1 text-[10px] sm:text-xs rounded transition-colors bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1"
             >
               <AppIcon 
                 :icon="refreshingTasks ? 'lucide:loader-2' : 'lucide:refresh-cw'" 
-                size="12" 
-                class="mr-1"
+                size="10" 
+                class="sm:w-3 sm:h-3"
                 :class="{ 'animate-spin': refreshingTasks }"
               />
-              {{ refreshingTasks ? 'Refreshing...' : 'Refresh Tasks' }}
+              <span class="hidden sm:inline">{{ refreshingTasks ? 'Refreshing...' : 'Refresh Tasks' }}</span>
+              <span class="sm:hidden">{{ refreshingTasks ? 'Refreshing...' : 'Refresh' }}</span>
             </button>
             <button 
               @click="saveSection('tasks')"
               :disabled="pendingSections.tasks || !hasSectionChanges('tasks')"
               :class="[
-                'px-3 py-1 text-xs rounded transition-colors',
+                'px-2 sm:px-3 py-1 text-[10px] sm:text-xs rounded transition-colors flex items-center gap-1',
                 hasSectionChanges('tasks') 
                   ? 'bg-primary text-primary-foreground hover:bg-primary/90' 
                   : 'bg-muted text-muted-foreground cursor-not-allowed'
@@ -473,8 +512,8 @@
             >
               <AppIcon 
                 :icon="pendingSections.tasks ? 'lucide:loader-2' : 'lucide:save'" 
-                size="12" 
-                class="mr-1"
+                size="10" 
+                class="sm:w-3 sm:h-3"
                 :class="{ 'animate-spin': pendingSections.tasks }"
               />
               {{ pendingSections.tasks ? 'Saving...' : 'Save' }}
@@ -482,17 +521,17 @@
           </div>
         </div>
         
-        <div class="space-y-6">
+        <div class="space-y-4 sm:space-y-6">
           <!-- Master Controls -->
-          <div class="space-y-4">
-            <h3 class="text-lg font-medium text-foreground">Master Controls</h3>
+          <div class="space-y-3 sm:space-y-4">
+            <h3 class="text-base sm:text-lg font-medium text-foreground">Master Controls</h3>
             
-            <div class="flex items-center justify-between p-4 bg-muted/50 rounded-lg">
-              <div>
-                <label class="text-sm font-medium text-foreground">Enable Background Tasks</label>
-                <p class="text-xs text-muted-foreground">Master switch for all background processing</p>
+            <div class="flex items-center justify-between p-3 sm:p-4 bg-muted/50 rounded-lg">
+              <div class="min-w-0 flex-1 pr-3">
+                <label class="text-xs sm:text-sm font-medium text-foreground block">Enable Background Tasks</label>
+                <p class="text-[10px] sm:text-xs text-muted-foreground">Master switch for all background processing</p>
               </div>
-              <div class="flex items-center space-x-2">
+              <div class="flex items-center space-x-2 flex-shrink-0">
                 <input
                   v-model="taskConfig.background_tasks_enabled"
                   type="checkbox"
@@ -501,12 +540,12 @@
               </div>
             </div>
             
-            <div class="flex items-center justify-between p-4 bg-muted/50 rounded-lg">
-              <div>
-                <label class="text-sm font-medium text-foreground">Enable Scheduler</label>
-                <p class="text-xs text-muted-foreground">Enable scheduled task execution</p>
+            <div class="flex items-center justify-between p-3 sm:p-4 bg-muted/50 rounded-lg">
+              <div class="min-w-0 flex-1 pr-3">
+                <label class="text-xs sm:text-sm font-medium text-foreground block">Enable Scheduler</label>
+                <p class="text-[10px] sm:text-xs text-muted-foreground">Enable scheduled task execution</p>
               </div>
-              <div class="flex items-center space-x-2">
+              <div class="flex items-center space-x-2 flex-shrink-0">
                 <input
                   v-model="taskConfig.scheduler_enabled"
                   type="checkbox"
@@ -515,12 +554,12 @@
               </div>
             </div>
             
-            <div class="flex items-center justify-between p-4 bg-muted/50 rounded-lg">
-              <div>
-                <label class="text-sm font-medium text-foreground">Enable Queue Processing</label>
-                <p class="text-xs text-muted-foreground">Process media requests from queues</p>
+            <div class="flex items-center justify-between p-3 sm:p-4 bg-muted/50 rounded-lg">
+              <div class="min-w-0 flex-1 pr-3">
+                <label class="text-xs sm:text-sm font-medium text-foreground block">Enable Queue Processing</label>
+                <p class="text-[10px] sm:text-xs text-muted-foreground">Process media requests from queues</p>
               </div>
-              <div class="flex items-center space-x-2">
+              <div class="flex items-center space-x-2 flex-shrink-0">
                 <input
                   v-model="taskConfig.queue_processing_enabled"
                   type="checkbox"
@@ -531,15 +570,15 @@
           </div>
           
           <!-- Task Settings -->
-          <div class="space-y-4 pt-4 border-t border-border">
-            <h3 class="text-lg font-medium text-foreground">Task Settings</h3>
+          <div class="space-y-3 sm:space-y-4 pt-3 sm:pt-4 border-t border-border">
+            <h3 class="text-base sm:text-lg font-medium text-foreground">Task Settings</h3>
             
-            <div class="flex items-center justify-between p-4 bg-muted/50 rounded-lg">
-              <div>
-                <label class="text-sm font-medium text-foreground">Automatic Background Task</label>
-                <p class="text-xs text-muted-foreground">Process movie requests automatically</p>
+            <div class="flex items-center justify-between p-3 sm:p-4 bg-muted/50 rounded-lg">
+              <div class="min-w-0 flex-1 pr-3">
+                <label class="text-xs sm:text-sm font-medium text-foreground block">Automatic Background Task</label>
+                <p class="text-[10px] sm:text-xs text-muted-foreground">Process movie requests automatically</p>
               </div>
-              <div class="flex items-center space-x-2">
+              <div class="flex items-center space-x-2 flex-shrink-0">
                 <input
                   v-model="taskConfig.enable_automatic_background_task"
                   type="checkbox"
@@ -548,12 +587,12 @@
               </div>
             </div>
             
-            <div class="flex items-center justify-between p-4 bg-muted/50 rounded-lg">
-              <div>
-                <label class="text-sm font-medium text-foreground">Show Subscription Checks</label>
-                <p class="text-xs text-muted-foreground">Check for new episodes in subscribed shows</p>
+            <div class="flex items-center justify-between p-3 sm:p-4 bg-muted/50 rounded-lg">
+              <div class="min-w-0 flex-1 pr-3">
+                <label class="text-xs sm:text-sm font-medium text-foreground block">Show Subscription Checks</label>
+                <p class="text-[10px] sm:text-xs text-muted-foreground">Check for new episodes in subscribed shows</p>
               </div>
-              <div class="flex items-center space-x-2">
+              <div class="flex items-center space-x-2 flex-shrink-0">
                 <input
                   v-model="taskConfig.enable_show_subscription_task"
                   type="checkbox"
@@ -564,91 +603,91 @@
           </div>
           
           <!-- Intervals -->
-          <div class="space-y-4 pt-4 border-t border-border">
-            <h3 class="text-lg font-medium text-foreground">Intervals (Minutes)</h3>
+          <div class="space-y-3 sm:space-y-4 pt-3 sm:pt-4 border-t border-border">
+            <h3 class="text-base sm:text-lg font-medium text-foreground">Intervals (Minutes)</h3>
             
-            <div class="space-y-3">
-              <div class="flex items-center justify-between">
-                <label class="text-sm font-medium text-foreground">Refresh Interval</label>
+            <div class="space-y-2 sm:space-y-3">
+              <div class="flex items-center justify-between gap-2">
+                <label class="text-xs sm:text-sm font-medium text-foreground min-w-0 flex-1">Refresh Interval</label>
                 <input 
                   v-model.number="taskConfig.refresh_interval_minutes" 
                   type="number" 
                   min="1" 
                   max="1440"
-                  class="w-20 h-8 px-2 text-sm rounded border border-input bg-background focus:ring-2 focus:ring-primary focus:border-primary"
+                  class="w-16 sm:w-20 h-7 sm:h-8 px-2 text-xs sm:text-sm rounded border border-input bg-background focus:ring-2 focus:ring-primary focus:border-primary"
                 />
               </div>
               
-              <div class="flex items-center justify-between">
-                <label class="text-sm font-medium text-foreground">Token Refresh</label>
+              <div class="flex items-center justify-between gap-2">
+                <label class="text-xs sm:text-sm font-medium text-foreground min-w-0 flex-1">Token Refresh</label>
                 <input 
                   v-model.number="taskConfig.token_refresh_interval_minutes" 
                   type="number" 
                   min="1" 
                   max="60"
-                  class="w-20 h-8 px-2 text-sm rounded border border-input bg-background focus:ring-2 focus:ring-primary focus:border-primary"
+                  class="w-16 sm:w-20 h-7 sm:h-8 px-2 text-xs sm:text-sm rounded border border-input bg-background focus:ring-2 focus:ring-primary focus:border-primary"
                 />
               </div>
               
-              <div class="flex items-center justify-between">
-                <label class="text-sm font-medium text-foreground">Movie Processing Check</label>
+              <div class="flex items-center justify-between gap-2">
+                <label class="text-xs sm:text-sm font-medium text-foreground min-w-0 flex-1">Movie Processing Check</label>
                 <input 
                   v-model.number="taskConfig.movie_processing_check_interval_minutes" 
                   type="number" 
                   min="1" 
                   max="120"
-                  class="w-20 h-8 px-2 text-sm rounded border border-input bg-background focus:ring-2 focus:ring-primary focus:border-primary"
+                  class="w-16 sm:w-20 h-7 sm:h-8 px-2 text-xs sm:text-sm rounded border border-input bg-background focus:ring-2 focus:ring-primary focus:border-primary"
                 />
               </div>
               
-              <div class="flex items-center justify-between">
-                <label class="text-sm font-medium text-foreground">Library Refresh</label>
+              <div class="flex items-center justify-between gap-2">
+                <label class="text-xs sm:text-sm font-medium text-foreground min-w-0 flex-1">Library Refresh</label>
                 <input 
                   v-model.number="taskConfig.library_refresh_interval_minutes" 
                   type="number" 
                   min="1" 
                   max="240"
-                  class="w-20 h-8 px-2 text-sm rounded border border-input bg-background focus:ring-2 focus:ring-primary focus:border-primary"
+                  class="w-16 sm:w-20 h-7 sm:h-8 px-2 text-xs sm:text-sm rounded border border-input bg-background focus:ring-2 focus:ring-primary focus:border-primary"
                 />
               </div>
               
-              <div class="flex items-center justify-between">
-                <label class="text-sm font-medium text-foreground">Subscription Check</label>
+              <div class="flex items-center justify-between gap-2">
+                <label class="text-xs sm:text-sm font-medium text-foreground min-w-0 flex-1">Subscription Check</label>
                 <input 
                   v-model.number="taskConfig.subscription_check_interval_minutes" 
                   type="number" 
                   min="1" 
                   max="240"
-                  class="w-20 h-8 px-2 text-sm rounded border border-input bg-background focus:ring-2 focus:ring-primary focus:border-primary"
+                  class="w-16 sm:w-20 h-7 sm:h-8 px-2 text-xs sm:text-sm rounded border border-input bg-background focus:ring-2 focus:ring-primary focus:border-primary"
                 />
               </div>
             </div>
           </div>
           
           <!-- Queue Sizes -->
-          <div class="space-y-4 pt-4 border-t border-border">
-            <h3 class="text-lg font-medium text-foreground">Queue Sizes</h3>
+          <div class="space-y-3 sm:space-y-4 pt-3 sm:pt-4 border-t border-border">
+            <h3 class="text-base sm:text-lg font-medium text-foreground">Queue Sizes</h3>
             
-            <div class="space-y-3">
-              <div class="flex items-center justify-between">
-                <label class="text-sm font-medium text-foreground">Movie Queue Size</label>
+            <div class="space-y-2 sm:space-y-3">
+              <div class="flex items-center justify-between gap-2">
+                <label class="text-xs sm:text-sm font-medium text-foreground min-w-0 flex-1">Movie Queue Size</label>
                 <input 
                   v-model.number="taskConfig.movie_queue_maxsize" 
                   type="number" 
                   min="10" 
                   max="1000"
-                  class="w-20 h-8 px-2 text-sm rounded border border-input bg-background focus:ring-2 focus:ring-primary focus:border-primary"
+                  class="w-16 sm:w-20 h-7 sm:h-8 px-2 text-xs sm:text-sm rounded border border-input bg-background focus:ring-2 focus:ring-primary focus:border-primary"
                 />
               </div>
               
-              <div class="flex items-center justify-between">
-                <label class="text-sm font-medium text-foreground">TV Queue Size</label>
+              <div class="flex items-center justify-between gap-2">
+                <label class="text-xs sm:text-sm font-medium text-foreground min-w-0 flex-1">TV Queue Size</label>
                 <input 
                   v-model.number="taskConfig.tv_queue_maxsize" 
                   type="number" 
                   min="10" 
                   max="1000"
-                  class="w-20 h-8 px-2 text-sm rounded border border-input bg-background focus:ring-2 focus:ring-primary focus:border-primary"
+                  class="w-16 sm:w-20 h-7 sm:h-8 px-2 text-xs sm:text-sm rounded border border-input bg-background focus:ring-2 focus:ring-primary focus:border-primary"
                 />
               </div>
             </div>
@@ -657,17 +696,17 @@
       </div>
 
       <!-- Failed Items Configuration -->
-      <div class="glass-card p-6 hover:shadow-lg transition-all duration-300">
-        <div class="flex items-center justify-between mb-6">
-          <h2 class="text-xl font-semibold flex items-center">
-            <AppIcon icon="lucide:alert-circle" size="20" class="mr-2 text-primary" />
+      <div class="glass-card p-4 sm:p-6 hover:shadow-lg transition-all duration-300">
+        <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 sm:gap-4 mb-4 sm:mb-6">
+          <h2 class="text-lg sm:text-xl font-semibold flex items-center">
+            <AppIcon icon="lucide:alert-circle" size="18" class="sm:w-5 sm:h-5 mr-2 text-primary" />
             Failed Items Configuration
           </h2>
           <button 
             @click="saveSection('failedItems')"
             :disabled="pendingSections.failedItems || !hasSectionChanges('failedItems')"
             :class="[
-              'px-3 py-1 text-xs rounded transition-colors',
+              'px-2 sm:px-3 py-1 text-[10px] sm:text-xs rounded transition-colors flex items-center gap-1',
               hasSectionChanges('failedItems') 
                 ? 'bg-primary text-primary-foreground hover:bg-primary/90' 
                 : 'bg-muted text-muted-foreground cursor-not-allowed'
@@ -675,21 +714,21 @@
           >
             <AppIcon 
               :icon="pendingSections.failedItems ? 'lucide:loader-2' : 'lucide:save'" 
-              size="12" 
-              class="mr-1"
+              size="10" 
+              class="sm:w-3 sm:h-3"
               :class="{ 'animate-spin': pendingSections.failedItems }"
             />
             {{ pendingSections.failedItems ? 'Saving...' : 'Save' }}
           </button>
         </div>
         
-        <div class="space-y-6">
-          <div class="flex items-center justify-between p-4 bg-muted/50 rounded-lg">
-            <div>
-              <label class="text-sm font-medium text-foreground">Enable Failed Item Retry</label>
-              <p class="text-xs text-muted-foreground">Enable or disable the automatic retry of failed media items</p>
+        <div class="space-y-4 sm:space-y-6">
+          <div class="flex items-center justify-between p-3 sm:p-4 bg-muted/50 rounded-lg">
+            <div class="min-w-0 flex-1 pr-3">
+              <label class="text-xs sm:text-sm font-medium text-foreground block">Enable Failed Item Retry</label>
+              <p class="text-[10px] sm:text-xs text-muted-foreground">Enable or disable the automatic retry of failed media items</p>
             </div>
-            <div class="flex items-center space-x-2">
+            <div class="flex items-center space-x-2 flex-shrink-0">
               <input
                 v-model="failedItemsConfig.enable_failed_item_retry"
                 type="checkbox"
@@ -698,9 +737,9 @@
             </div>
           </div>
           
-          <div class="grid grid-cols-2 gap-4">
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
             <div>
-              <label class="block text-sm font-medium text-foreground mb-2">
+              <label class="block text-xs sm:text-sm font-medium text-foreground mb-1.5 sm:mb-2">
                 Retry Interval (minutes)
               </label>
               <input
@@ -708,13 +747,13 @@
                 type="number"
                 min="1"
                 max="1440"
-                class="w-full px-3 py-2 glass-input rounded-lg"
+                class="w-full px-3 py-2 text-xs sm:text-sm glass-input rounded-lg"
               />
-              <p class="text-xs text-muted-foreground mt-1">Interval between failed item retry checks</p>
+              <p class="text-[10px] sm:text-xs text-muted-foreground mt-1">Interval between failed item retry checks</p>
             </div>
             
             <div>
-              <label class="block text-sm font-medium text-foreground mb-2">
+              <label class="block text-xs sm:text-sm font-medium text-foreground mb-1.5 sm:mb-2">
                 Max Retry Attempts
               </label>
               <input
@@ -722,15 +761,15 @@
                 type="number"
                 min="1"
                 max="10"
-                class="w-full px-3 py-2 glass-input rounded-lg"
+                class="w-full px-3 py-2 text-xs sm:text-sm glass-input rounded-lg"
               />
-              <p class="text-xs text-muted-foreground mt-1">Maximum number of retry attempts for failed items</p>
+              <p class="text-[10px] sm:text-xs text-muted-foreground mt-1">Maximum number of retry attempts for failed items</p>
             </div>
           </div>
           
-          <div class="grid grid-cols-2 gap-4">
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
             <div>
-              <label class="block text-sm font-medium text-foreground mb-2">
+              <label class="block text-xs sm:text-sm font-medium text-foreground mb-1.5 sm:mb-2">
                 Initial Retry Delay (hours)
               </label>
               <input
@@ -738,13 +777,13 @@
                 type="number"
                 min="1"
                 max="168"
-                class="w-full px-3 py-2 glass-input rounded-lg"
+                class="w-full px-3 py-2 text-xs sm:text-sm glass-input rounded-lg"
               />
-              <p class="text-xs text-muted-foreground mt-1">Initial delay before first retry attempt</p>
+              <p class="text-[10px] sm:text-xs text-muted-foreground mt-1">Initial delay before first retry attempt</p>
             </div>
             
             <div>
-              <label class="block text-sm font-medium text-foreground mb-2">
+              <label class="block text-xs sm:text-sm font-medium text-foreground mb-1.5 sm:mb-2">
                 Backoff Multiplier
               </label>
               <input
@@ -753,14 +792,14 @@
                 min="1"
                 max="10"
                 step="0.1"
-                class="w-full px-3 py-2 glass-input rounded-lg"
+                class="w-full px-3 py-2 text-xs sm:text-sm glass-input rounded-lg"
               />
-              <p class="text-xs text-muted-foreground mt-1">Multiplier for exponential backoff (e.g., 2 = 2h, 4h, 8h)</p>
+              <p class="text-[10px] sm:text-xs text-muted-foreground mt-1">Multiplier for exponential backoff (e.g., 2 = 2h, 4h, 8h)</p>
             </div>
           </div>
           
           <div>
-            <label class="block text-sm font-medium text-foreground mb-2">
+            <label class="block text-xs sm:text-sm font-medium text-foreground mb-1.5 sm:mb-2">
               Max Retry Delay (hours)
             </label>
             <input
@@ -768,9 +807,9 @@
               type="number"
               min="1"
               max="168"
-              class="w-full px-3 py-2 glass-input rounded-lg"
+              class="w-full px-3 py-2 text-xs sm:text-sm glass-input rounded-lg"
             />
-            <p class="text-xs text-muted-foreground mt-1">Maximum delay between retry attempts</p>
+            <p class="text-[10px] sm:text-xs text-muted-foreground mt-1">Maximum delay between retry attempts</p>
           </div>
         </div>
       </div>
@@ -780,9 +819,47 @@
 
 <script setup lang="ts">
 import { useNotifications } from '~/composables/useNotifications'
+import { onClickOutside } from '@vueuse/core'
 
 const { addNotification } = useNotifications()
 const colorMode = useColorMode()
+const showThemeMenu = ref(false)
+const themeMenuRef = ref<HTMLElement | null>(null)
+
+// Theme definitions
+const themes = [
+  { value: 'light', name: 'Light', icon: 'lucide:sun' },
+  { value: 'dark', name: 'SeerrBridge', icon: 'lucide:moon' },
+  { value: 'darth-vadarr', name: 'Darth Vadarr', icon: 'lucide:sparkles' }
+]
+
+// Get theme display name
+const getThemeName = (themeValue: string) => {
+  const theme = themes.find(t => t.value === themeValue)
+  return theme ? theme.name : 'Light'
+}
+
+// Get theme icon
+const getThemeIcon = (themeValue: string) => {
+  const theme = themes.find(t => t.value === themeValue)
+  return theme ? theme.icon : 'lucide:sun'
+}
+
+// Select theme
+const selectTheme = (themeValue: string) => {
+  colorMode.preference = themeValue
+  // Apply custom class for darth-vadarr theme
+  if (process.client) {
+    const html = document.documentElement
+    html.classList.remove('dark', 'darth-vadarr')
+    if (themeValue === 'darth-vadarr') {
+      html.classList.add('darth-vadarr')
+    } else if (themeValue === 'dark') {
+      html.classList.add('dark')
+    }
+  }
+  showThemeMenu.value = false
+}
 
 // Main configuration object
 const config = ref({
@@ -879,8 +956,24 @@ const episodeSizeOptions = [
 ]
 
 const toggleTheme = () => {
-  colorMode.preference = colorMode.value === 'dark' ? 'light' : 'dark'
+  // Cycle through themes: light -> dark -> darth-vadarr -> light
+  const currentIndex = themes.findIndex(t => t.value === colorMode.value)
+  const nextIndex = (currentIndex + 1) % themes.length
+  selectTheme(themes[nextIndex].value)
 }
+
+// Watch for color mode changes to apply custom classes
+watch(() => colorMode.value, (newValue) => {
+  if (process.client) {
+    const html = document.documentElement
+    html.classList.remove('dark', 'darth-vadarr')
+    if (newValue === 'darth-vadarr') {
+      html.classList.add('darth-vadarr')
+    } else if (newValue === 'dark') {
+      html.classList.add('dark')
+    }
+  }
+}, { immediate: true })
 
 // Helper function to ensure size values match dropdown options
 const ensureSizeValueMatches = (value, options, defaultValue) => {
@@ -1591,6 +1684,11 @@ watch([() => config.value.max_movie_size, () => config.value.max_episode_size],
   },
   { immediate: false }
 )
+
+// Close theme menu when clicking outside
+onClickOutside(themeMenuRef, () => {
+  showThemeMenu.value = false
+})
 
 // Load settings on mount
 onMounted(async () => {

@@ -18,9 +18,19 @@ export const useNotifications = () => {
   const unreadCount = computed(() => notifications.value.filter(n => !n.read).length)
   const lastChecked = ref<Date>(new Date())
   const displayedNotificationIds = ref<Set<string | number>>(new Set())
+  const pageLoadTime = ref<Date>(new Date()) // Track when page loaded to only show new notifications
 
+  // Track if we're currently fetching to prevent concurrent fetches
+  let isFetching = false
+  
   // Fetch notifications from backend
   const fetchNotifications = async (limit = 50, unreadOnly = false) => {
+    // Prevent concurrent fetches
+    if (isFetching) {
+      return
+    }
+    
+    isFetching = true
     try {
       const query = new URLSearchParams({
         limit: limit.toString(),
@@ -32,24 +42,41 @@ export const useNotifications = () => {
       )
       
       if (data.success && data.data) {
-        // Get existing notification IDs
+        // Get existing notification IDs (both in list and displayed)
         const existingIds = new Set(notifications.value.map(n => String(n.id)))
         
         // Filter out duplicates and only get truly new notifications
         const newNotifications = data.data.filter(n => {
           const notificationId = String(n.id)
+          
           // Don't show toasts for read notifications
           if (n.read) {
             return false
           }
-          // Check if already displayed
+          
+          // Check if already displayed (this is the key check to prevent duplicates)
           if (displayedNotificationIds.value.has(notificationId)) {
             return false
           }
+          
           // Check if already in local list
           if (existingIds.has(notificationId)) {
             return false
           }
+          
+          // Only show toasts for notifications created AFTER page load
+          // This prevents old notifications from showing as toasts on refresh
+          if (pageLoadTime.value) {
+            const notificationTime = new Date(n.created_at || n.timestamp)
+            const pageLoad = new Date(pageLoadTime.value)
+            // Add 1 second buffer to account for timing differences
+            if (notificationTime.getTime() < (pageLoad.getTime() - 1000)) {
+              // Mark as displayed so we don't check it again, but don't show as toast
+              displayedNotificationIds.value.add(notificationId)
+              return false
+            }
+          }
+          
           return true
         })
         
@@ -59,18 +86,34 @@ export const useNotifications = () => {
           if (existingIndex !== -1) {
             // Update read status
             notifications.value[existingIndex].read = backendNotif.read
+          } else {
+            // If notification exists in backend but not in our list, add it (but mark as displayed if read)
+            // This handles the case where notifications were cleared from UI but still exist in DB
+            if (backendNotif.read) {
+              // Don't add read notifications that we haven't seen before
+              displayedNotificationIds.value.add(String(backendNotif.id))
+            }
           }
         })
         
         // Add new notifications to the beginning
         if (newNotifications.length > 0) {
-          notifications.value.unshift(...newNotifications)
-          
-          // Mark all new notifications as displayed regardless of read status
-          // This prevents them from showing as toasts again on subsequent polls
+          // IMPORTANT: Mark as displayed BEFORE adding to prevent race conditions
+          // This ensures that if another poll happens while we're processing, it won't add duplicates
           newNotifications.forEach(n => {
             displayedNotificationIds.value.add(String(n.id))
           })
+          
+          // Filter out any that might have been added between the check and now (extra safety)
+          const trulyNew = newNotifications.filter(n => {
+            const id = String(n.id)
+            return !notifications.value.some(existing => String(existing.id) === id)
+          })
+          
+          // Now add to list
+          if (trulyNew.length > 0) {
+            notifications.value.unshift(...trulyNew)
+          }
         }
         
         // Sort by timestamp (newest first)
@@ -87,6 +130,8 @@ export const useNotifications = () => {
       }
     } catch (error) {
       console.error('Error fetching notifications:', error)
+    } finally {
+      isFetching = false
     }
   }
 
@@ -97,9 +142,10 @@ export const useNotifications = () => {
         '/api/notifications/unread-count'
       )
       
-      if (data.success) {
-        // Always fetch all notifications to keep in sync, not just unread ones
-        await fetchNotifications(50, false)
+      if (data.success && data.count > 0) {
+        // Only fetch if there are unread notifications to avoid unnecessary calls
+        // Fetch only unread notifications to reduce duplicates
+        await fetchNotifications(50, true)
       }
     } catch (error) {
       console.error('Error fetching unread count:', error)
@@ -164,27 +210,42 @@ export const useNotifications = () => {
     notifications.value.unshift(newNotification)
   }
 
-  // Poll for new notifications
-  const startPolling = (intervalMs = 30000) => {
+  // Ultra real-time polling for notifications
+  let pollingInterval: ReturnType<typeof setInterval> | null = null
+  
+  const startPolling = (intervalMs = 1000) => {
     const poll = async () => {
-      await fetchUnreadCount()
+      // Only poll if pageLoadTime is set (initialization complete)
+      if (pageLoadTime.value) {
+        await fetchUnreadCount()
+      }
     }
     
-    // Poll immediately
-    poll()
+    // Don't poll immediately - wait for initialization to complete
+    // The first poll will happen after the interval
     
-    // Then poll at intervals
-    const interval = setInterval(poll, intervalMs)
+    // Then poll at intervals (ultra aggressive for real-time)
+    pollingInterval = setInterval(poll, intervalMs)
     
-    return () => clearInterval(interval)
+    return () => {
+      if (pollingInterval) {
+        clearInterval(pollingInterval)
+        pollingInterval = null
+      }
+    }
   }
 
   // Initialize notifications on startup
   const initializeNotifications = async () => {
+    // Set page load time to NOW - only notifications created after this will show as toasts
+    // This prevents old notifications from showing as toasts on page refresh
+    pageLoadTime.value = new Date()
+    
+    // Fetch existing notifications (but they won't show as toasts if created before pageLoadTime)
     await fetchNotifications(50, false)
     
-    // Mark all existing notifications as displayed since they've been loaded
-    // Only unread notifications will show as toasts
+    // Mark ALL fetched notifications as displayed (even if they're old)
+    // This ensures they won't show as toasts, but they'll still be in the notification history
     notifications.value.forEach(n => {
       displayedNotificationIds.value.add(String(n.id))
     })

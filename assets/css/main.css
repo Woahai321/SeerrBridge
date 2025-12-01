@@ -53,54 +53,82 @@
 
 @layer base {
   :root {
-    --background: 0 0% 100%;
-    --foreground: 222.2 84% 4.9%;
-    --card: 0 0% 100%;
-    --card-foreground: 222.2 84% 4.9%;
-    --popover: 0 0% 100%;
-    --popover-foreground: 222.2 84% 4.9%;
-    --primary: 265 89% 78%; /* Purple */
-    --primary-foreground: 0 0% 100%;
-    --secondary: 262 83% 94%;
-    --secondary-foreground: 222.2 47.4% 11.2%;
-    --muted: 210 40% 96.1%;
-    --muted-foreground: 215.4 16.3% 46.9%;
-    --accent: 250 95% 76%;
-    --accent-foreground: 222.2 47.4% 11.2%;
-    --destructive: 0 84.2% 60.2%;
-    --destructive-foreground: 210 40% 98%;
-    --border: 214.3 31.8% 91.4%;
-    --input: 214.3 31.8% 91.4%;
-    --ring: 265 89% 78%;
+    /* Light Mode - Black & Purple (#8224E3) Theme */
+    --background: 0 0% 100%; /* Pure white */
+    --foreground: 0 0% 0%; /* Pure black */
+    --card: 0 0% 100%; /* White cards */
+    --card-foreground: 0 0% 0%; /* Black text */
+    --popover: 0 0% 100%; /* White popovers */
+    --popover-foreground: 0 0% 0%; /* Black text */
+    --primary: 270 77% 52%; /* #8224E3 - Main purple */
+    --primary-foreground: 0 0% 100%; /* White text on purple */
+    --secondary: 270 30% 96%; /* Very light purple tint */
+    --secondary-foreground: 0 0% 0%; /* Black text */
+    --muted: 270 20% 95%; /* Light gray with purple tint */
+    --muted-foreground: 0 0% 40%; /* Dark gray text */
+    --accent: 270 77% 52%; /* Same as primary */
+    --accent-foreground: 0 0% 100%; /* White text */
+    --destructive: 0 84.2% 60.2%; /* Red for errors */
+    --destructive-foreground: 0 0% 100%; /* White text */
+    --border: 270 15% 85%; /* Light purple-gray borders */
+    --input: 270 15% 95%; /* Light input backgrounds */
+    --ring: 270 77% 52%; /* Purple focus rings */
     --radius: 0.75rem;
-    --success: 142.1 76.2% 36.3%;
-    --warning: 38 92% 50%;
-    --info: 217.2 91.2% 59.8%;
+    --success: 142.1 76.2% 36.3%; /* Green for success */
+    --warning: 38 92% 50%; /* Orange for warnings */
+    --info: 270 77% 52%; /* Purple for info */
   }
 
   .dark {
-    --background: 260 25% 9%; /* Deep purple-blue background */
-    --foreground: 210 40% 98%;
-    --card: 258 30% 7%;
-    --card-foreground: 210 40% 98%;
-    --popover: 258 30% 7%;
-    --popover-foreground: 210 40% 98%;
-    --primary: 267 85% 81%; /* Vibrant purple */
-    --primary-foreground: 0 0% 100%;
-    --secondary: 265 50% 15%;
-    --secondary-foreground: 210 40% 98%;
-    --muted: 265 30% 13%;
-    --muted-foreground: 217 20% 80%;
-    --accent: 273 75% 70%;
-    --accent-foreground: 210 40% 98%;
-    --destructive: 0 62.8% 60.6%;
-    --destructive-foreground: 210 40% 98%;
-    --border: 265 25% 20%;
-    --input: 265 25% 18%;
-    --ring: 267 85% 81%;
-    --success: 142.1 70.6% 45.3%;
-    --warning: 48 96.5% 53.9%;
-    --info: 217.2 91.2% 59.8%;
+    /* Dark Mode - Black & Purple (#8224E3) Theme - Now named "SeerrBridge" */
+    --background: 0 0% 0%; /* Pure black */
+    --foreground: 0 0% 100%; /* Pure white */
+    --card: 0 0% 5%; /* Very dark gray (almost black) */
+    --card-foreground: 0 0% 100%; /* White text */
+    --popover: 0 0% 5%; /* Very dark popovers */
+    --popover-foreground: 0 0% 100%; /* White text */
+    --primary: 270 77% 60%; /* #8224E3 - Slightly lighter for dark mode visibility */
+    --primary-foreground: 0 0% 100%; /* White text on purple */
+    --secondary: 270 40% 8%; /* Dark purple-gray */
+    --secondary-foreground: 0 0% 100%; /* White text */
+    --muted: 270 50% 12%; /* Dark purple with transparency - will be overridden by glassmorphic class */
+    --muted-foreground: 0 0% 70%; /* Light gray text */
+    --accent: 270 77% 60%; /* Purple accent */
+    --accent-foreground: 0 0% 100%; /* White text */
+    --destructive: 0 62.8% 60.6%; /* Red for errors */
+    --destructive-foreground: 0 0% 100%; /* White text */
+    --border: 270 30% 15%; /* Dark purple borders */
+    --input: 270 30% 12%; /* Dark input backgrounds */
+    --ring: 270 77% 60%; /* Purple focus rings */
+    --success: 142.1 70.6% 45.3%; /* Green for success */
+    --warning: 48 96.5% 53.9%; /* Orange for warnings */
+    --info: 270 77% 60%; /* Purple for info */
+  }
+
+  .darth-vadarr {
+    /* Darth Vadarr Theme - Black & Red (#E92025) */
+    --background: 0 0% 0%; /* Pure black */
+    --foreground: 0 0% 100%; /* Pure white */
+    --card: 0 0% 5%; /* Very dark gray (almost black) */
+    --card-foreground: 0 0% 100%; /* White text */
+    --popover: 0 0% 5%; /* Very dark popovers */
+    --popover-foreground: 0 0% 100%; /* White text */
+    --primary: 0 80% 50%; /* #E92025 - Red primary */
+    --primary-foreground: 0 0% 100%; /* White text on red */
+    --secondary: 0 40% 8%; /* Dark red-gray */
+    --secondary-foreground: 0 0% 100%; /* White text */
+    --muted: 0 50% 12%; /* Dark red with transparency */
+    --muted-foreground: 0 0% 70%; /* Light gray text */
+    --accent: 0 80% 50%; /* Red accent */
+    --accent-foreground: 0 0% 100%; /* White text */
+    --destructive: 0 70% 55%; /* Red for errors */
+    --destructive-foreground: 0 0% 100%; /* White text */
+    --border: 0 30% 15%; /* Dark red borders */
+    --input: 0 30% 12%; /* Dark input backgrounds */
+    --ring: 0 80% 50%; /* Red focus rings */
+    --success: 142.1 70.6% 45.3%; /* Green for success */
+    --warning: 48 96.5% 53.9%; /* Orange for warnings */
+    --info: 0 80% 50%; /* Red for info */
   }
 }
 
@@ -109,42 +137,208 @@
     @apply border-border;
   }
   body {
-    @apply bg-background text-foreground font-sans;
+    @apply bg-background text-foreground font-sans font-semibold;
+    font-family: 'Titillium Web', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+    font-weight: 600;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+  
+  /* Make headings extra bold */
+  h1, h2, h3, h4, h5, h6 {
+    font-weight: 700;
+  }
+  
+  /* Make buttons and important text bold */
+  button, .font-bold, .font-semibold {
+    font-weight: 700;
+  }
+  
+  /* Global header with icon spacing - ensure consistent spacing throughout app */
+  /* Ensure headers with icons use flexbox with proper gap */
+  h1.flex.items-center,
+  h2.flex.items-center,
+  h3.flex.items-center,
+  h4.flex.items-center,
+  h5.flex.items-center,
+  h6.flex.items-center {
+    gap: 0.75rem !important; /* 12px gap between icon and text - consistent spacing */
+  }
+  
+  /* Remove margin-right from icon wrappers and icon-base inside headers (gap handles spacing) */
+  h1.flex.items-center .icon-wrapper,
+  h1.flex.items-center .icon-base,
+  h2.flex.items-center .icon-wrapper,
+  h2.flex.items-center .icon-base,
+  h3.flex.items-center .icon-wrapper,
+  h3.flex.items-center .icon-base,
+  h4.flex.items-center .icon-wrapper,
+  h4.flex.items-center .icon-base,
+  h5.flex.items-center .icon-wrapper,
+  h5.flex.items-center .icon-base,
+  h6.flex.items-center .icon-wrapper,
+  h6.flex.items-center .icon-base {
+    margin-right: 0 !important; /* Remove margin since gap handles spacing */
+  }
+  
+  /* Override Tailwind margin utilities on icons inside headers */
+  h1.flex.items-center .icon-wrapper.mr-1,
+  h1.flex.items-center .icon-base.mr-1,
+  h1.flex.items-center .icon-wrapper.mr-1\.5,
+  h1.flex.items-center .icon-base.mr-1\.5,
+  h1.flex.items-center .icon-wrapper.mr-2,
+  h1.flex.items-center .icon-base.mr-2,
+  h1.flex.items-center .icon-wrapper.mr-3,
+  h1.flex.items-center .icon-base.mr-3,
+  h2.flex.items-center .icon-wrapper.mr-1,
+  h2.flex.items-center .icon-base.mr-1,
+  h2.flex.items-center .icon-wrapper.mr-1\.5,
+  h2.flex.items-center .icon-base.mr-1\.5,
+  h2.flex.items-center .icon-wrapper.mr-2,
+  h2.flex.items-center .icon-base.mr-2,
+  h2.flex.items-center .icon-wrapper.mr-3,
+  h2.flex.items-center .icon-base.mr-3,
+  h3.flex.items-center .icon-wrapper.mr-1,
+  h3.flex.items-center .icon-base.mr-1,
+  h3.flex.items-center .icon-wrapper.mr-1\.5,
+  h3.flex.items-center .icon-base.mr-1\.5,
+  h3.flex.items-center .icon-wrapper.mr-2,
+  h3.flex.items-center .icon-base.mr-2,
+  h3.flex.items-center .icon-wrapper.mr-3,
+  h3.flex.items-center .icon-base.mr-3,
+  h4.flex.items-center .icon-wrapper.mr-1,
+  h4.flex.items-center .icon-base.mr-1,
+  h4.flex.items-center .icon-wrapper.mr-1\.5,
+  h4.flex.items-center .icon-base.mr-1\.5,
+  h4.flex.items-center .icon-wrapper.mr-2,
+  h4.flex.items-center .icon-base.mr-2,
+  h4.flex.items-center .icon-wrapper.mr-3,
+  h4.flex.items-center .icon-base.mr-3,
+  h5.flex.items-center .icon-wrapper.mr-1,
+  h5.flex.items-center .icon-base.mr-1,
+  h5.flex.items-center .icon-wrapper.mr-1\.5,
+  h5.flex.items-center .icon-base.mr-1\.5,
+  h5.flex.items-center .icon-wrapper.mr-2,
+  h5.flex.items-center .icon-base.mr-2,
+  h5.flex.items-center .icon-wrapper.mr-3,
+  h5.flex.items-center .icon-base.mr-3,
+  h6.flex.items-center .icon-wrapper.mr-1,
+  h6.flex.items-center .icon-base.mr-1,
+  h6.flex.items-center .icon-wrapper.mr-1\.5,
+  h6.flex.items-center .icon-base.mr-1\.5,
+  h6.flex.items-center .icon-wrapper.mr-2,
+  h6.flex.items-center .icon-base.mr-2,
+  h6.flex.items-center .icon-wrapper.mr-3,
+  h6.flex.items-center .icon-base.mr-3 {
+    margin-right: 0 !important; /* Remove margin utilities when gap is used */
+  }
+  
+  /* Also handle responsive margin utilities */
+  h1.flex.items-center .icon-wrapper.sm\:mr-2,
+  h1.flex.items-center .icon-base.sm\:mr-2,
+  h1.flex.items-center .icon-wrapper.sm\:mr-3,
+  h1.flex.items-center .icon-base.sm\:mr-3,
+  h2.flex.items-center .icon-wrapper.sm\:mr-2,
+  h2.flex.items-center .icon-base.sm\:mr-2,
+  h2.flex.items-center .icon-wrapper.sm\:mr-3,
+  h2.flex.items-center .icon-base.sm\:mr-3,
+  h3.flex.items-center .icon-wrapper.sm\:mr-2,
+  h3.flex.items-center .icon-base.sm\:mr-2,
+  h3.flex.items-center .icon-wrapper.sm\:mr-3,
+  h3.flex.items-center .icon-base.sm\:mr-3,
+  h4.flex.items-center .icon-wrapper.sm\:mr-2,
+  h4.flex.items-center .icon-base.sm\:mr-2,
+  h4.flex.items-center .icon-wrapper.sm\:mr-3,
+  h4.flex.items-center .icon-base.sm\:mr-3,
+  h5.flex.items-center .icon-wrapper.sm\:mr-2,
+  h5.flex.items-center .icon-base.sm\:mr-2,
+  h5.flex.items-center .icon-wrapper.sm\:mr-3,
+  h5.flex.items-center .icon-base.sm\:mr-3,
+  h6.flex.items-center .icon-wrapper.sm\:mr-2,
+  h6.flex.items-center .icon-base.sm\:mr-2,
+  h6.flex.items-center .icon-wrapper.sm\:mr-3,
+  h6.flex.items-center .icon-base.sm\:mr-3 {
+    margin-right: 0 !important;
   }
 }
 
 @layer components {
+  /* Header with icon utility class - ensures consistent spacing */
+  .header-with-icon {
+    @apply flex items-center;
+    gap: 0.75rem !important; /* 12px consistent spacing */
+  }
+  
+  .header-with-icon .icon-wrapper {
+    margin-right: 0 !important; /* Remove margin since we use gap */
+    flex-shrink: 0;
+  }
+  
+  /* Ensure all headers with icons have proper spacing */
+  .header-with-icon h1,
+  .header-with-icon h2,
+  .header-with-icon h3,
+  .header-with-icon h4,
+  .header-with-icon h5,
+  .header-with-icon h6 {
+    margin: 0;
+  }
+  
   .glass-card {
     @apply bg-background/30 backdrop-blur-xl border border-border/40 shadow-sm rounded-xl;
-    background: rgba(255, 255, 255, 0.08);
+    background: rgba(255, 255, 255, 0.95);
     backdrop-filter: blur(12px);
     -webkit-backdrop-filter: blur(12px);
-    border: 1px solid rgba(255, 255, 255, 0.12);
-    box-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.1);
+    border: 1px solid rgba(130, 36, 227, 0.15);
+    box-shadow: 0 8px 32px 0 rgba(130, 36, 227, 0.08);
     transition: all 0.3s ease;
   }
 
+  .darth-vadarr .glass-card {
+    border: 1px solid rgba(233, 32, 37, 0.15);
+    box-shadow: 0 8px 32px 0 rgba(233, 32, 37, 0.08);
+  }
+
   .dark .glass-card {
-    background: rgba(23, 12, 41, 0.4);
-    border: 1px solid rgba(128, 85, 255, 0.1);
-    box-shadow: 0 8px 32px 0 rgba(9, 4, 21, 0.2), 
-                0 0 0 1px rgba(138, 101, 241, 0.05),
-                inset 0 0 8px rgba(92, 51, 188, 0.05);
+    background: rgba(0, 0, 0, 0.6);
+    border: 1px solid rgba(130, 36, 227, 0.2);
+    box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.4), 
+                0 0 0 1px rgba(130, 36, 227, 0.1),
+                inset 0 0 8px rgba(130, 36, 227, 0.05);
+  }
+
+  .darth-vadarr .glass-card {
+    background: rgba(0, 0, 0, 0.6);
+    border: 1px solid rgba(233, 32, 37, 0.2);
+    box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.4), 
+                0 0 0 1px rgba(233, 32, 37, 0.1),
+                inset 0 0 8px rgba(233, 32, 37, 0.05);
   }
 
   .glass-button {
     @apply bg-background/30 backdrop-blur-xl border border-border/40 rounded-lg transition-all duration-200 font-medium;
-    background: rgba(255, 255, 255, 0.1);
+    background: rgba(255, 255, 255, 0.9);
     backdrop-filter: blur(8px);
     -webkit-backdrop-filter: blur(8px);
-    border: 1px solid rgba(255, 255, 255, 0.1);
+    border: 1px solid rgba(130, 36, 227, 0.2);
     color: hsl(var(--primary));
   }
 
   .glass-button:hover {
-    background: rgba(255, 255, 255, 0.15);
+    background: rgba(130, 36, 227, 0.1);
+    border-color: rgba(130, 36, 227, 0.3);
     transform: translateY(-1px);
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+    box-shadow: 0 4px 12px rgba(130, 36, 227, 0.15);
+  }
+
+  .darth-vadarr .glass-button {
+    border: 1px solid rgba(233, 32, 37, 0.2);
+  }
+
+  .darth-vadarr .glass-button:hover {
+    background: rgba(233, 32, 37, 0.1);
+    border-color: rgba(233, 32, 37, 0.3);
+    box-shadow: 0 4px 12px rgba(233, 32, 37, 0.15);
   }
 
   .glass-button:active {
@@ -152,31 +346,47 @@
   }
 
   .dark .glass-button {
-    background: rgba(128, 90, 213, 0.12);
-    border: 1px solid rgba(138, 101, 241, 0.2);
-    box-shadow: 0 2px 10px rgba(89, 36, 210, 0.1);
+    background: rgba(130, 36, 227, 0.15);
+    border: 1px solid rgba(130, 36, 227, 0.3);
+    box-shadow: 0 2px 10px rgba(130, 36, 227, 0.2);
+    color: hsl(var(--primary));
   }
 
   .dark .glass-button:hover {
-    background: rgba(128, 90, 213, 0.18);
-    border: 1px solid rgba(138, 101, 241, 0.3);
-    box-shadow: 0 4px 15px rgba(89, 36, 210, 0.15), 
-                0 0 0 1px rgba(138, 101, 241, 0.1);
+    background: rgba(130, 36, 227, 0.25);
+    border: 1px solid rgba(130, 36, 227, 0.4);
+    box-shadow: 0 4px 15px rgba(130, 36, 227, 0.3), 
+                0 0 0 1px rgba(130, 36, 227, 0.2);
+  }
+
+  .darth-vadarr .glass-button {
+    background: rgba(233, 32, 37, 0.15);
+    border: 1px solid rgba(233, 32, 37, 0.3);
+    box-shadow: 0 2px 10px rgba(233, 32, 37, 0.2);
+    color: hsl(var(--primary));
+  }
+
+  .darth-vadarr .glass-button:hover {
+    background: rgba(233, 32, 37, 0.25);
+    border: 1px solid rgba(233, 32, 37, 0.4);
+    box-shadow: 0 4px 15px rgba(233, 32, 37, 0.3), 
+                0 0 0 1px rgba(233, 32, 37, 0.2);
   }
 
   .animated-gradient {
-    background: linear-gradient(-45deg, #6c3dd9, #9550e5, #b366ff, #c278ff);
+    background: linear-gradient(-45deg, #8224E3, #9d4ae8, #b866ed, #d182f2);
     background-size: 400% 400%;
     animation: gradient 15s ease infinite;
   }
 
   .dot-pattern {
-    background-image: radial-gradient(hsl(var(--primary) / 0.15) 1px, transparent 1px);
+    background-image: radial-gradient(rgba(130, 36, 227, 0.15) 1px, transparent 1px);
     background-size: 18px 18px;
   }
 
   .animate-fade-in {
-    animation: fadeIn 0.5s ease-in-out;
+    animation: fadeIn 0.6s ease-out forwards;
+    opacity: 1; /* Start visible, animate in */
   }
 
   .animate-pulse-soft {
@@ -198,8 +408,8 @@
     height: 200%;
     background: radial-gradient(
       circle at center,
-      rgba(138, 101, 241, 0.1) 0%,
-      rgba(138, 101, 241, 0) 70%
+      rgba(130, 36, 227, 0.15) 0%,
+      rgba(130, 36, 227, 0) 70%
     );
     opacity: 0;
     transition: opacity 0.5s ease;
@@ -212,9 +422,9 @@
   
   /* Futuristic border */
   .futuristic-border {
-    border: 1px solid rgba(138, 101, 241, 0.2);
-    box-shadow: 0 0 20px rgba(138, 101, 241, 0.1),
-                inset 0 0 10px rgba(138, 101, 241, 0.05);
+    border: 1px solid rgba(130, 36, 227, 0.3);
+    box-shadow: 0 0 20px rgba(130, 36, 227, 0.15),
+                inset 0 0 10px rgba(130, 36, 227, 0.08);
   }
   
   /* Shimmering effect */
@@ -250,7 +460,7 @@
     content: '';
     position: absolute;
     inset: 0;
-    background: rgba(138, 101, 241, 0.03);
+    background: rgba(130, 36, 227, 0.03);
     z-index: 1;
     pointer-events: none;
   }
@@ -265,7 +475,7 @@
     background: linear-gradient(
       90deg, 
       transparent, 
-      rgba(138, 101, 241, 0.06), 
+      rgba(130, 36, 227, 0.08), 
       transparent
     );
     animation: shimmerSubtle 60s cubic-bezier(0.4, 0.0, 0.2, 1) infinite;
@@ -275,18 +485,28 @@
 
   .glass-input {
     @apply bg-background/30 backdrop-blur-xl border border-border/40 rounded-lg transition-all duration-200;
-    background: rgba(255, 255, 255, 0.08);
+    background: rgba(255, 255, 255, 0.95);
     backdrop-filter: blur(8px);
     -webkit-backdrop-filter: blur(8px);
-    border: 1px solid rgba(255, 255, 255, 0.12);
+    border: 1px solid rgba(130, 36, 227, 0.15);
     color: hsl(var(--foreground));
   }
 
   .glass-input:focus {
     @apply ring-2 ring-ring ring-offset-2 ring-offset-background border-primary;
-    background: rgba(255, 255, 255, 0.12);
-    border: 1px solid rgba(138, 101, 241, 0.3);
+    background: rgba(255, 255, 255, 1);
+    border: 1px solid rgba(130, 36, 227, 0.4);
     outline: none;
+    box-shadow: 0 0 0 3px rgba(130, 36, 227, 0.1);
+  }
+
+  .darth-vadarr .glass-input {
+    border: 1px solid rgba(233, 32, 37, 0.15);
+  }
+
+  .darth-vadarr .glass-input:focus {
+    border: 1px solid rgba(233, 32, 37, 0.4);
+    box-shadow: 0 0 0 3px rgba(233, 32, 37, 0.1);
   }
 
   .glass-input::placeholder {
@@ -294,13 +514,268 @@
   }
 
   .dark .glass-input {
-    background: rgba(23, 12, 41, 0.4);
-    border: 1px solid rgba(128, 85, 255, 0.1);
+    background: rgba(0, 0, 0, 0.5);
+    border: 1px solid rgba(130, 36, 227, 0.2);
   }
 
   .dark .glass-input:focus {
-    background: rgba(23, 12, 41, 0.6);
-    border: 1px solid rgba(138, 101, 241, 0.4);
+    background: rgba(0, 0, 0, 0.7);
+    border: 1px solid rgba(130, 36, 227, 0.5);
+    box-shadow: 0 0 0 3px rgba(130, 36, 227, 0.2);
+  }
+
+  .darth-vadarr .glass-input {
+    background: rgba(0, 0, 0, 0.5);
+    border: 1px solid rgba(233, 32, 37, 0.2);
+  }
+
+  .darth-vadarr .glass-input:focus {
+    background: rgba(0, 0, 0, 0.7);
+    border: 1px solid rgba(233, 32, 37, 0.5);
+    box-shadow: 0 0 0 3px rgba(233, 32, 37, 0.2);
+  }
+
+  /* Enhanced Media Card Utilities */
+  .glass-card-enhanced {
+    background: rgba(255, 255, 255, 0.95);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    border: 1px solid rgba(130, 36, 227, 0.2);
+    box-shadow: 
+      0 8px 32px 0 rgba(130, 36, 227, 0.1),
+      inset 0 0 0 1px rgba(130, 36, 227, 0.05);
+    transition: all 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+    transform-style: preserve-3d;
+    perspective: 1000px;
+  }
+
+  .dark .glass-card-enhanced {
+    background: rgba(0, 0, 0, 0.6);
+    border: 1px solid rgba(130, 36, 227, 0.25);
+    box-shadow: 
+      0 8px 32px 0 rgba(0, 0, 0, 0.4),
+      0 0 0 1px rgba(130, 36, 227, 0.15),
+      inset 0 0 20px rgba(130, 36, 227, 0.1);
+  }
+
+  .darth-vadarr .glass-card-enhanced {
+    background: rgba(0, 0, 0, 0.6);
+    border: 1px solid rgba(233, 32, 37, 0.25);
+    box-shadow: 
+      0 8px 32px 0 rgba(0, 0, 0, 0.4),
+      0 0 0 1px rgba(233, 32, 37, 0.15),
+      inset 0 0 20px rgba(233, 32, 37, 0.1);
+  }
+
+  .glass-card-enhanced:hover {
+    border-color: rgba(130, 36, 227, 0.5);
+    box-shadow: 
+      0 20px 60px 0 rgba(130, 36, 227, 0.25),
+      0 0 0 1px rgba(130, 36, 227, 0.4),
+      inset 0 0 30px rgba(130, 36, 227, 0.15);
+  }
+
+  /* Status Badge Enhancements */
+  .status-badge-glow {
+    position: relative;
+  }
+
+  .status-badge-glow::before {
+    content: '';
+    position: absolute;
+    inset: -2px;
+    border-radius: inherit;
+    padding: 2px;
+    background: linear-gradient(45deg, rgba(130, 36, 227, 0.6), rgba(130, 36, 227, 0.3));
+    -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+    -webkit-mask-composite: xor;
+    mask-composite: exclude;
+    opacity: 0;
+    transition: opacity 0.3s;
+  }
+
+  .status-badge-glow:hover::before {
+    opacity: 1;
+    animation: rotateGlow 3s linear infinite;
+  }
+
+  /* Skeleton Loading */
+  .skeleton-shimmer {
+    position: relative;
+    overflow: hidden;
+  }
+
+  .skeleton-shimmer::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    left: 0;
+    background: linear-gradient(
+      90deg,
+      transparent,
+      rgba(255, 255, 255, 0.1),
+      transparent
+    );
+    animation: shimmerFast 1.5s infinite;
+  }
+
+  .dark .skeleton-shimmer::after {
+    background: linear-gradient(
+      90deg,
+      transparent,
+      rgba(130, 36, 227, 0.15),
+      transparent
+    );
+  }
+
+  /* Progress Ring Animation */
+  .progress-ring {
+    transition: stroke-dashoffset 0.7s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+
+  /* Card Hover Effects */
+  .card-3d {
+    transform-style: preserve-3d;
+    transition: transform 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+
+  .card-3d:hover {
+    transform: translateY(-8px) rotateX(2deg) rotateY(1deg);
+  }
+
+  /* Animated Gradient Background */
+  .animated-bg-gradient {
+    background: linear-gradient(-45deg, 
+      rgba(130, 36, 227, 0.1),
+      rgba(130, 36, 227, 0.15),
+      rgba(130, 36, 227, 0.1),
+      rgba(130, 36, 227, 0.15)
+    );
+    background-size: 400% 400%;
+    animation: gradient 15s ease infinite;
+  }
+
+  /* Badge Pulse Effect */
+  .badge-pulse {
+    animation: badgeBounce 2s ease-in-out infinite;
+  }
+
+  /* Glow Effect */
+  .glow-effect {
+    position: relative;
+  }
+
+  .glow-effect::after {
+    content: '';
+    position: absolute;
+    inset: -4px;
+    border-radius: inherit;
+    background: inherit;
+    filter: blur(12px);
+    opacity: 0;
+    transition: opacity 0.3s;
+    z-index: -1;
+  }
+
+  .glow-effect:hover::after {
+    opacity: 0.6;
+  }
+
+  /* Glassmorphic Muted Background for Dark Mode - High specificity */
+  .dark .bg-muted,
+  .dark.bg-muted {
+    background: rgba(130, 36, 227, 0.15) !important;
+    backdrop-filter: blur(12px) !important;
+    -webkit-backdrop-filter: blur(12px) !important;
+  }
+
+  .darth-vadarr .bg-muted,
+  .darth-vadarr.bg-muted {
+    background: rgba(233, 32, 37, 0.15) !important;
+    backdrop-filter: blur(12px) !important;
+    -webkit-backdrop-filter: blur(12px) !important;
+  }
+
+  .dark .bg-muted\/50,
+  .dark.bg-muted\/50 {
+    background: rgba(130, 36, 227, 0.08) !important;
+    backdrop-filter: blur(8px) !important;
+    -webkit-backdrop-filter: blur(8px) !important;
+  }
+
+  .dark .bg-muted\/30,
+  .dark.bg-muted\/30 {
+    background: rgba(130, 36, 227, 0.06) !important;
+    backdrop-filter: blur(6px) !important;
+    -webkit-backdrop-filter: blur(6px) !important;
+  }
+
+  .dark .bg-muted\/20,
+  .dark.bg-muted\/20 {
+    background: rgba(130, 36, 227, 0.05) !important;
+    backdrop-filter: blur(4px) !important;
+    -webkit-backdrop-filter: blur(4px) !important;
+  }
+
+  .dark .bg-muted\/40,
+  .dark.bg-muted\/40 {
+    background: rgba(130, 36, 227, 0.1) !important;
+    backdrop-filter: blur(8px) !important;
+    -webkit-backdrop-filter: blur(8px) !important;
+  }
+
+  .dark .hover\:bg-muted\/50:hover,
+  .dark.hover\:bg-muted\/50:hover {
+    background: rgba(130, 36, 227, 0.2) !important;
+    backdrop-filter: blur(12px) !important;
+    -webkit-backdrop-filter: blur(12px) !important;
+    border-color: rgba(130, 36, 227, 0.3) !important;
+  }
+
+  .dark .hover\:bg-muted:hover,
+  .dark.hover\:bg-muted:hover {
+    background: rgba(130, 36, 227, 0.25) !important;
+    backdrop-filter: blur(12px) !important;
+    -webkit-backdrop-filter: blur(12px) !important;
+    border-color: rgba(130, 36, 227, 0.35) !important;
+  }
+
+  /* Glassmorphic card backgrounds in dark mode */
+  .dark .bg-card {
+    background: rgba(130, 36, 227, 0.1) !important;
+    backdrop-filter: blur(16px) !important;
+    -webkit-backdrop-filter: blur(16px) !important;
+    border-color: rgba(130, 36, 227, 0.2) !important;
+  }
+
+  .darth-vadarr .bg-card {
+    background: rgba(233, 32, 37, 0.1) !important;
+    backdrop-filter: blur(16px) !important;
+    -webkit-backdrop-filter: blur(16px) !important;
+    border-color: rgba(233, 32, 37, 0.2) !important;
+  }
+
+  /* Enhanced glassmorphic effect for cards and containers */
+  .dark .glass-muted {
+    background: rgba(130, 36, 227, 0.12);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    border: 1px solid rgba(130, 36, 227, 0.25);
+    box-shadow: 
+      0 4px 24px 0 rgba(0, 0, 0, 0.3),
+      0 0 0 1px rgba(130, 36, 227, 0.15),
+      inset 0 0 12px rgba(130, 36, 227, 0.05);
+  }
+
+  .dark .glass-muted:hover {
+    background: rgba(130, 36, 227, 0.18);
+    border-color: rgba(130, 36, 227, 0.35);
+    box-shadow: 
+      0 8px 32px 0 rgba(130, 36, 227, 0.2),
+      0 0 0 1px rgba(130, 36, 227, 0.25),
+      inset 0 0 16px rgba(130, 36, 227, 0.08);
   }
 }
 
@@ -326,6 +801,76 @@
 }
 
 @keyframes shimmerSubtle {
-  0% { left: -100%; }
-  100% { left: 100%; }
+  0% { left: -70%; opacity: 0; }
+  10% { opacity: 0.5; }
+  90% { opacity: 0.75; }
+  100% { left: 170%; opacity: 0; }
+}
+
+/* Enhanced Media Card Animations */
+@keyframes cardFloat {
+  0%, 100% {
+    transform: translateY(0px) rotateX(0deg);
+  }
+  50% {
+    transform: translateY(-5px) rotateX(1deg);
+  }
+}
+
+@keyframes glowPulse {
+  0%, 100% {
+    box-shadow: 0 0 20px rgba(130, 36, 227, 0.4);
+  }
+  50% {
+    box-shadow: 0 0 40px rgba(130, 36, 227, 0.7);
+  }
+}
+
+@keyframes badgeBounce {
+  0%, 100% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.1);
+  }
+}
+
+@keyframes shimmerFast {
+  0% {
+    transform: translateX(-100%) skewX(-15deg);
+  }
+  100% {
+    transform: translateX(200%) skewX(-15deg);
+  }
+}
+
+@keyframes fadeInUp {
+  from {
+    opacity: 0;
+    transform: translateY(30px) scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes scaleIn {
+  from {
+    opacity: 0;
+    transform: scale(0.9);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes rotateGlow {
+  0% {
+    filter: hue-rotate(0deg);
+  }
+  100% {
+    filter: hue-rotate(360deg);
+  }
 }

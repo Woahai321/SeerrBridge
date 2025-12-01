@@ -29,7 +29,8 @@ export default defineNuxtConfig({
         { name: 'description', content: 'Monitor and manage your SeerrBridge service with ease' }
       ],
       link: [
-        { rel: 'icon', type: 'image/x-icon', href: '/favicon.ico' }
+        { rel: 'icon', type: 'image/svg+xml', href: '/vadarr-icon.svg' },
+        { rel: 'alternate icon', type: 'image/x-icon', href: '/vadarr-icon.ico' }
       ]
     }
   },
@@ -54,15 +55,18 @@ export default defineNuxtConfig({
   colorMode: {
     preference: 'dark',
     fallback: 'dark',
-    classSuffix: ''
+    classSuffix: '',
+    dataValue: 'theme',
+    hid: 'nuxt-color-mode-script'
   },
 
   // Google Fonts
   googleFonts: {
     families: {
-      Outfit: [300, 400, 500, 600, 700]
+      'Titillium Web': [400, 600, 700, 900]
     },
-    display: 'swap'
+    display: 'swap',
+    preload: true
   },
 
   // Tailwind CSS

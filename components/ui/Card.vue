@@ -19,9 +19,9 @@ const cardClass = computed(() => {
   const baseClass = 'rounded-xl border border-border'
   
   const variants = {
-    default: 'bg-card text-card-foreground',
+    default: 'bg-card text-card-foreground dark:glass-muted',
     glass: 'glass-card',
-    elevated: 'bg-card text-card-foreground shadow-lg'
+    elevated: 'bg-card text-card-foreground shadow-lg dark:glass-muted'
   }
   
   const paddings = {

@@ -1,25 +1,25 @@
 <template>
-  <div class="space-y-8">
+  <div class="space-y-4 sm:space-y-6 lg:space-y-8">
     <!-- Header Section -->
-    <div class="flex items-center justify-between flex-wrap gap-4">
+    <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 sm:gap-4">
       <div>
-        <h1 class="text-3xl font-bold text-foreground tracking-tight">Processed Media</h1>
-        <p class="text-sm text-muted-foreground mt-1">View and manage all processed media in your library</p>
+        <h1 class="text-2xl sm:text-3xl font-bold text-foreground tracking-tight">Processed Media</h1>
+        <p class="text-xs sm:text-sm text-muted-foreground mt-1">View and manage all processed media in your library</p>
       </div>
       
       <!-- Action Buttons -->
-      <div class="flex items-center gap-3">
+      <div class="flex items-center gap-2 sm:gap-3 flex-wrap">
         <!-- Search -->
-        <div class="relative">
+        <div class="relative flex-1 sm:flex-none min-w-0">
           <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-            <AppIcon icon="lucide:search" size="18" class="text-muted-foreground" />
+            <AppIcon icon="lucide:search" size="16" class="sm:w-[18px] sm:h-[18px] text-muted-foreground" />
           </div>
           <input
             v-model="searchQuery"
             @input="debouncedSearch"
             type="text"
             placeholder="Search media..."
-            class="w-72 pl-10 pr-4 py-2.5 bg-background border border-input rounded-xl text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+            class="w-full sm:w-64 lg:w-72 pl-9 sm:pl-10 pr-3 sm:pr-4 py-2 sm:py-2.5 bg-background border border-input rounded-xl text-xs sm:text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring"
           />
         </div>
         
@@ -27,11 +27,12 @@
         <Button 
           @click="showFilters = !showFilters" 
           variant="outline"
-          class="gap-2"
+          size="sm"
+          class="gap-1.5 sm:gap-2"
         >
-          <AppIcon icon="lucide:filter" size="18" />
-          <span>Filters</span>
-          <span v-if="activeFiltersCount > 0" class="ml-1 inline-flex items-center justify-center min-w-[1.5rem] h-6 px-2 text-xs font-medium text-white bg-primary rounded-full">
+          <AppIcon icon="lucide:filter" size="16" class="sm:w-[18px] sm:h-[18px]" />
+          <span class="hidden sm:inline">Filters</span>
+          <span v-if="activeFiltersCount > 0" class="ml-0.5 sm:ml-1 inline-flex items-center justify-center min-w-[1.25rem] sm:min-w-[1.5rem] h-5 sm:h-6 px-1.5 sm:px-2 text-[10px] sm:text-xs font-medium text-white bg-primary rounded-full">
             {{ activeFiltersCount }}
           </span>
         </Button>
@@ -41,90 +42,92 @@
           @click="refreshData" 
           :disabled="loading"
           variant="outline"
+          size="sm"
         >
-          <AppIcon v-if="loading" icon="lucide:loader-2" size="18" class="animate-spin" />
-          <AppIcon v-else icon="lucide:refresh-cw" size="18" />
+          <AppIcon v-if="loading" icon="lucide:loader-2" size="16" class="sm:w-[18px] sm:h-[18px] animate-spin" />
+          <AppIcon v-else icon="lucide:refresh-cw" size="16" class="sm:w-[18px] sm:h-[18px]" />
         </Button>
       </div>
     </div>
     
     <!-- Stats Section -->
-    <div class="bg-card border border-border rounded-2xl p-6 space-y-6">
-      <div class="flex items-center justify-between">
-        <h2 class="text-xl font-semibold text-foreground">Media Statistics</h2>
-        <div class="flex items-center gap-4">
-          <span v-if="stats.subscribed_count > 0" class="text-sm text-muted-foreground flex items-center gap-2">
-            <AppIcon icon="lucide:bell" size="16" class="text-purple-500" />
-            {{ formatNumber(stats.subscribed_count) }} subscriptions
+    <div class="bg-card border border-border rounded-xl sm:rounded-2xl p-4 sm:p-6 space-y-4 sm:space-y-6">
+      <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 sm:gap-4">
+        <h2 class="text-lg sm:text-xl font-semibold text-foreground">Media Statistics</h2>
+        <div class="flex items-center gap-2 sm:gap-4 flex-wrap text-xs sm:text-sm">
+          <span v-if="stats.subscribed_count > 0" class="text-muted-foreground flex items-center gap-1.5 sm:gap-2">
+            <AppIcon icon="lucide:bell" size="14" class="sm:w-4 sm:h-4 text-primary" />
+            <span class="hidden sm:inline">{{ formatNumber(stats.subscribed_count) }} subscriptions</span>
+            <span class="sm:hidden">{{ formatNumber(stats.subscribed_count) }}</span>
           </span>
-          <span class="text-sm text-muted-foreground">{{ formatNumber(stats.total_media || 0) }} total items</span>
+          <span class="text-muted-foreground">{{ formatNumber(stats.total_media || 0) }} total</span>
         </div>
       </div>
       
       <!-- Status Overview -->
-      <div class="grid grid-cols-2 lg:grid-cols-4 gap-4">
+      <div class="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
         <div 
           @click="applyStatFilter('', '')"
-          class="bg-background border border-border rounded-2xl p-6 shadow-sm hover:shadow-md transition-all cursor-pointer hover:border-primary/50 group relative overflow-hidden"
+          class="bg-background border border-border rounded-xl sm:rounded-2xl p-4 sm:p-6 shadow-sm hover:shadow-md transition-all cursor-pointer hover:border-primary/50 group relative overflow-hidden"
           :class="{ 'border-primary/50 bg-primary/5': filters.status === '' && filters.mediaType === '' }"
         >
-          <div class="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-primary to-purple-500"></div>
-          <div class="flex items-center justify-between mb-3">
-            <div class="w-12 h-12 bg-primary/10 rounded-xl flex items-center justify-center group-hover:bg-primary/20 transition-colors">
-              <AppIcon icon="lucide:database" size="24" class="text-primary" />
+          <div class="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-primary to-primary/80"></div>
+          <div class="flex items-center justify-between mb-2 sm:mb-3">
+            <div class="w-10 h-10 sm:w-12 sm:h-12 bg-primary/10 rounded-lg sm:rounded-xl flex items-center justify-center group-hover:bg-primary/20 transition-colors">
+              <AppIcon icon="lucide:database" size="20" class="sm:w-6 sm:h-6 text-primary" />
             </div>
-            <span class="text-xs font-medium text-muted-foreground">All Statuses</span>
+            <span class="text-[10px] sm:text-xs font-medium text-muted-foreground">All</span>
           </div>
-          <p class="text-3xl font-bold text-foreground mb-1">{{ formatNumber(stats.total_media || 0) }}</p>
-          <p class="text-xs text-muted-foreground">Total media items</p>
+          <p class="text-2xl sm:text-3xl font-bold text-foreground mb-1">{{ formatNumber(stats.total_media || 0) }}</p>
+          <p class="text-[10px] sm:text-xs text-muted-foreground line-clamp-1">Total media items</p>
         </div>
         
         <div 
           @click="applyStatFilter('completed', '')"
-          class="bg-background border border-border rounded-2xl p-6 shadow-sm hover:shadow-md transition-all cursor-pointer hover:border-emerald-500/50 group relative overflow-hidden"
+          class="bg-background border border-border rounded-xl sm:rounded-2xl p-4 sm:p-6 shadow-sm hover:shadow-md transition-all cursor-pointer hover:border-emerald-500/50 group relative overflow-hidden"
           :class="{ 'border-emerald-500/50 bg-emerald-500/5': filters.status === 'completed' }"
         >
           <div class="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-emerald-500 to-green-500"></div>
-          <div class="flex items-center justify-between mb-3">
-            <div class="w-12 h-12 bg-emerald-500/10 rounded-xl flex items-center justify-center group-hover:bg-emerald-500/20 transition-colors">
-              <AppIcon icon="lucide:check-circle" size="24" class="text-emerald-500" />
+          <div class="flex items-center justify-between mb-2 sm:mb-3">
+            <div class="w-10 h-10 sm:w-12 sm:h-12 bg-emerald-500/10 rounded-lg sm:rounded-xl flex items-center justify-center group-hover:bg-emerald-500/20 transition-colors">
+              <AppIcon icon="lucide:check-circle" size="20" class="sm:w-6 sm:h-6 text-emerald-500" />
             </div>
-            <span class="text-xs font-medium text-emerald-500">{{ Math.round((stats.completed_count / stats.total_media) * 100) || 0 }}%</span>
+            <span class="text-[10px] sm:text-xs font-medium text-emerald-500">{{ Math.round((stats.completed_count / stats.total_media) * 100) || 0 }}%</span>
           </div>
-          <p class="text-3xl font-bold text-foreground mb-1">{{ formatNumber(stats.completed_count || 0) }}</p>
-          <p class="text-xs text-muted-foreground">Successfully completed</p>
+          <p class="text-2xl sm:text-3xl font-bold text-foreground mb-1">{{ formatNumber(stats.completed_count || 0) }}</p>
+          <p class="text-[10px] sm:text-xs text-muted-foreground line-clamp-1">Successfully completed</p>
         </div>
         
         <div 
           @click="applyStatFilter('processing', '')"
-          class="bg-background border border-border rounded-2xl p-6 shadow-sm hover:shadow-md transition-all cursor-pointer hover:border-amber-500/50 group relative overflow-hidden"
+          class="bg-background border border-border rounded-xl sm:rounded-2xl p-4 sm:p-6 shadow-sm hover:shadow-md transition-all cursor-pointer hover:border-amber-500/50 group relative overflow-hidden"
           :class="{ 'border-amber-500/50 bg-amber-500/5': filters.status === 'processing' }"
         >
           <div class="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-amber-500 to-orange-500"></div>
-          <div class="flex items-center justify-between mb-3">
-            <div class="w-12 h-12 bg-amber-500/10 rounded-xl flex items-center justify-center group-hover:bg-amber-500/20 transition-colors">
-              <AppIcon icon="lucide:loader-2" size="24" class="text-amber-500 animate-spin" />
+          <div class="flex items-center justify-between mb-2 sm:mb-3">
+            <div class="w-10 h-10 sm:w-12 sm:h-12 bg-amber-500/10 rounded-lg sm:rounded-xl flex items-center justify-center group-hover:bg-amber-500/20 transition-colors">
+              <AppIcon icon="lucide:loader-2" size="20" class="sm:w-6 sm:h-6 text-amber-500 animate-spin" />
             </div>
-            <span class="text-xs font-medium text-amber-500">{{ Math.round((stats.processing_count / stats.total_media) * 100) || 0 }}%</span>
+            <span class="text-[10px] sm:text-xs font-medium text-amber-500">{{ Math.round((stats.processing_count / stats.total_media) * 100) || 0 }}%</span>
           </div>
-          <p class="text-3xl font-bold text-foreground mb-1">{{ formatNumber(stats.processing_count || 0) }}</p>
-          <p class="text-xs text-muted-foreground">Currently processing</p>
+          <p class="text-2xl sm:text-3xl font-bold text-foreground mb-1">{{ formatNumber(stats.processing_count || 0) }}</p>
+          <p class="text-[10px] sm:text-xs text-muted-foreground line-clamp-1">Currently processing</p>
         </div>
         
         <div 
           @click="applyStatFilter('failed', '')"
-          class="bg-background border border-border rounded-2xl p-6 shadow-sm hover:shadow-md transition-all cursor-pointer hover:border-red-500/50 group relative overflow-hidden"
+          class="bg-background border border-border rounded-xl sm:rounded-2xl p-4 sm:p-6 shadow-sm hover:shadow-md transition-all cursor-pointer hover:border-red-500/50 group relative overflow-hidden"
           :class="{ 'border-red-500/50 bg-red-500/5': filters.status === 'failed' }"
         >
           <div class="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-red-500 to-rose-500"></div>
-          <div class="flex items-center justify-between mb-3">
-            <div class="w-12 h-12 bg-red-500/10 rounded-xl flex items-center justify-center group-hover:bg-red-500/20 transition-colors">
-              <AppIcon icon="lucide:x-circle" size="24" class="text-red-500" />
+          <div class="flex items-center justify-between mb-2 sm:mb-3">
+            <div class="w-10 h-10 sm:w-12 sm:h-12 bg-red-500/10 rounded-lg sm:rounded-xl flex items-center justify-center group-hover:bg-red-500/20 transition-colors">
+              <AppIcon icon="lucide:x-circle" size="20" class="sm:w-6 sm:h-6 text-red-500" />
             </div>
-            <span class="text-xs font-medium text-red-500">{{ Math.round((stats.failed_count / stats.total_media) * 100) || 0 }}%</span>
+            <span class="text-[10px] sm:text-xs font-medium text-red-500">{{ Math.round((stats.failed_count / stats.total_media) * 100) || 0 }}%</span>
           </div>
-          <p class="text-3xl font-bold text-foreground mb-1">{{ formatNumber(stats.failed_count || 0) }}</p>
-          <p class="text-xs text-muted-foreground">Requires attention</p>
+          <p class="text-2xl sm:text-3xl font-bold text-foreground mb-1">{{ formatNumber(stats.failed_count || 0) }}</p>
+          <p class="text-[10px] sm:text-xs text-muted-foreground line-clamp-1">Requires attention</p>
         </div>
       </div>
       
@@ -132,40 +135,40 @@
       <div class="border-t border-border"></div>
       
       <!-- Media Type Breakdown -->
-      <div class="flex flex-col lg:flex-row gap-4 lg:gap-0">
+      <div class="flex flex-col lg:flex-row gap-3 sm:gap-4 lg:gap-0">
         <!-- Movies Card -->
         <div 
           @click="applyStatFilter('', 'movie')"
-          class="flex-1 bg-background border border-border rounded-2xl lg:rounded-l-2xl lg:rounded-r-none lg:border-r-0 p-4 shadow-sm hover:shadow-md transition-all cursor-pointer hover:border-primary/50 group"
+          class="flex-1 bg-background border border-border rounded-xl sm:rounded-2xl lg:rounded-l-2xl lg:rounded-r-none lg:border-r-0 p-3 sm:p-4 shadow-sm hover:shadow-md transition-all cursor-pointer hover:border-primary/50 group"
           :class="{ 'border-primary/50 bg-primary/5': filters.mediaType === 'movie' }"
         >
-          <div class="flex items-center justify-between mb-4">
-            <div class="flex items-center gap-3">
-              <div class="w-10 h-10 bg-primary/10 rounded-xl flex items-center justify-center group-hover:bg-primary/20 transition-colors">
-                <AppIcon icon="lucide:film" size="20" class="text-primary" />
+          <div class="flex items-center justify-between mb-3 sm:mb-4">
+            <div class="flex items-center gap-2 sm:gap-3">
+              <div class="w-8 h-8 sm:w-10 sm:h-10 bg-primary/10 rounded-lg sm:rounded-xl flex items-center justify-center group-hover:bg-primary/20 transition-colors">
+                <AppIcon icon="lucide:film" size="18" class="sm:w-5 sm:h-5 text-primary" />
               </div>
               <div>
-                <h3 class="text-xl font-bold text-foreground">{{ formatNumber(stats.total_movies || 0) }}</h3>
-                <p class="text-xs text-muted-foreground">Movies</p>
+                <h3 class="text-lg sm:text-xl font-bold text-foreground">{{ formatNumber(stats.total_movies || 0) }}</h3>
+                <p class="text-[10px] sm:text-xs text-muted-foreground">Movies</p>
               </div>
             </div>
-            <span class="text-xs font-semibold px-2.5 py-1 bg-primary/10 text-primary rounded-full">
+            <span class="text-[10px] sm:text-xs font-semibold px-2 sm:px-2.5 py-0.5 sm:py-1 bg-primary/10 text-primary rounded-full">
               {{ Math.round((stats.total_movies / stats.total_media) * 100) || 0 }}%
             </span>
           </div>
           
-          <div class="grid grid-cols-3 gap-2 pt-3 border-t border-border">
+          <div class="grid grid-cols-3 gap-1.5 sm:gap-2 pt-2 sm:pt-3 border-t border-border">
             <div>
-              <p class="text-xs text-muted-foreground mb-0.5">Completed</p>
-              <p class="text-base font-bold text-foreground">{{ formatNumber(stats.movies_completed || 0) }}</p>
+              <p class="text-[10px] sm:text-xs text-muted-foreground mb-0.5">Completed</p>
+              <p class="text-sm sm:text-base font-bold text-foreground">{{ formatNumber(stats.movies_completed || 0) }}</p>
             </div>
             <div>
-              <p class="text-xs text-muted-foreground mb-0.5">Processing</p>
-              <p class="text-base font-bold text-foreground">{{ formatNumber(stats.movies_processing || 0) }}</p>
+              <p class="text-[10px] sm:text-xs text-muted-foreground mb-0.5">Processing</p>
+              <p class="text-sm sm:text-base font-bold text-foreground">{{ formatNumber(stats.movies_processing || 0) }}</p>
             </div>
             <div>
-              <p class="text-xs text-muted-foreground mb-0.5">Failed</p>
-              <p class="text-base font-bold text-foreground">{{ formatNumber(stats.movies_failed || 0) }}</p>
+              <p class="text-[10px] sm:text-xs text-muted-foreground mb-0.5">Failed</p>
+              <p class="text-sm sm:text-base font-bold text-foreground">{{ formatNumber(stats.movies_failed || 0) }}</p>
             </div>
           </div>
         </div>
@@ -176,36 +179,36 @@
         <!-- TV Shows Card -->
         <div 
           @click="applyStatFilter('', 'tv')"
-          class="flex-1 bg-background border border-border rounded-2xl lg:rounded-r-2xl lg:rounded-l-none lg:border-l-0 p-4 shadow-sm hover:shadow-md transition-all cursor-pointer hover:border-primary/50 group"
+          class="flex-1 bg-background border border-border rounded-xl sm:rounded-2xl lg:rounded-r-2xl lg:rounded-l-none lg:border-l-0 p-3 sm:p-4 shadow-sm hover:shadow-md transition-all cursor-pointer hover:border-primary/50 group"
           :class="{ 'border-primary/50 bg-primary/5': filters.mediaType === 'tv' }"
         >
-          <div class="flex items-center justify-between mb-4">
-            <div class="flex items-center gap-3">
-              <div class="w-10 h-10 bg-primary/10 rounded-xl flex items-center justify-center group-hover:bg-primary/20 transition-colors">
-                <AppIcon icon="lucide:tv" size="20" class="text-primary" />
+          <div class="flex items-center justify-between mb-3 sm:mb-4">
+            <div class="flex items-center gap-2 sm:gap-3">
+              <div class="w-8 h-8 sm:w-10 sm:h-10 bg-primary/10 rounded-lg sm:rounded-xl flex items-center justify-center group-hover:bg-primary/20 transition-colors">
+                <AppIcon icon="lucide:tv" size="18" class="sm:w-5 sm:h-5 text-primary" />
               </div>
               <div>
-                <h3 class="text-xl font-bold text-foreground">{{ formatNumber(stats.total_tv_shows || 0) }}</h3>
-                <p class="text-xs text-muted-foreground">TV Shows</p>
+                <h3 class="text-lg sm:text-xl font-bold text-foreground">{{ formatNumber(stats.total_tv_shows || 0) }}</h3>
+                <p class="text-[10px] sm:text-xs text-muted-foreground">TV Shows</p>
               </div>
             </div>
-            <span class="text-xs font-semibold px-2.5 py-1 bg-primary/10 text-primary rounded-full">
+            <span class="text-[10px] sm:text-xs font-semibold px-2 sm:px-2.5 py-0.5 sm:py-1 bg-primary/10 text-primary rounded-full">
               {{ Math.round((stats.total_tv_shows / stats.total_media) * 100) || 0 }}%
             </span>
           </div>
           
-          <div class="grid grid-cols-3 gap-2 pt-3 border-t border-border">
+          <div class="grid grid-cols-3 gap-1.5 sm:gap-2 pt-2 sm:pt-3 border-t border-border">
             <div>
-              <p class="text-xs text-muted-foreground mb-0.5">Completed</p>
-              <p class="text-base font-bold text-foreground">{{ formatNumber(stats.tv_completed || 0) }}</p>
+              <p class="text-[10px] sm:text-xs text-muted-foreground mb-0.5">Completed</p>
+              <p class="text-sm sm:text-base font-bold text-foreground">{{ formatNumber(stats.tv_completed || 0) }}</p>
             </div>
             <div>
-              <p class="text-xs text-muted-foreground mb-0.5">Processing</p>
-              <p class="text-base font-bold text-foreground">{{ formatNumber(stats.tv_processing || 0) }}</p>
+              <p class="text-[10px] sm:text-xs text-muted-foreground mb-0.5">Processing</p>
+              <p class="text-sm sm:text-base font-bold text-foreground">{{ formatNumber(stats.tv_processing || 0) }}</p>
             </div>
             <div>
-              <p class="text-xs text-muted-foreground mb-0.5">Failed</p>
-              <p class="text-base font-bold text-foreground">{{ formatNumber(stats.tv_failed || 0) }}</p>
+              <p class="text-[10px] sm:text-xs text-muted-foreground mb-0.5">Failed</p>
+              <p class="text-sm sm:text-base font-bold text-foreground">{{ formatNumber(stats.tv_failed || 0) }}</p>
             </div>
           </div>
         </div>
@@ -221,8 +224,8 @@
       leave-from-class="opacity-100 translate-y-0"
       leave-to-class="opacity-0 -translate-y-2"
     >
-      <div v-if="showFilters" class="bg-card rounded-2xl p-6 border border-border">
-        <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+      <div v-if="showFilters" class="bg-card rounded-xl sm:rounded-2xl p-4 sm:p-6 border border-border">
+        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
           <div>
             <label class="block text-sm font-semibold text-foreground mb-2">Status</label>
             <select 
@@ -283,119 +286,127 @@
     </Transition>
 
     <!-- Media Grid -->
-    <div v-if="!loading && mediaItems.length > 0" class="grid grid-cols-2 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-6">
+    <div v-if="!loading && mediaItems.length > 0" class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-2 sm:gap-3">
       <div
-        v-for="media in mediaItems"
+        v-for="(media, index) in mediaItems"
         :key="media.id"
         @click="viewDetails(media)"
-        class="group relative bg-card rounded-2xl overflow-hidden cursor-pointer transition-all hover:shadow-2xl hover:-translate-y-2 border border-border"
+        :style="{ animationDelay: `${index * 50}ms` }"
+        class="media-card group relative glass-card-enhanced overflow-hidden cursor-pointer transition-all duration-500 ease-out hover:scale-[1.02] hover:shadow-2xl hover:shadow-primary/20 animate-fade-in-up rounded-2xl h-full flex flex-col"
       >
+        <!-- Glow Effect on Hover -->
+        <div class="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none z-0">
+          <div class="absolute inset-0 bg-gradient-to-br from-primary/20 via-primary/10 to-transparent blur-2xl rounded-3xl"></div>
+        </div>
+        
         <!-- Poster Container -->
-        <div class="relative aspect-[2/3] bg-muted">
-          <!-- Image -->
-          <img
-            v-if="getBestImageUrl(media)"
-            :src="getBestImageUrl(media)"
-            :alt="media.title"
-            class="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110"
-            @error="handleImageError"
-          />
-          
-          <!-- Placeholder -->
-          <div v-else class="w-full h-full flex items-center justify-center p-6">
-            <div class="text-center">
-              <div class="w-16 h-16 mx-auto mb-3 rounded-2xl bg-muted flex items-center justify-center">
-                <AppIcon 
-                  :icon="media.media_type === 'movie' ? 'lucide:film' : 'lucide:tv'" 
-                  size="32" 
-                  class="text-muted-foreground"
-                />
+        <div class="relative flex-1 bg-gradient-to-br from-muted via-muted/80 to-muted/60 overflow-hidden rounded-t-2xl">
+          <!-- Image with Gradient Overlay -->
+          <div class="relative w-full h-full">
+            <img
+              v-if="getBestImageUrl(media)"
+              :src="getBestImageUrl(media)"
+              :alt="media.title"
+              class="w-full h-full object-cover transition-all duration-700 group-hover:scale-110 group-hover:brightness-110"
+              @error="handleImageError"
+              loading="lazy"
+            />
+            
+            <!-- Enhanced Placeholder with Gradient -->
+            <div v-else class="w-full h-full flex items-center justify-center p-6 bg-gradient-to-br from-primary/10 via-primary/5 to-muted/50">
+              <div class="text-center transform group-hover:scale-110 transition-transform duration-300">
+                <div class="w-16 h-16 mx-auto mb-3 rounded-2xl bg-gradient-to-br from-primary/20 to-primary/10 backdrop-blur-sm flex items-center justify-center border border-primary/20 shadow-lg">
+                  <AppIcon 
+                    :icon="media.media_type === 'movie' ? 'lucide:film' : 'lucide:tv'" 
+                    size="32" 
+                    class="text-primary"
+                  />
+                </div>
+                <p class="text-xs text-foreground font-semibold line-clamp-2 drop-shadow-sm">{{ media.title }}</p>
               </div>
-              <p class="text-xs text-muted-foreground font-medium line-clamp-2">{{ media.title }}</p>
             </div>
           </div>
           
-          <!-- Status Badge with Boat Icon -->
-          <div class="absolute top-3 right-3 z-10">
+          <!-- Animated Status Badge with Glow -->
+          <div class="absolute top-3 right-3 z-20">
             <div 
               :class="getStatusIconClass(media)" 
-              class="w-8 h-8 rounded-lg backdrop-blur-md shadow-lg flex items-center justify-center"
+              class="status-badge-enhanced w-8 h-8 sm:w-10 sm:h-10 rounded-2xl backdrop-blur-xl shadow-2xl flex items-center justify-center border-2 transition-all duration-300 group-hover:scale-110 group-hover:shadow-lg"
             >
-              <AppIcon 
-                :icon="getStatusIcon(media)" 
-                size="16" 
-                :class="getStatusIconColor(media)"
+              <img 
+                src="/vadarr-icon-white.svg" 
+                alt="Status" 
+                class="w-6 h-6 sm:w-8 sm:h-8 drop-shadow-lg"
               />
             </div>
           </div>
           
-          <!-- Media Type Badge -->
-          <div class="absolute top-3 left-3 z-10">
+          <!-- Enhanced Media Type Badge -->
+          <div class="absolute top-3 left-3 z-20">
             <span 
-              :class="media.media_type === 'movie' ? 'bg-muted/90' : 'bg-muted/90'" 
-              class="px-3 py-1 text-xs font-semibold text-foreground rounded-full backdrop-blur-md shadow-lg border border-border/50"
+              class="media-type-badge px-3 py-1.5 text-[10px] sm:text-xs font-bold rounded-full backdrop-blur-xl shadow-xl border-2 transition-all duration-300 group-hover:scale-105"
+              :class="media.media_type === 'movie' ? 'media-type-movie' : 'media-type-tv'"
             >
               {{ media.media_type.toUpperCase() }}
             </span>
           </div>
           
-          <!-- Request Count -->
-          <div v-if="media.request_count && media.request_count > 1" class="absolute bottom-3 right-3 z-10">
-            <span class="bg-muted/90 text-foreground px-2 py-1 text-xs font-semibold rounded-full backdrop-blur-md shadow-lg border border-border/50 flex items-center gap-1">
-              <AppIcon icon="lucide:repeat" size="10" />
-              {{ media.request_count }}x
-            </span>
-          </div>
-          
-          <!-- Error Badge (only show icon, not when completed) -->
-          <div v-if="media.error_message && getDisplayStatus(media) !== 'completed'" class="absolute bottom-3 left-3 z-10">
-            <div class="bg-muted/90 backdrop-blur-md shadow-lg flex items-center justify-center w-8 h-8 rounded-lg border border-border/50">
-              <AppIcon icon="lucide:alert-circle" size="16" class="text-foreground" />
+          <!-- Error Badge with Pulse Animation -->
+          <div v-if="media.error_message && getDisplayStatus(media) !== 'completed'" class="absolute bottom-3 left-3 z-20">
+            <div class="error-badge bg-red-500/40 backdrop-blur-xl shadow-xl flex items-center justify-center w-9 h-9 rounded-2xl border-2 border-red-500/40 transition-all duration-300 group-hover:scale-110 animate-pulse-soft">
+              <AppIcon icon="lucide:alert-circle" size="16" class="text-red-400 drop-shadow-lg" />
             </div>
           </div>
           
-          <!-- Progress Bar -->
-          <div v-if="media.media_type === 'tv' && media.progress_percentage > 0" class="absolute bottom-0 left-0 right-0 z-10">
-            <div class="h-1.5 bg-black/50">
+          <!-- Enhanced Progress Ring for TV Shows -->
+          <div v-if="media.media_type === 'tv' && media.progress_percentage > 0" class="absolute bottom-0 left-0 right-0 z-20 overflow-hidden">
+            <div class="relative h-2 bg-black/60 backdrop-blur-sm overflow-hidden">
               <div 
-                class="h-full bg-emerald-500 transition-all duration-500"
+                class="h-full bg-gradient-to-r from-emerald-400 via-emerald-500 to-emerald-600 transition-all duration-700 shadow-lg shadow-emerald-500/50"
                 :style="{ width: `${media.progress_percentage}%` }"
-              />
+              >
+                <div class="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent animate-shimmer"></div>
+              </div>
             </div>
           </div>
         </div>
         
-        <!-- Card Info -->
-        <div class="p-4 space-y-2">
-          <h3 class="text-sm font-bold text-foreground line-clamp-2">
+        <!-- Enhanced Card Info with Glassmorphic Background -->
+        <div class="relative p-3 sm:p-4 space-y-2 bg-gradient-to-b from-card/95 via-card/90 to-card backdrop-blur-sm flex-shrink-0 rounded-b-2xl">
+          <!-- Title -->
+          <h3 class="text-xs sm:text-sm font-bold text-foreground line-clamp-2 transition-all duration-300 group-hover:text-primary">
             {{ media.title }}
           </h3>
-          <p class="text-xs text-muted-foreground">
-            {{ media.year || 'N/A' }}
-          </p>
-          <div class="flex items-center gap-2">
-            <div v-if="media.rating" class="flex items-center text-xs text-muted-foreground">
-              <AppIcon icon="lucide:star" size="12" class="text-amber-500 mr-0.5" />
-              <span class="font-semibold">{{ media.rating }}</span>
-            </div>
-            <div v-if="media.genres && media.genres.length > 0" class="flex-1">
-              <span class="text-xs px-2 py-0.5 bg-muted text-foreground rounded-full">
-                {{ media.genres[0] }}
-              </span>
+          
+          <!-- Year and Rating Row -->
+          <div class="flex items-center justify-between gap-2">
+            <p class="text-[10px] sm:text-xs text-muted-foreground font-medium">
+              {{ media.year || 'N/A' }}
+            </p>
+            <div v-if="media.rating" class="flex items-center gap-1 text-[10px] sm:text-xs bg-amber-500/20 px-2 py-0.5 rounded-full border border-amber-500/30">
+              <AppIcon icon="lucide:star" size="10" class="sm:w-3 sm:h-3 text-amber-400 fill-amber-400" />
+              <span class="font-bold text-amber-400">{{ media.rating }}</span>
             </div>
           </div>
         </div>
       </div>
     </div>
     
-    <!-- Loading State -->
-    <div v-if="loading && mediaItems.length === 0" class="flex items-center justify-center py-24">
-      <div class="text-center">
-        <div class="w-20 h-20 mx-auto mb-6 bg-primary/10 rounded-2xl flex items-center justify-center">
-          <AppIcon icon="lucide:loader-2" size="40" class="text-primary animate-spin" />
+    <!-- Enhanced Loading State with Skeleton Cards -->
+    <div v-if="loading && mediaItems.length === 0" class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-2 sm:gap-3">
+      <div
+        v-for="i in 12"
+        :key="`skeleton-${i}`"
+        class="skeleton-card glass-card-enhanced overflow-hidden animate-pulse h-full flex flex-col rounded-2xl"
+      >
+        <div class="relative flex-1 bg-gradient-to-br from-muted via-muted/80 to-muted/60 rounded-t-2xl">
+          <div class="absolute inset-0 bg-gradient-to-r from-transparent via-white/5 to-transparent animate-shimmer"></div>
         </div>
-        <h3 class="text-xl font-semibold text-foreground mb-2">Loading media library</h3>
-        <p class="text-sm text-muted-foreground">Please wait while we fetch your processed media</p>
+        <div class="p-3 sm:p-4 space-y-2 flex-shrink-0 rounded-b-2xl">
+          <div class="h-4 bg-muted rounded-lg w-3/4"></div>
+          <div class="h-3 bg-muted rounded-lg w-1/2"></div>
+          <div class="h-3 bg-muted rounded-full w-1/3"></div>
+        </div>
       </div>
     </div>
     
@@ -446,7 +457,7 @@
     leave-from-class="opacity-100"
     leave-to-class="opacity-0"
   >
-    <div v-if="showDetailsModal" class="fixed inset-0 z-50 overflow-y-auto p-4">
+    <div v-if="showDetailsModal" class="fixed inset-0 z-50 overflow-y-auto">
       <!-- Overlay -->
       <div 
         class="fixed inset-0 bg-black/80 backdrop-blur-sm" 
@@ -454,9 +465,9 @@
       ></div>
       
       <!-- Modal Content -->
-      <div class="relative mx-auto max-w-4xl my-8 bg-card rounded-3xl shadow-2xl overflow-hidden">
+      <div class="relative mx-auto max-w-4xl min-h-screen sm:min-h-0 sm:my-4 lg:my-8 bg-card sm:rounded-xl lg:rounded-2xl xl:rounded-3xl shadow-2xl overflow-hidden flex flex-col">
         <!-- Hero -->
-        <div v-if="selectedMedia" class="relative h-80 overflow-hidden bg-gradient-to-br from-primary/20 to-primary/10">
+        <div v-if="selectedMedia" class="relative min-h-[200px] sm:h-64 lg:h-80 overflow-hidden bg-gradient-to-br from-primary/20 to-primary/10 flex-shrink-0">
           <img
             v-if="getBestImageUrl(selectedMedia)"
             :src="getBestImageUrl(selectedMedia)"
@@ -465,20 +476,24 @@
           />
           
           <!-- Top Right Buttons -->
-          <div class="absolute top-4 right-4 z-10 flex items-center gap-2">
+          <div class="absolute top-2 right-2 sm:top-4 sm:right-4 z-10 flex items-center gap-1.5 sm:gap-2">
             <!-- Action Menu -->
             <div class="relative action-menu-container">
-              <Button
+              <button
                 @click.stop="showActionMenu = !showActionMenu"
-                variant="outline"
-                class="w-12 h-12 rounded-full bg-background/90 backdrop-blur-md hover:bg-background border-border hover:border-primary/50 hover:bg-primary/10 transition-all duration-200"
+                class="w-8 h-8 sm:w-10 sm:h-10 lg:w-12 lg:h-12 rounded-full bg-background/90 backdrop-blur-md hover:bg-background border border-border hover:border-primary/50 hover:bg-primary/10 transition-all duration-200 flex items-center justify-center text-foreground hover:text-primary"
               >
-                <AppIcon 
-                  icon="lucide:more-horizontal" 
-                  size="24"
-                  class="text-foreground hover:text-primary transition-colors duration-200"
-                />
-              </Button>
+                <ClientOnly>
+                  <Icon 
+                    name="lucide:more-horizontal" 
+                    size="20"
+                    class="text-foreground"
+                  />
+                  <template #fallback>
+                    <span class="w-5 h-5 flex items-center justify-center text-foreground">⋯</span>
+                  </template>
+                </ClientOnly>
+              </button>
               
               <!-- Action Menu Dropdown -->
               <Transition
@@ -489,22 +504,22 @@
                 leave-from-class="opacity-100 translate-y-0"
                 leave-to-class="opacity-0 -translate-y-2"
               >
-                <div v-if="showActionMenu" class="absolute right-0 top-14 w-64 bg-background rounded-xl border border-border shadow-lg p-2 z-20">
+                <div v-if="showActionMenu" class="absolute right-0 top-11 sm:top-12 lg:top-14 w-[calc(100vw-2rem)] sm:w-56 lg:w-64 max-w-[280px] sm:max-w-none bg-background rounded-lg sm:rounded-xl border border-border shadow-lg p-2 z-20">
                   <!-- Processing Status -->
-                  <div class="px-3 py-2 border-b border-border mb-2">
-                    <div class="flex items-center justify-between">
-                      <span class="text-xs font-medium text-muted-foreground">Processing Status</span>
-                      <span :class="getStatusBadgeClass(selectedMedia)" class="px-2 py-0.5 text-xs font-semibold rounded-full">
+                  <div class="px-2 sm:px-3 py-1.5 sm:py-2 border-b border-border mb-1.5 sm:mb-2">
+                    <div class="flex items-center justify-between gap-2">
+                      <span class="text-[10px] sm:text-xs font-medium text-muted-foreground">Processing Status</span>
+                      <span :class="getStatusBadgeClass(selectedMedia)" class="px-1.5 sm:px-2 py-0.5 text-[10px] sm:text-xs font-semibold rounded-full whitespace-nowrap">
                         {{ selectedMedia.status === 'ignored' ? 'Ignored' : 'Active' }}
                       </span>
                     </div>
-                    <p class="text-xs text-muted-foreground mt-1">
+                    <p class="text-[10px] sm:text-xs text-muted-foreground mt-0.5 sm:mt-1 line-clamp-2">
                       {{ selectedMedia.status === 'ignored' ? 'Not processed by background tasks' : 'Will be processed by background tasks' }}
                     </p>
                   </div>
                   
                   <!-- Actions -->
-                  <div class="space-y-1">
+                  <div class="space-y-0.5 sm:space-y-1">
                     <!-- View in Overseerr -->
                     <a
                       v-if="getOverseerrUrl(selectedMedia)"
@@ -512,37 +527,37 @@
                       target="_blank"
                       rel="noopener noreferrer"
                       @click.stop
-                      class="w-full flex items-center gap-3 px-3 py-2 text-sm text-primary hover:bg-primary/10 rounded-lg transition-colors"
+                      class="w-full flex items-center gap-2 sm:gap-3 px-2 sm:px-3 py-1.5 sm:py-2 text-xs sm:text-sm text-primary hover:bg-primary/10 rounded-lg transition-colors"
                     >
-                      <AppIcon icon="lucide:external-link" size="16" />
-                      View in Overseerr
+                      <AppIcon icon="lucide:external-link" size="14" class="sm:w-4 sm:h-4" />
+                      <span class="truncate">View in Overseerr</span>
                     </a>
                     
                     <button
                       @click.stop="retriggerMedia"
                       :disabled="selectedMedia.status === 'ignored'"
-                      class="w-full flex items-center gap-3 px-3 py-2 text-sm text-foreground hover:bg-muted rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                      class="w-full flex items-center gap-2 sm:gap-3 px-2 sm:px-3 py-1.5 sm:py-2 text-xs sm:text-sm text-foreground hover:bg-muted rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                     >
-                      <AppIcon icon="lucide:refresh-cw" size="16" />
-                      Re-trigger Processing
+                      <AppIcon icon="lucide:refresh-cw" size="14" class="sm:w-4 sm:h-4" />
+                      <span class="truncate">Re-trigger Processing</span>
                     </button>
                     
                     <button
                       @click.stop="toggleIgnoreStatus"
-                      class="w-full flex items-center gap-3 px-3 py-2 text-sm text-foreground hover:bg-muted rounded-lg transition-colors"
+                      class="w-full flex items-center gap-2 sm:gap-3 px-2 sm:px-3 py-1.5 sm:py-2 text-xs sm:text-sm text-foreground hover:bg-muted rounded-lg transition-colors"
                     >
-                      <AppIcon :icon="selectedMedia.status === 'ignored' ? 'lucide:play' : 'lucide:pause'" size="16" />
-                      {{ selectedMedia.status === 'ignored' ? 'Enable Processing' : 'Ignore Processing' }}
+                      <AppIcon :icon="selectedMedia.status === 'ignored' ? 'lucide:play' : 'lucide:pause'" size="14" class="sm:w-4 sm:h-4" />
+                      <span class="truncate">{{ selectedMedia.status === 'ignored' ? 'Enable Processing' : 'Ignore Processing' }}</span>
                     </button>
                     
-                    <div class="border-t border-border my-1"></div>
+                    <div class="border-t border-border my-0.5 sm:my-1"></div>
                     
                     <button
                       @click.stop="confirmDeleteMedia"
-                      class="w-full flex items-center gap-3 px-3 py-2 text-sm text-red-600 hover:bg-red-500/10 rounded-lg transition-colors"
+                      class="w-full flex items-center gap-2 sm:gap-3 px-2 sm:px-3 py-1.5 sm:py-2 text-xs sm:text-sm text-red-600 hover:bg-red-500/10 rounded-lg transition-colors"
                     >
-                      <AppIcon icon="lucide:trash-2" size="16" />
-                      Delete Media Item
+                      <AppIcon icon="lucide:trash-2" size="14" class="sm:w-4 sm:h-4" />
+                      <span class="truncate">Delete Media Item</span>
                     </button>
                   </div>
                 </div>
@@ -550,35 +565,51 @@
             </div>
             
             <!-- Subscription Button (for TV shows) -->
-            <Button
+            <button
               v-if="selectedMedia.media_type === 'tv'"
               @click.stop="toggleSubscription"
-              :variant="selectedMedia.is_subscribed ? 'default' : 'outline'"
-              class="w-12 h-12 rounded-full bg-background/90 backdrop-blur-md hover:bg-background border-border hover:border-purple-500/50 hover:bg-purple-500/10 transition-all duration-200"
+              :class="[
+                'w-8 h-8 sm:w-10 sm:h-10 lg:w-12 lg:h-12 rounded-full bg-background/90 backdrop-blur-md hover:bg-background border transition-all duration-200 flex items-center justify-center',
+                selectedMedia.is_subscribed 
+                  ? 'border-primary/50 bg-primary/10 text-primary hover:text-primary/80' 
+                  : 'border-border hover:border-primary/50 hover:bg-primary/10 text-muted-foreground hover:text-primary'
+              ]"
             >
-              <AppIcon 
-                :icon="selectedMedia.is_subscribed ? 'lucide:bell' : 'lucide:bell-off'" 
-                size="24"
-                :class="selectedMedia.is_subscribed ? 'text-purple-500 hover:text-purple-600' : 'text-muted-foreground hover:text-purple-500'"
-              />
-            </Button>
+              <ClientOnly>
+                <Icon 
+                  :name="selectedMedia.is_subscribed ? 'lucide:bell' : 'lucide:bell-off'" 
+                  size="20"
+                />
+                <template #fallback>
+                  <span class="w-5 h-5 flex items-center justify-center">🔔</span>
+                </template>
+              </ClientOnly>
+            </button>
             
             <!-- Close Button -->
-            <Button 
+            <button 
               @click="closeModal" 
-              variant="outline"
-              class="w-12 h-12 rounded-full bg-background/90 backdrop-blur-md hover:bg-background border-border hover:border-red-500/50 hover:bg-red-500/10 transition-all duration-200"
+              class="w-8 h-8 sm:w-10 sm:h-10 lg:w-12 lg:h-12 rounded-full bg-background/90 backdrop-blur-md hover:bg-background border border-border hover:border-red-500/50 hover:bg-red-500/10 transition-all duration-200 flex items-center justify-center text-foreground hover:text-red-500"
             >
-              <AppIcon icon="lucide:x" size="24" class="text-foreground hover:text-red-500 transition-colors duration-200" />
-            </Button>
+              <ClientOnly>
+                <Icon 
+                  name="lucide:x" 
+                  size="20"
+                  class="text-foreground"
+                />
+                <template #fallback>
+                  <span class="w-5 h-5 flex items-center justify-center text-foreground">×</span>
+                </template>
+              </ClientOnly>
+            </button>
           </div>
           
           <!-- Content -->
-          <div class="relative h-full flex items-end p-8">
-            <div class="flex gap-6 w-full">
+          <div class="relative flex-1 flex items-center sm:items-end justify-center sm:justify-start p-3 sm:p-4 lg:p-6 xl:p-8">
+            <div class="flex flex-col sm:flex-row gap-2 sm:gap-3 lg:gap-4 xl:gap-6 w-full max-w-full">
               <!-- Poster -->
-              <div class="flex-shrink-0">
-                <div class="w-40 h-60 rounded-2xl overflow-hidden shadow-2xl ring-2 ring-border">
+              <div class="flex-shrink-0 self-center sm:self-end mb-2 sm:mb-0">
+                <div class="w-24 h-36 sm:w-28 sm:h-42 lg:w-36 lg:h-54 xl:w-40 xl:h-60 rounded-lg sm:rounded-xl lg:rounded-2xl overflow-hidden shadow-2xl ring-2 ring-border">
                   <img
                     v-if="getBestImageUrl(selectedMedia)"
                     :src="getBestImageUrl(selectedMedia)"
@@ -599,73 +630,78 @@
               </div>
               
               <!-- Info -->
-              <div class="flex-1 pb-2">
-                <div class="flex gap-2 mb-3 flex-wrap">
+              <div class="flex-1 pb-1 sm:pb-2 text-center sm:text-left min-w-0 flex flex-col justify-center sm:justify-end">
+                <div class="flex gap-1 sm:gap-1.5 mb-1.5 sm:mb-2 flex-wrap justify-center sm:justify-start">
                   <span 
-                    class="px-3 py-1 text-xs font-semibold bg-muted text-foreground rounded-full border border-border"
+                    class="px-1.5 sm:px-2 lg:px-3 py-0.5 text-[9px] sm:text-[10px] lg:text-xs font-semibold bg-muted text-foreground rounded-full border border-border whitespace-nowrap"
                   >
                     {{ selectedMedia.media_type.toUpperCase() }}
                   </span>
-                  <span class="px-3 py-1 text-xs font-semibold bg-muted text-foreground rounded-full border border-border">
+                  <span class="px-1.5 sm:px-2 lg:px-3 py-0.5 text-[9px] sm:text-[10px] lg:text-xs font-semibold bg-muted text-foreground rounded-full border border-border whitespace-nowrap">
                     {{ getDisplayStatus(selectedMedia) }}
                   </span>
                   <span 
                     v-if="selectedMedia.media_type === 'tv'"
-                    class="px-3 py-1 text-xs font-semibold bg-muted text-foreground rounded-full border border-border flex items-center gap-1"
+                    class="px-1.5 sm:px-2 lg:px-3 py-0.5 text-[9px] sm:text-[10px] lg:text-xs font-semibold bg-muted text-foreground rounded-full border border-border flex items-center gap-0.5 sm:gap-1 whitespace-nowrap"
                   >
-                    <AppIcon :icon="selectedMedia.is_subscribed ? 'lucide:bell' : 'lucide:bell-off'" size="12" />
-                    {{ selectedMedia.is_subscribed ? 'Subscribed' : 'Not Subscribed' }}
+                    <AppIcon :icon="selectedMedia.is_subscribed ? 'lucide:bell' : 'lucide:bell-off'" :size="10" class="!w-2.5 !h-2.5 sm:!w-3 sm:!h-3 flex-shrink-0" />
+                    <span class="hidden lg:inline">{{ selectedMedia.is_subscribed ? 'Subscribed' : 'Not Subscribed' }}</span>
+                    <span class="lg:hidden">{{ selectedMedia.is_subscribed ? 'Sub' : 'Not Sub' }}</span>
                   </span>
                 </div>
                 
-                <h2 class="text-3xl font-bold text-foreground mb-3">{{ selectedMedia.title }}</h2>
+                <h2 class="text-lg sm:text-xl lg:text-2xl xl:text-3xl font-bold text-foreground mb-1.5 sm:mb-2 lg:mb-3 line-clamp-2 sm:line-clamp-none">{{ selectedMedia.title }}</h2>
                 
                 <!-- Season Status Overview for TV Shows -->
-                <div v-if="selectedMedia.media_type === 'tv' && selectedMedia.seasons && selectedMedia.seasons.length > 0" class="mb-4">
-                  <div class="flex items-center gap-3 flex-wrap">
-                    <div class="flex items-center gap-2">
-                      <AppIcon icon="lucide:tv" size="14" class="text-muted-foreground" />
-                      <span class="text-sm font-medium text-foreground">Seasons:</span>
+                <div v-if="selectedMedia.media_type === 'tv' && selectedMedia.seasons && selectedMedia.seasons.length > 0" class="mb-2 sm:mb-3 lg:mb-4">
+                  <div class="flex flex-col sm:flex-row items-center sm:items-center gap-1.5 sm:gap-2 lg:gap-3">
+                    <div class="flex items-center gap-1 sm:gap-2">
+                      <AppIcon icon="lucide:tv" :size="12" class="!w-3 !h-3 sm:!w-3.5 sm:!h-3.5 text-muted-foreground flex-shrink-0" />
+                      <span class="text-xs sm:text-sm font-medium text-foreground">Seasons:</span>
                     </div>
-                    <div class="flex flex-wrap gap-2">
+                    <div class="flex flex-wrap gap-1 sm:gap-1.5 lg:gap-2 justify-center sm:justify-start">
                       <span 
-                        v-for="season in selectedMedia.seasons" 
+                        v-for="season in selectedMedia.seasons.slice(0, 3)" 
                         :key="season.season_number"
                         :class="getSeasonStatusBadgeClass(season)" 
-                        class="px-2 py-1 text-xs font-semibold rounded-full flex items-center gap-1"
+                        class="px-1.5 sm:px-2 py-0.5 text-[9px] sm:text-[10px] lg:text-xs font-semibold rounded-full flex items-center gap-0.5 sm:gap-1"
                       >
-                        <AppIcon :icon="getSeasonStatusIcon(season)" size="10" />
-                        S{{ season.season_number }}: {{ getSeasonStatusText(season) }}
+                        <AppIcon :icon="getSeasonStatusIcon(season)" :size="10" class="!w-2.5 !h-2.5 sm:!w-3 sm:!h-3 flex-shrink-0" />
+                        <span class="hidden sm:inline">S{{ season.season_number }}: {{ getSeasonStatusText(season) }}</span>
+                        <span class="sm:hidden">S{{ season.season_number }}</span>
+                      </span>
+                      <span v-if="selectedMedia.seasons.length > 3" class="px-1.5 sm:px-2 py-0.5 text-[9px] sm:text-[10px] lg:text-xs font-semibold bg-muted text-muted-foreground rounded-full">
+                        +{{ selectedMedia.seasons.length - 3 }}
                       </span>
                     </div>
                   </div>
                 </div>
                 
-                <div class="flex items-center gap-4 mb-4 flex-wrap">
-                  <span class="text-muted-foreground">{{ selectedMedia.year || 'N/A' }}</span>
-                  <span v-if="selectedMedia.runtime" class="inline-flex items-center gap-1">
-                    <AppIcon icon="lucide:clock" size="14" class="text-muted-foreground" />
+                <div class="flex items-center justify-center sm:justify-start gap-2 sm:gap-3 lg:gap-4 mb-2 sm:mb-3 lg:mb-4 flex-wrap text-xs sm:text-sm">
+                  <span class="text-muted-foreground whitespace-nowrap">{{ selectedMedia.year || 'N/A' }}</span>
+                  <span v-if="selectedMedia.runtime" class="inline-flex items-center gap-1 whitespace-nowrap">
+                    <AppIcon icon="lucide:clock" :size="14" class="!w-3.5 !h-3.5 sm:!w-4 sm:!h-4 text-muted-foreground flex-shrink-0" />
                     <span class="text-muted-foreground">{{ selectedMedia.runtime }} min</span>
                   </span>
-                  <span v-if="selectedMedia.rating" class="inline-flex items-center gap-1">
-                    <AppIcon icon="lucide:star" size="16" class="text-amber-500" />
+                  <span v-if="selectedMedia.rating" class="inline-flex items-center gap-0.5 sm:gap-1 whitespace-nowrap">
+                    <AppIcon icon="lucide:star" :size="14" class="!w-3.5 !h-3.5 sm:!w-4 sm:!h-4 text-amber-500 flex-shrink-0" />
                     <span class="font-semibold text-foreground">{{ selectedMedia.rating }}</span>
                   </span>
                   <!-- Genres as badges -->
-                  <div v-if="selectedMedia.genres && selectedMedia.genres.length > 0" class="flex items-center gap-2 flex-wrap">
+                  <div v-if="selectedMedia.genres && selectedMedia.genres.length > 0" class="flex items-center gap-1 sm:gap-1.5 lg:gap-2 flex-wrap justify-center sm:justify-start">
                     <span 
-                      v-for="genre in selectedMedia.genres.slice(0, 3)" 
+                      v-for="genre in selectedMedia.genres.slice(0, 2)" 
                       :key="genre"
-                      class="px-2 py-1 text-xs font-medium bg-muted text-foreground rounded-full border border-border"
+                      class="px-1.5 sm:px-2 py-0.5 text-[9px] sm:text-[10px] lg:text-xs font-medium bg-muted text-foreground rounded-full border border-border"
                     >
                       {{ genre }}
                     </span>
-                    <span v-if="selectedMedia.genres.length > 3" class="px-2 py-1 text-xs font-medium bg-muted text-muted-foreground rounded-full border border-border">
-                      +{{ selectedMedia.genres.length - 3 }} more
+                    <span v-if="selectedMedia.genres.length > 2" class="px-1.5 sm:px-2 py-0.5 text-[9px] sm:text-[10px] lg:text-xs font-medium bg-muted text-muted-foreground rounded-full border border-border">
+                      +{{ selectedMedia.genres.length - 2 }}
                     </span>
                   </div>
                 </div>
-                <p v-if="selectedMedia.overview" class="text-muted-foreground line-clamp-2 max-w-2xl">
+                <p v-if="selectedMedia.overview" class="text-xs sm:text-sm text-muted-foreground line-clamp-2 sm:line-clamp-3 lg:line-clamp-none max-w-2xl mx-auto sm:mx-0">
                   {{ selectedMedia.overview }}
                 </p>
               </div>
@@ -674,24 +710,24 @@
         </div>
         
         <!-- Body -->
-        <div v-if="selectedMedia" class="px-8 py-8 space-y-6">
+        <div v-if="selectedMedia" class="px-3 sm:px-4 lg:px-6 xl:px-8 py-3 sm:py-4 lg:py-6 xl:py-8 space-y-3 sm:space-y-4 lg:space-y-6 overflow-y-auto flex-1">
           <!-- Enhanced Status & Progress Cards -->
-          <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          <div class="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6">
             <!-- Status & Processing Info -->
-            <div class="bg-gradient-to-br from-muted to-muted/50 rounded-2xl p-6 border border-border">
-              <div class="flex items-center gap-3 mb-4">
-                <div class="w-12 h-12 bg-primary/10 rounded-xl flex items-center justify-center">
-                  <AppIcon icon="lucide:activity" size="24" class="text-primary" />
+            <div class="bg-gradient-to-br from-muted to-muted/50 rounded-xl sm:rounded-2xl p-4 sm:p-6 border border-border">
+              <div class="flex items-center gap-2 sm:gap-3 mb-3 sm:mb-4">
+                <div class="w-10 h-10 sm:w-12 sm:h-12 bg-primary/10 rounded-lg sm:rounded-xl flex items-center justify-center">
+                  <AppIcon icon="lucide:activity" size="20" class="sm:w-6 sm:h-6 text-primary" />
                 </div>
                 <div>
-                  <h3 class="text-lg font-bold text-foreground">Processing Status</h3>
-                  <span class="text-sm font-semibold px-3 py-1 rounded-full bg-muted text-foreground border border-border">
+                  <h3 class="text-base sm:text-lg font-bold text-foreground">Processing Status</h3>
+                  <span class="text-xs sm:text-sm font-semibold px-2 sm:px-3 py-0.5 sm:py-1 rounded-full bg-muted text-foreground border border-border">
                     {{ getDisplayStatus(selectedMedia) }}
                   </span>
                 </div>
               </div>
               
-              <div class="space-y-3">
+              <div class="space-y-2 sm:space-y-3">
                 <div class="flex items-center justify-between">
                   <span class="text-sm text-muted-foreground">Database Status</span>
                   <span class="text-sm font-medium text-foreground">{{ selectedMedia.status }}</span>
@@ -720,22 +756,22 @@
             </div>
             
             <!-- Progress & Timeline -->
-            <div class="bg-gradient-to-br from-muted to-muted/50 rounded-2xl p-6 border border-border">
-              <div class="flex items-center gap-3 mb-4">
-                <div class="w-12 h-12 bg-emerald-600/10 rounded-xl flex items-center justify-center">
-                  <AppIcon icon="lucide:trending-up" size="24" class="text-emerald-600" />
+            <div class="bg-gradient-to-br from-muted to-muted/50 rounded-xl sm:rounded-2xl p-4 sm:p-6 border border-border">
+              <div class="flex items-center gap-2 sm:gap-3 mb-3 sm:mb-4">
+                <div class="w-10 h-10 sm:w-12 sm:h-12 bg-emerald-600/10 rounded-lg sm:rounded-xl flex items-center justify-center">
+                  <AppIcon icon="lucide:trending-up" size="20" class="sm:w-6 sm:h-6 text-emerald-600" />
                 </div>
                 <div>
-                  <h3 class="text-lg font-bold text-foreground">Progress & Timeline</h3>
-                  <span v-if="selectedMedia.media_type === 'tv' && selectedMedia.progress_percentage > 0" class="text-sm font-semibold text-emerald-600">
+                  <h3 class="text-base sm:text-lg font-bold text-foreground">Progress & Timeline</h3>
+                  <span v-if="selectedMedia.media_type === 'tv' && selectedMedia.progress_percentage > 0" class="text-xs sm:text-sm font-semibold text-emerald-600">
                     {{ Math.round(selectedMedia.progress_percentage) }}% Complete
                   </span>
                 </div>
               </div>
               
               <!-- Progress Bar for TV Shows -->
-              <div v-if="selectedMedia.media_type === 'tv' && selectedMedia.progress_percentage > 0" class="mb-4">
-                <div class="w-full bg-muted rounded-full h-3 overflow-hidden">
+              <div v-if="selectedMedia.media_type === 'tv' && selectedMedia.progress_percentage > 0" class="mb-3 sm:mb-4">
+                <div class="w-full bg-muted rounded-full h-2 sm:h-3 overflow-hidden">
                   <div 
                     class="h-full bg-gradient-to-r from-emerald-500 to-emerald-600 transition-all duration-500 rounded-full"
                     :style="{ width: `${selectedMedia.progress_percentage}%` }"
@@ -743,7 +779,7 @@
                 </div>
               </div>
               
-              <div class="space-y-3">
+              <div class="space-y-2 sm:space-y-3">
                 <div v-if="selectedMedia.processing_started_at" class="flex items-center justify-between">
                   <span class="text-sm text-muted-foreground">Processing Started</span>
                   <span class="text-sm font-medium text-foreground">{{ formatDate(selectedMedia.processing_started_at) }}</span>
@@ -1005,9 +1041,9 @@
           </div>
           
           <!-- Technical Details -->
-          <div class="border-t border-border pt-6">
-            <h4 class="text-sm font-semibold text-foreground mb-4">Technical Details</h4>
-            <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+          <div class="border-t border-border pt-4 sm:pt-6">
+            <h4 class="text-xs sm:text-sm font-semibold text-foreground mb-3 sm:mb-4">Technical Details</h4>
+            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
               <div v-if="selectedMedia.tmdb_id">
                 <p class="text-xs text-muted-foreground mb-1">TMDB ID</p>
                 <p class="text-sm font-mono text-foreground">{{ selectedMedia.tmdb_id }}</p>
@@ -1053,9 +1089,11 @@
         </div>
         
         <!-- Footer -->
-        <div class="bg-muted px-8 py-6 border-t border-border flex justify-end">
+        <div class="bg-muted px-3 sm:px-4 lg:px-6 xl:px-8 py-3 sm:py-4 lg:py-6 border-t border-border flex justify-end flex-shrink-0">
           <Button 
             @click="closeModal"
+            size="sm"
+            class="w-full sm:w-auto"
           >
             Close
           </Button>
@@ -1073,7 +1111,7 @@
     leave-from-class="opacity-100"
     leave-to-class="opacity-0"
   >
-    <div v-if="showDeleteConfirmation" class="fixed inset-0 z-[100] overflow-y-auto p-4">
+    <div v-if="showDeleteConfirmation" class="fixed inset-0 z-[100] overflow-y-auto p-2 sm:p-4">
       <!-- Overlay -->
       <div 
         class="fixed inset-0 bg-black/80 backdrop-blur-sm" 
@@ -1081,22 +1119,22 @@
       ></div>
       
       <!-- Confirmation Modal -->
-      <div class="relative mx-auto max-w-md my-8 bg-card rounded-3xl shadow-2xl overflow-hidden">
+      <div class="relative mx-auto max-w-md my-4 sm:my-8 bg-card rounded-xl sm:rounded-2xl lg:rounded-3xl shadow-2xl overflow-hidden">
         <!-- Header -->
-        <div class="bg-red-500/10 border-b border-red-500/20 px-6 py-4">
-          <div class="flex items-center gap-3">
-            <div class="w-10 h-10 bg-red-500/20 rounded-xl flex items-center justify-center">
-              <AppIcon icon="lucide:trash-2" size="20" class="text-red-500" />
+        <div class="bg-red-500/10 border-b border-red-500/20 px-4 sm:px-6 py-3 sm:py-4">
+          <div class="flex items-center gap-2 sm:gap-3">
+            <div class="w-8 h-8 sm:w-10 sm:h-10 bg-red-500/20 rounded-lg sm:rounded-xl flex items-center justify-center">
+              <AppIcon icon="lucide:trash-2" size="18" class="sm:w-5 sm:h-5 text-red-500" />
             </div>
             <div>
-              <h3 class="text-lg font-bold text-foreground">Delete Media Item</h3>
-              <p class="text-sm text-muted-foreground">This action cannot be undone</p>
+              <h3 class="text-base sm:text-lg font-bold text-foreground">Delete Media Item</h3>
+              <p class="text-xs sm:text-sm text-muted-foreground">This action cannot be undone</p>
             </div>
           </div>
         </div>
         
         <!-- Body -->
-        <div class="px-6 py-6">
+        <div class="px-4 sm:px-6 py-4 sm:py-6">
           <div class="space-y-4">
             <p class="text-sm text-muted-foreground">
               Are you sure you want to permanently delete this media item from the database?
@@ -1168,30 +1206,33 @@
         </div>
         
         <!-- Footer -->
-        <div class="bg-muted px-6 py-4 border-t border-border flex justify-end gap-3">
+        <div class="bg-muted px-4 sm:px-6 py-3 sm:py-4 border-t border-border flex flex-col sm:flex-row justify-end gap-2 sm:gap-3">
           <Button 
             @click="showDeleteConfirmation = false"
             variant="outline"
             :disabled="deleting"
+            size="sm"
+            class="w-full sm:w-auto"
           >
             Cancel
           </Button>
           <Button 
             @click="deleteMedia"
             :disabled="deleting"
-            class="bg-red-600 hover:bg-red-700 text-white border-red-600 hover:border-red-700"
+            size="sm"
+            class="w-full sm:w-auto bg-red-600 hover:bg-red-700 text-white border-red-600 hover:border-red-700"
           >
             <AppIcon 
               v-if="deleting" 
               icon="lucide:loader-2" 
-              size="16" 
-              class="animate-spin mr-2"
+              size="14" 
+              class="sm:w-4 sm:h-4 animate-spin mr-2"
             />
             <AppIcon 
               v-else 
               icon="lucide:trash-2" 
-              size="16" 
-              class="mr-2"
+              size="14" 
+              class="sm:w-4 sm:h-4 mr-2"
             />
             {{ deleting ? 'Deleting...' : 'Delete Permanently' }}
           </Button>
@@ -1425,8 +1466,8 @@ const getDisplayStatus = (media: ProcessedMedia) => {
 }
 
 const getStatusIcon = (media: ProcessedMedia) => {
-  // Use the same sailboat icon for all statuses, differentiate with color
-  return 'lucide:sailboat'
+  // Using white Vadarr icon for all statuses
+  return null // Not used anymore, replaced with img tag
 }
 
 const getStatusIconClass = (media: ProcessedMedia) => {
@@ -1816,6 +1857,46 @@ const retriggerMedia = async () => {
   }
 }
 
+const retriggerMediaFromCard = async (media: ProcessedMedia) => {
+  if (!media) return
+  
+  // Show confirmation dialog
+  const confirmed = confirm(
+    `Are you sure you want to re-trigger processing for "${media.title}"?\n\n` +
+    `This will:\n` +
+    `• Remove it from completed status\n` +
+    `• Set it to unprocessed (pending)\n` +
+    `• Queue it for processing by SeerrBridge again\n\n` +
+    `Click OK to confirm or Cancel to abort.`
+  )
+  
+  if (!confirmed) return
+  
+  try {
+    const response = await $fetch(`/api/retrigger-media/${media.id}`, {
+      method: 'POST'
+    })
+    
+    if (response && response.status === 'success') {
+      // Update the media status to pending
+      const index = mediaItems.value.findIndex(item => item.id === media.id)
+      if (index !== -1) {
+        mediaItems.value[index].status = 'pending'
+        mediaItems.value[index].display_status = 'pending'
+        mediaItems.value[index].processing_stage = 'retriggered'
+      }
+      
+      // Refresh the media list to update the UI
+      await refreshData()
+      
+      // Success - could add toast notification here
+    }
+  } catch (error) {
+    // Error retriggering media - could add toast notification here
+    console.error('Error retriggering media:', error)
+  }
+}
+
 const confirmDeleteMedia = () => {
   if (!selectedMedia.value) return
   showDeleteConfirmation.value = true
@@ -1933,7 +2014,14 @@ const handleScroll = () => {
 }
 
 const openModalForMediaId = async (mediaId: number) => {
-  // Wait for media to load first
+  // Wait for media to load first - wait for loading to complete
+  if (loading.value) {
+    // Wait for loading to finish
+    while (loading.value) {
+      await new Promise(resolve => setTimeout(resolve, 100))
+    }
+  }
+  
   await nextTick()
   
   // Find the media item with the specified ID
@@ -1956,15 +2044,24 @@ const openModalForMediaId = async (mediaId: number) => {
   }
 }
 
-// Watch for route changes to handle dynamic navigation
-watch(() => useRoute().query.mediaId, async (newMediaId) => {
+// Watch for route changes to handle dynamic navigation (after initial mount)
+let isInitialMount = true
+watch(() => useRoute().query.mediaId, async (newMediaId, oldMediaId) => {
+  // Skip on initial mount - handled in onMounted
+  if (isInitialMount) {
+    isInitialMount = false
+    return
+  }
+  
   if (newMediaId && typeof newMediaId === 'string') {
     const id = parseInt(newMediaId)
     if (!isNaN(id)) {
-      // Small delay to ensure the page is fully rendered
-      setTimeout(() => {
-        openModalForMediaId(id)
-      }, 100)
+      // Wait for page to be ready and data to load
+      await nextTick()
+      // Wait a bit more to ensure data is loaded
+      setTimeout(async () => {
+        await openModalForMediaId(id)
+      }, 300)
     }
   } else if (!newMediaId && showDetailsModal.value) {
     // Close modal if mediaId is removed from URL
@@ -1985,10 +2082,11 @@ onMounted(async () => {
   if (mediaId && typeof mediaId === 'string') {
     const id = parseInt(mediaId)
     if (!isNaN(id)) {
-      // Small delay to ensure the page is fully rendered
-      setTimeout(() => {
-        openModalForMediaId(id)
-      }, 100)
+      // Wait for data to be loaded before opening modal
+      await nextTick()
+      setTimeout(async () => {
+        await openModalForMediaId(id)
+      }, 300)
     }
   }
   
@@ -2023,5 +2121,186 @@ onUnmounted(() => {
   -webkit-line-clamp: 3;
   -webkit-box-orient: vertical;
   overflow: hidden;
+}
+
+/* Enhanced Glass Card - Rounded and Clean */
+.glass-card-enhanced {
+  background: rgba(255, 255, 255, 0.05);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  box-shadow: 
+    0 4px 24px 0 rgba(31, 38, 135, 0.12),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.03);
+  transition: all 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+  transform-style: preserve-3d;
+  perspective: 1000px;
+}
+
+.dark .glass-card-enhanced {
+  background: rgba(0, 0, 0, 0.6);
+  border: 1px solid rgba(130, 36, 227, 0.2);
+  box-shadow: 
+    0 4px 24px 0 rgba(0, 0, 0, 0.4),
+    0 0 0 1px rgba(130, 36, 227, 0.15),
+    inset 0 0 15px rgba(130, 36, 227, 0.1);
+}
+
+.glass-card-enhanced:hover {
+  border-color: rgba(130, 36, 227, 0.4);
+  box-shadow: 
+    0 12px 40px 0 rgba(130, 36, 227, 0.2),
+    0 0 0 1px rgba(130, 36, 227, 0.3),
+    inset 0 0 20px rgba(130, 36, 227, 0.12);
+  transform: translateY(-6px);
+}
+
+/* Staggered Fade In Animation */
+@keyframes fadeInUp {
+  from {
+    opacity: 0;
+    transform: translateY(30px) scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.animate-fade-in-up {
+  animation: fadeInUp 0.6s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+  opacity: 0;
+}
+
+/* Enhanced Status Badge */
+.status-badge-enhanced {
+  box-shadow: 
+    0 4px 20px rgba(0, 0, 0, 0.3),
+    0 0 0 1px rgba(255, 255, 255, 0.1),
+    inset 0 1px 0 rgba(255, 255, 255, 0.2);
+}
+
+.status-badge-enhanced:hover {
+  box-shadow: 
+    0 6px 30px rgba(130, 36, 227, 0.5),
+    0 0 0 1px rgba(255, 255, 255, 0.2),
+    inset 0 1px 0 rgba(255, 255, 255, 0.3);
+}
+
+/* Media Type Badge */
+.media-type-badge {
+  box-shadow: 
+    0 4px 15px rgba(0, 0, 0, 0.2),
+    inset 0 1px 0 rgba(255, 255, 255, 0.3);
+}
+
+/* Request Count Badge */
+.request-count-badge {
+  box-shadow: 
+    0 4px 15px rgba(130, 36, 227, 0.4),
+    inset 0 1px 0 rgba(255, 255, 255, 0.2);
+}
+
+/* Error Badge */
+.error-badge {
+  box-shadow: 
+    0 4px 20px rgba(239, 68, 68, 0.3),
+    inset 0 1px 0 rgba(255, 255, 255, 0.2);
+}
+
+/* Skeleton Card */
+.skeleton-card {
+  background: rgba(255, 255, 255, 0.03);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.dark .skeleton-card {
+  background: rgba(0, 0, 0, 0.4);
+  border: 1px solid rgba(130, 36, 227, 0.15);
+}
+
+/* Shimmer Animation */
+@keyframes shimmer {
+  0% {
+    transform: translateX(-100%) skewX(-15deg);
+  }
+  100% {
+    transform: translateX(200%) skewX(-15deg);
+  }
+}
+
+.animate-shimmer {
+  animation: shimmer 2s infinite;
+}
+
+/* Soft Pulse Animation */
+@keyframes pulse-soft {
+  0%, 100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.7;
+    transform: scale(1.05);
+  }
+}
+
+.animate-pulse-soft {
+  animation: pulse-soft 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+
+/* Media Type Badge - Color Palette Adherence */
+.media-type-movie {
+  background: hsl(var(--info) / 0.2);
+  color: hsl(var(--info));
+  border-color: hsl(var(--info) / 0.3);
+}
+
+.dark .media-type-movie {
+  background: hsl(var(--info) / 0.15);
+  color: hsl(var(--info));
+  border-color: hsl(var(--info) / 0.25);
+}
+
+.media-type-movie:hover {
+  border-color: hsl(var(--info) / 0.5);
+  background: hsl(var(--info) / 0.25);
+}
+
+.dark .media-type-movie:hover {
+  border-color: hsl(var(--info) / 0.4);
+  background: hsl(var(--info) / 0.2);
+}
+
+.media-type-tv {
+  background: hsl(var(--success) / 0.2);
+  color: hsl(var(--success));
+  border-color: hsl(var(--success) / 0.3);
+}
+
+.dark .media-type-tv {
+  background: hsl(var(--success) / 0.15);
+  color: hsl(var(--success));
+  border-color: hsl(var(--success) / 0.25);
+}
+
+.media-type-tv:hover {
+  border-color: hsl(var(--success) / 0.5);
+  background: hsl(var(--success) / 0.25);
+}
+
+.dark .media-type-tv:hover {
+  border-color: hsl(var(--success) / 0.4);
+  background: hsl(var(--success) / 0.2);
+}
+
+/* Responsive adjustments */
+@media (max-width: 640px) {
+  .glass-card-enhanced:hover {
+    transform: translateY(-4px);
+  }
 }
 </style>

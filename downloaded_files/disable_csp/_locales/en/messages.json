@@ -1,0 +1,20 @@
+{
+  "extensionName": {
+    "message": "Disable Content Security Policy (CSP)"
+  },
+  "extensionDescription": {
+    "message": "Disables the Content Security Policy (CSP) on web pages."
+  },
+  "optionsTitle": {
+    "message": "CSP Security Settings"
+  },
+  "cspExplanation": {
+    "message": "Content Security Policy (CSP) is a security feature that helps prevent certain types of attacks, such as Cross-Site Scripting (XSS) and data injection attacks. It works by restricting the sources from which content can be loaded."
+  },
+  "cspWarning": {
+    "message": "Disabling CSP can make your browsing experience less secure by allowing potentially harmful content to load on web pages."
+  },
+  "cspDisclaimer": {
+    "message": "Use this extension with caution. Only disable CSP if you understand the risks."
+  }
+}

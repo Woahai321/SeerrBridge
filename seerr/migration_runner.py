@@ -184,6 +184,19 @@ class MigrationRunner:
                 except Exception as e:
                     logger.warning(f"Could not check/modify status ENUM: {e}")
             
+            # Add sync_count column to trakt_lists table if it doesn't exist
+            if self.inspector.has_table('trakt_lists'):
+                if not self.check_column_exists('trakt_lists', 'sync_count'):
+                    logger.info("Adding sync_count column to trakt_lists table")
+                    alter_table_sql = text("""
+                        ALTER TABLE trakt_lists 
+                        ADD COLUMN sync_count INT NOT NULL DEFAULT 0 COMMENT 'Total number of times this list has been synced'
+                    """)
+                    self.db.execute(alter_table_sql)
+                    logger.success("Successfully added sync_count column to trakt_lists table")
+                else:
+                    logger.info("sync_count column already exists in trakt_lists table")
+            
             self.db.commit()
             logger.info("Database migration completed successfully")
             

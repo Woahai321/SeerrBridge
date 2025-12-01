@@ -1,5 +1,5 @@
 <template>
-  <div class="fixed top-4 right-4 z-50 space-y-2 max-h-[calc(100vh-2rem)] overflow-hidden pointer-events-none">
+  <div class="fixed top-4 right-4 z-[9999] space-y-2 max-h-[calc(100vh-2rem)] overflow-hidden pointer-events-none">
     <TransitionGroup name="notification" tag="div" class="flex flex-col-reverse space-y-reverse space-y-2">
       <div
         v-for="notification in displayedNotifications"
@@ -11,7 +11,7 @@
           <div class="flex-shrink-0">
             <AppIcon 
               :icon="getNotificationIcon(notification.type)" 
-              size="20" 
+              size="18" 
               :class="getNotificationIconClass(notification.type)"
             />
           </div>
@@ -31,7 +31,7 @@
             class="flex-shrink-0 text-muted-foreground hover:text-foreground transition-colors p-1 -mt-1 -mr-1"
             aria-label="Close notification"
           >
-            <AppIcon icon="lucide:x" size="16" />
+            <AppIcon icon="lucide:x" size="18" />
           </button>
         </div>
       </div>
@@ -149,11 +149,13 @@ watch(notifications, () => {
 
 // Clean up on unmount
 onMounted(async () => {
-  // Initialize notifications on startup
+  // Initialize notifications on startup FIRST (this sets pageLoadTime)
   await initializeNotifications()
   
-  // Set up auto-dismiss for all displayed notifications after initialization
+  // Wait a bit to ensure initialization is complete before starting polling
   await nextTick()
+  
+  // Set up auto-dismiss for all displayed notifications after initialization
   setupAllDisplayedNotifications()
   
   // Periodic check to ensure all displayed notifications have timers (safety net)
@@ -161,8 +163,9 @@ onMounted(async () => {
     setupAllDisplayedNotifications()
   }, 2000) // Check every 2 seconds
   
-  // Start polling for notifications
-  const stopPolling = startPolling(30000) // Poll every 30 seconds
+  // Start ultra real-time notification polling AFTER initialization
+  // This ensures pageLoadTime is set before any notifications are fetched
+  const stopPolling = startPolling(1000) // Ultra real-time: Poll every 1 second
 
   onUnmounted(() => {
     // Clear all timeouts and intervals

@@ -22,11 +22,14 @@ DB_PASSWORD = os.getenv('DB_PASSWORD', 'seerrbridge')
 # Create database URL
 DATABASE_URL = f"mysql+pymysql://{DB_USER}:{DB_PASSWORD}@{DB_HOST}:{DB_PORT}/{DB_NAME}?charset=utf8mb4"
 
-# Create engine
+# Create engine with proper connection pooling for async/concurrent access
 engine = create_engine(
     DATABASE_URL,
-    pool_pre_ping=True,
-    pool_recycle=300,
+    pool_pre_ping=True,  # Verify connections before using
+    pool_recycle=300,  # Recycle connections after 5 minutes
+    pool_size=10,  # Number of connections to maintain in pool
+    max_overflow=20,  # Maximum overflow connections
+    pool_timeout=30,  # Timeout for getting connection from pool
     echo=False  # Set to True for SQL debugging
 )
 
@@ -200,6 +203,102 @@ class ServiceStatus(Base):
     last_updated = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, index=True)
     created_at = Column(DateTime, default=datetime.utcnow)
 
+class TraktList(Base):
+    """Trakt list configuration table"""
+    __tablename__ = "trakt_lists"
+    
+    id = Column(Integer, primary_key=True)
+    list_identifier = Column(String(500), nullable=False, unique=True, index=True)  # URL or shortcut
+    list_type = Column(String(50), nullable=False, index=True)  # watchlist, custom, public, trending, popular, etc.
+    list_name = Column(String(500), nullable=True)  # User-friendly name
+    description = Column(Text, nullable=True)
+    item_count = Column(Integer, nullable=False, default=0)
+    sync_count = Column(Integer, nullable=False, default=0)  # Total number of times this list has been synced
+    last_synced = Column(DateTime, nullable=True, index=True)
+    last_sync_status = Column(String(20), nullable=True)  # success, error, partial
+    auto_sync = Column(Boolean, default=False, index=True)
+    sync_interval_hours = Column(Float, nullable=True)
+    is_active = Column(Boolean, default=True, index=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    
+    # Indexes
+    __table_args__ = (
+        Index('idx_list_type_active', 'list_type', 'is_active'),
+        Index('idx_last_synced', 'last_synced'),
+    )
+
+class TraktListSyncHistory(Base):
+    """Trakt list sync operation history"""
+    __tablename__ = "trakt_list_sync_history"
+    
+    id = Column(Integer, primary_key=True)
+    trakt_list_id = Column(Integer, ForeignKey('trakt_lists.id', ondelete='CASCADE'), nullable=False, index=True)
+    session_id = Column(String(100), nullable=False, unique=True, index=True)  # Unique session identifier
+    sync_type = Column(String(20), nullable=False, index=True)  # manual, automated, dry_run
+    status = Column(String(20), nullable=False, default='in_progress', index=True)  # in_progress, completed, failed, cancelled
+    start_time = Column(DateTime, nullable=False, default=datetime.utcnow, index=True)
+    end_time = Column(DateTime, nullable=True)
+    total_items = Column(Integer, nullable=False, default=0)
+    items_requested = Column(Integer, nullable=False, default=0)
+    items_already_requested = Column(Integer, nullable=False, default=0)
+    items_already_available = Column(Integer, nullable=False, default=0)
+    items_not_found = Column(Integer, nullable=False, default=0)
+    items_errors = Column(Integer, nullable=False, default=0)
+    error_message = Column(Text, nullable=True)
+    details = Column(JSON, nullable=True)  # Full sync details
+    created_at = Column(DateTime, default=datetime.utcnow)
+    
+    # Relationship
+    trakt_list = relationship("TraktList", backref="sync_history")
+    
+    # Indexes
+    __table_args__ = (
+        Index('idx_list_status', 'trakt_list_id', 'status'),
+        Index('idx_start_time', 'start_time'),
+    )
+
+class TraktListSyncItem(Base):
+    """Individual items processed during Trakt list sync"""
+    __tablename__ = "trakt_list_sync_items"
+    
+    id = Column(Integer, primary_key=True)
+    sync_history_id = Column(Integer, ForeignKey('trakt_list_sync_history.id', ondelete='CASCADE'), nullable=False, index=True)
+    # Note: unified_media_id is just an integer reference, not a foreign key constraint
+    # This is because unified_media uses a different Base class, so SQLAlchemy can't validate the FK
+    # The table already exists in the database, so referential integrity is maintained at the DB level
+    unified_media_id = Column(Integer, nullable=True, index=True)
+    
+    # Item identification
+    title = Column(String(500), nullable=False)
+    year = Column(Integer, nullable=True)
+    media_type = Column(String(20), nullable=False, index=True)  # movie, tv
+    tmdb_id = Column(Integer, nullable=True, index=True)
+    imdb_id = Column(String(20), nullable=True, index=True)
+    trakt_id = Column(String(20), nullable=True, index=True)
+    season_number = Column(Integer, nullable=True)  # For TV shows with specific seasons
+    
+    # Sync result
+    status = Column(String(50), nullable=False, index=True)  # requested, already_requested, already_available, not_found, error, skipped
+    match_method = Column(String(50), nullable=True)  # TMDB_ID_DIRECT, IMDB_TO_TMDB, TITLE_TO_TMDB, OVERSEERR_SEARCH_FALLBACK
+    error_message = Column(Text, nullable=True)
+    overseerr_request_id = Column(Integer, nullable=True, index=True)
+    
+    # Timestamps
+    synced_at = Column(DateTime, nullable=False, default=datetime.utcnow, index=True)
+    
+    # Relationships
+    sync_history = relationship("TraktListSyncHistory", backref="sync_items")
+    # Note: unified_media relationship removed because UnifiedMedia uses a different Base
+    # The foreign key still works for database integrity, we just query directly when needed
+    
+    # Indexes
+    __table_args__ = (
+        Index('idx_sync_status', 'sync_history_id', 'status'),
+        Index('idx_tmdb_media_type', 'tmdb_id', 'media_type'),
+        Index('idx_synced_at', 'synced_at'),
+    )
+
 # Add relationships
 LogType.displays = relationship("LogDisplay", back_populates="log_type")
 
@@ -214,7 +313,13 @@ def get_db() -> Session:
 def create_tables():
     """Create all tables"""
     try:
+        # Create tables from database.py Base
         Base.metadata.create_all(bind=engine)
+        
+        # Also create tables from unified_models.py Base (for unified_media table)
+        from seerr.unified_models import Base as UnifiedMediaBase
+        UnifiedMediaBase.metadata.create_all(bind=engine)
+        
         logger.info("Database tables created successfully")
     except Exception as e:
         logger.error(f"Error creating database tables: {e}")

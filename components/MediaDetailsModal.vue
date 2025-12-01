@@ -3,109 +3,109 @@
     <Transition name="modal">
       <div
         v-if="isOpen"
-        class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm"
+        class="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 bg-black/50 backdrop-blur-sm"
         @click="close"
       >
         <div
-          class="relative max-w-4xl w-full max-h-[90vh] overflow-y-auto bg-card border border-border rounded-2xl shadow-2xl"
+          class="relative max-w-4xl w-full max-h-[95vh] sm:max-h-[90vh] overflow-y-auto bg-card border border-border rounded-lg sm:rounded-xl lg:rounded-2xl shadow-2xl"
           @click.stop
         >
           <!-- Header -->
-          <div class="sticky top-0 z-10 flex items-center justify-between p-6 border-b border-border bg-card backdrop-blur-sm">
-            <h2 class="text-2xl font-bold text-foreground">
+          <div class="sticky top-0 z-10 flex items-center justify-between p-3 sm:p-4 lg:p-6 border-b border-border bg-card backdrop-blur-sm">
+            <h2 class="text-lg sm:text-xl lg:text-2xl font-bold text-foreground pr-2 truncate">
               {{ media ? getMediaTitle(media) : '' }}
             </h2>
             <button
               @click="close"
-              class="p-2 hover:bg-muted rounded-lg transition-colors"
+              class="p-1.5 sm:p-2 hover:bg-muted rounded-lg transition-colors flex-shrink-0"
             >
-              <Icon name="mdi:close" class="w-6 h-6" />
+              <Icon name="mdi:close" class="w-5 h-5 sm:w-6 sm:h-6" />
             </button>
           </div>
 
           <!-- Content -->
-          <div v-if="media" class="p-6">
+          <div v-if="media" class="p-3 sm:p-4 lg:p-6">
             <!-- Media Info -->
-            <div class="flex gap-6 mb-6">
+            <div class="flex flex-col sm:flex-row gap-4 sm:gap-6 mb-4 sm:mb-6">
               <!-- Poster -->
-              <div class="flex-shrink-0">
+              <div class="flex-shrink-0 self-center sm:self-start">
                 <img
                   v-if="getPosterUrl(media.posterPath)"
                   :src="getPosterUrl(media.posterPath)"
                   :alt="getMediaTitle(media)"
-                  class="w-48 rounded-lg"
+                  class="w-32 h-48 sm:w-40 sm:h-60 lg:w-48 lg:h-72 rounded-lg"
                 />
-                <div v-else class="w-48 h-72 bg-muted rounded-lg flex items-center justify-center">
-                  <Icon name="mdi:image-off" class="w-16 h-16 text-muted-foreground" />
+                <div v-else class="w-32 h-48 sm:w-40 sm:h-60 lg:w-48 lg:h-72 bg-muted rounded-lg flex items-center justify-center">
+                  <Icon name="mdi:image-off" class="w-12 h-12 sm:w-16 sm:h-16 text-muted-foreground" />
                 </div>
               </div>
 
               <!-- Details -->
-              <div class="flex-1">
-                <div class="flex items-center gap-2 mb-4">
-                  <span class="px-3 py-1 bg-primary text-primary-foreground text-sm font-semibold rounded-full">
+              <div class="flex-1 min-w-0">
+                <div class="flex flex-wrap items-center gap-1.5 sm:gap-2 mb-3 sm:mb-4">
+                  <span class="px-2 sm:px-3 py-0.5 sm:py-1 bg-primary text-primary-foreground text-xs sm:text-sm font-semibold rounded-full">
                     {{ getMediaTypeLabel(media) }}
                   </span>
-                  <span v-if="media.voteAverage" class="flex items-center gap-1 px-3 py-1 bg-yellow-500/20 text-yellow-400 text-sm font-semibold rounded-full">
-                    <Icon name="mdi:star" class="w-4 h-4" />
+                  <span v-if="media.voteAverage" class="flex items-center gap-1 px-2 sm:px-3 py-0.5 sm:py-1 bg-yellow-500/20 text-yellow-400 text-xs sm:text-sm font-semibold rounded-full">
+                    <Icon name="mdi:star" class="w-3 h-3 sm:w-4 sm:h-4" />
                     {{ formatVoteAverage(media.voteAverage) }}
                   </span>
-                  <span v-if="getMediaYear(media)" class="px-3 py-1 bg-muted text-sm rounded-full">
+                  <span v-if="getMediaYear(media)" class="px-2 sm:px-3 py-0.5 sm:py-1 bg-muted text-xs sm:text-sm rounded-full">
                     {{ getMediaYear(media) }}
                   </span>
                 </div>
 
-                <p v-if="media.overview" class="text-muted-foreground mb-6 line-clamp-4">
+                <p v-if="media.overview" class="text-sm sm:text-base text-muted-foreground mb-4 sm:mb-6 line-clamp-3 sm:line-clamp-4">
                   {{ media.overview }}
                 </p>
 
                 <!-- Availability Status -->
-                <div class="space-y-2">
-                  <div class="p-4 bg-muted rounded-lg">
-                    <h3 class="font-semibold text-foreground mb-2">Availability Status</h3>
+                <div class="space-y-2 sm:space-y-3">
+                  <div class="p-3 sm:p-4 bg-muted rounded-lg">
+                    <h3 class="text-sm sm:text-base font-semibold text-foreground mb-2 sm:mb-3">Availability Status</h3>
                     
                     <!-- If mediaInfo exists -->
-                    <div v-if="media.mediaInfo">
+                    <div v-if="media.mediaInfo" class="space-y-2">
                       <!-- Database Status -->
-                      <div class="flex items-center gap-2 mb-2">
+                      <div class="flex flex-wrap items-center gap-1.5 sm:gap-2">
                         <Icon
                           v-if="isLoadingStatus"
                           name="mdi:loading"
-                          class="w-5 h-5 animate-spin text-muted-foreground"
+                          class="w-4 h-4 sm:w-5 sm:h-5 animate-spin text-muted-foreground flex-shrink-0"
                         />
                         <Icon
                           v-else
                           :name="inDatabase ? 'mdi:database-check' : 'mdi:database-remove'"
                           :class="inDatabase ? 'text-primary' : 'text-muted-foreground'"
-                          class="w-5 h-5"
+                          class="w-4 h-4 sm:w-5 sm:h-5 flex-shrink-0"
                         />
-                        <span class="text-sm font-medium text-foreground">In SeerrBridge Database:</span>
-                        <span :class="inDatabase ? 'bg-success/20 text-success' : 'bg-muted/20 text-muted-foreground'" class="px-2 py-1 text-xs font-semibold rounded">
+                        <span class="text-xs sm:text-sm font-medium text-foreground">In SeerrBridge Database:</span>
+                        <span :class="inDatabase ? 'bg-success/20 text-success' : 'bg-muted/20 text-muted-foreground'" class="px-1.5 sm:px-2 py-0.5 sm:py-1 text-[10px] sm:text-xs font-semibold rounded">
                           {{ isLoadingStatus ? 'Checking...' : (inDatabase ? 'Yes' : 'No') }}
                         </span>
                       </div>
 
                       <!-- Overseerr Status -->
-                      <div class="flex items-center gap-2">
+                      <div class="flex flex-wrap items-center gap-1.5 sm:gap-2">
                         <Icon
                           :name="getStatusIcon(media.mediaInfo.status)"
                           :class="getStatusColor(media.mediaInfo.status)"
-                          class="w-5 h-5"
+                          class="w-4 h-4 sm:w-5 sm:h-5 flex-shrink-0"
                         />
-                        <span class="text-sm font-medium text-foreground">Overseerr Status:</span>
-                        <span :class="getStatusBadgeClass(media.mediaInfo.status)" class="px-2 py-1 text-xs font-semibold rounded">
+                        <span class="text-xs sm:text-sm font-medium text-foreground">Overseerr Status:</span>
+                        <span :class="getStatusBadgeClass(media.mediaInfo.status)" class="px-1.5 sm:px-2 py-0.5 sm:py-1 text-[10px] sm:text-xs font-semibold rounded">
                           {{ getStatusText(media.mediaInfo.status) }}
                         </span>
                       </div>
 
                       <!-- 4K Status if applicable -->
-                      <div v-if="media.mediaInfo.status4k" class="flex items-center gap-2 mt-2">
+                      <div v-if="media.mediaInfo.status4k" class="flex flex-wrap items-center gap-1.5 sm:gap-2">
                         <Icon
                           name="mdi:4k-box"
-                          class="w-5 h-5 text-purple-400"
+                          class="w-4 h-4 sm:w-5 sm:h-5 text-primary flex-shrink-0"
                         />
-                        <span class="text-sm font-medium text-foreground">4K Status:</span>
-                        <span :class="getStatusBadgeClass(media.mediaInfo.status4k)" class="px-2 py-1 text-xs font-semibold rounded">
+                        <span class="text-xs sm:text-sm font-medium text-foreground">4K Status:</span>
+                        <span :class="getStatusBadgeClass(media.mediaInfo.status4k)" class="px-1.5 sm:px-2 py-0.5 sm:py-1 text-[10px] sm:text-xs font-semibold rounded">
                           {{ getStatusText(media.mediaInfo.status4k) }}
                         </span>
                       </div>
@@ -113,12 +113,12 @@
 
                     <!-- If mediaInfo doesn't exist -->
                     <div v-else>
-                      <div class="flex items-center gap-2">
+                      <div class="flex items-center gap-1.5 sm:gap-2">
                         <Icon
                           name="mdi:information-outline"
-                          class="w-5 h-5 text-muted-foreground"
+                          class="w-4 h-4 sm:w-5 sm:h-5 text-muted-foreground flex-shrink-0"
                         />
-                        <span class="text-sm font-medium text-muted-foreground">Not available in database</span>
+                        <span class="text-xs sm:text-sm font-medium text-muted-foreground">Not available in database</span>
                       </div>
                     </div>
                   </div>
@@ -128,80 +128,80 @@
                     v-if="canRequest"
                     @click="handleRequest"
                     :disabled="isRequesting"
-                    class="w-full py-3 px-6 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed transition-colors font-medium flex items-center justify-center gap-2"
+                    class="w-full py-2.5 sm:py-3 px-4 sm:px-6 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed transition-colors font-medium flex items-center justify-center gap-2 text-sm sm:text-base"
                   >
-                    <Icon v-if="!isRequesting" name="mdi:plus-circle" class="w-5 h-5" />
-                    <Icon v-else name="mdi:loading" class="w-5 h-5 animate-spin" />
+                    <Icon v-if="!isRequesting" name="mdi:plus-circle" class="w-4 h-4 sm:w-5 sm:h-5" />
+                    <Icon v-else name="mdi:loading" class="w-4 h-4 sm:w-5 sm:h-5 animate-spin" />
                     <span>{{ isRequesting ? 'Requesting...' : 'Request this ' + getMediaTypeLabel(media) }}</span>
                   </button>
 
                   <!-- Already Available -->
                   <div
                     v-if="isAvailable"
-                    class="w-full py-3 px-6 bg-success/20 text-success rounded-lg flex items-center justify-center gap-2"
+                    class="w-full py-2.5 sm:py-3 px-4 sm:px-6 bg-success/20 text-success rounded-lg flex items-center justify-center gap-2"
                   >
-                    <Icon name="mdi:check-circle" class="w-5 h-5" />
-                    <span class="font-medium">Already Available</span>
+                    <Icon name="mdi:check-circle" class="w-4 h-4 sm:w-5 sm:h-5" />
+                    <span class="text-sm sm:text-base font-medium">Already Available</span>
                   </div>
                 </div>
               </div>
             </div>
 
             <!-- Season Selection for TV Shows -->
-            <div v-if="media.mediaType === 'tv' && seasons.length > 0" class="mt-6 pt-6 border-t border-border">
-              <h3 class="text-lg font-semibold text-foreground mb-4">Select Seasons</h3>
-              <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3 max-h-96 overflow-y-auto p-4 bg-muted rounded-lg">
+            <div v-if="media.mediaType === 'tv' && seasons.length > 0" class="mt-4 sm:mt-6 pt-4 sm:pt-6 border-t border-border">
+              <h3 class="text-base sm:text-lg font-semibold text-foreground mb-3 sm:mb-4">Select Seasons</h3>
+              <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-2 sm:gap-3 max-h-64 sm:max-h-96 overflow-y-auto p-2 sm:p-4 bg-muted rounded-lg">
                 <label
                   v-for="season in seasons"
                   :key="season.id"
-                  class="flex items-center gap-2 p-3 bg-card border border-border rounded-lg hover:border-primary transition-colors cursor-pointer"
+                  class="flex items-center gap-1.5 sm:gap-2 p-2 sm:p-3 bg-card border border-border rounded-lg hover:border-primary transition-colors cursor-pointer"
                   :class="{ 'border-primary bg-primary/10': selectedSeasons.includes(season.seasonNumber) }"
                 >
                   <input
                     v-model="selectedSeasons"
                     type="checkbox"
                     :value="season.seasonNumber"
-                    class="w-4 h-4 text-primary rounded focus:ring-primary"
+                    class="w-3.5 h-3.5 sm:w-4 sm:h-4 text-primary rounded focus:ring-primary flex-shrink-0"
                   />
-                  <span class="text-sm font-medium text-foreground">
+                  <span class="text-xs sm:text-sm font-medium text-foreground truncate">
                     Season {{ season.seasonNumber }}
                   </span>
-                  <span v-if="season.episodeCount" class="text-xs text-muted-foreground">
-                    ({{ season.episodeCount }} eps)
+                  <span v-if="season.episodeCount" class="text-[10px] sm:text-xs text-muted-foreground flex-shrink-0">
+                    ({{ season.episodeCount }})
                   </span>
                 </label>
               </div>
             </div>
 
             <!-- Additional Info -->
-            <div v-if="media.mediaInfo" class="grid grid-cols-2 gap-4 mt-6 pt-6 border-t border-border">
+            <div v-if="media.mediaInfo" class="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4 mt-4 sm:mt-6 pt-4 sm:pt-6 border-t border-border">
               <div>
-                <p class="text-sm text-muted-foreground mb-1">TMDB ID</p>
-                <p class="text-foreground font-medium">{{ media.mediaInfo.tmdbId }}</p>
+                <p class="text-xs sm:text-sm text-muted-foreground mb-0.5 sm:mb-1">TMDB ID</p>
+                <p class="text-sm sm:text-base text-foreground font-medium break-all">{{ media.mediaInfo.tmdbId }}</p>
               </div>
               <div>
-                <p class="text-sm text-muted-foreground mb-1">TVDB ID</p>
-                <p class="text-foreground font-medium">{{ media.mediaInfo.tvdbId || 'N/A' }}</p>
+                <p class="text-xs sm:text-sm text-muted-foreground mb-0.5 sm:mb-1">TVDB ID</p>
+                <p class="text-sm sm:text-base text-foreground font-medium">{{ media.mediaInfo.tvdbId || 'N/A' }}</p>
               </div>
               <div v-if="media.imdbId">
-                <p class="text-sm text-muted-foreground mb-1">IMDB ID</p>
-                <p class="text-foreground font-medium">{{ media.imdbId }}</p>
+                <p class="text-xs sm:text-sm text-muted-foreground mb-0.5 sm:mb-1">IMDB ID</p>
+                <p class="text-sm sm:text-base text-foreground font-medium break-all">{{ media.imdbId }}</p>
                 <!-- Debrid Media Manager Link -->
-                <div class="mt-2">
+                <div class="mt-1.5 sm:mt-2">
                   <a 
                     :href="getDebridMediaManagerUrl(media)" 
                     target="_blank" 
                     rel="noopener noreferrer"
-                    class="inline-flex items-center gap-1 text-xs text-primary hover:text-primary/80 transition-colors"
+                    class="inline-flex items-center gap-1 text-[10px] sm:text-xs text-primary hover:text-primary/80 transition-colors"
                   >
-                    <Icon name="mdi:external-link" class="w-3 h-3" />
-                    View in Debrid Media Manager
+                    <Icon name="mdi:external-link" class="w-3 h-3 flex-shrink-0" />
+                    <span class="break-all">View in Debrid Media Manager</span>
                   </a>
                 </div>
               </div>
               <div v-if="media.mediaInfo.mediaType === 'tv'">
-                <p class="text-sm text-muted-foreground mb-1">First Air Date</p>
-                <p class="text-foreground font-medium">{{ formatDate(media.firstAirDate) }}</p>
+                <p class="text-xs sm:text-sm text-muted-foreground mb-0.5 sm:mb-1">First Air Date</p>
+                <p class="text-sm sm:text-base text-foreground font-medium">{{ formatDate(media.firstAirDate) }}</p>
               </div>
             </div>
           </div>

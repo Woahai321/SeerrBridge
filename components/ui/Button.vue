@@ -3,7 +3,7 @@
     :is="as"
     :class="buttonClass"
     :disabled="disabled"
-    v-bind="$attrs"
+    v-bind="attrs"
   >
     <slot />
   </component>
@@ -23,6 +23,8 @@ const props = withDefaults(defineProps<Props>(), {
   disabled: false,
   as: 'button'
 })
+
+const attrs = useAttrs()
 
 const buttonClass = computed(() => {
   const baseClass = 'inline-flex items-center justify-center rounded-lg font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50'

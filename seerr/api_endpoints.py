@@ -2,9 +2,12 @@
 API endpoints for SeerrBridge
 Handles HTTP requests for configuration and task management
 """
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
+from pydantic import BaseModel
+from typing import Optional
 import asyncio
+import json
 from seerr.task_config_manager import task_config
 from seerr.background_tasks import refresh_all_scheduled_tasks, refresh_queue_sizes
 from seerr.db_logger import log_info, log_error
@@ -354,6 +357,476 @@ async def health_check():
         "status": "healthy",
         "service": "SeerrBridge API"
     }
+
+class TraktListFetchRequest(BaseModel):
+    listId: str
+    limit: Optional[int] = None
+    listType: Optional[str] = None
+
+@app.post("/trakt-lists/fetch")
+async def fetch_trakt_list(request_data: TraktListFetchRequest):
+    """Fetch items from a Trakt list or Letterboxd list"""
+    try:
+        list_id = request_data.listId
+        limit = request_data.limit
+        list_type = request_data.listType
+        
+        # Auto-detect list type if not provided
+        if not list_type:
+            list_id_lower = list_id.lower()
+            if 'letterboxd.com' in list_id_lower or list_id_lower.startswith('letterboxd/'):
+                list_type = "letterboxd"
+            else:
+                list_type = "trakt"
+        
+        if not list_id:
+            raise HTTPException(status_code=400, detail="listId is required")
+        
+        log_info("API", f"Fetching {list_type} list: {list_id}", module="api_endpoints", function="fetch_trakt_list")
+        
+        # Route to appropriate provider based on list type
+        if list_type == "letterboxd":
+            from seerr.letterboxd_lists import fetch_letterboxd_list
+            import concurrent.futures
+            # Run HTTP requests in a thread executor to avoid blocking the async event loop
+            # requests.get() is blocking I/O, so we run it in a separate thread
+            log_info("API", f"Starting Letterboxd list fetch in thread executor", module="api_endpoints", function="fetch_trakt_list")
+            with concurrent.futures.ThreadPoolExecutor() as executor:
+                future = executor.submit(fetch_letterboxd_list, list_id, limit if limit else None)
+                try:
+                    items = future.result(timeout=300)  # 5 minute timeout
+                    log_info("API", f"Letterboxd list fetch completed. Got {len(items)} items", module="api_endpoints", function="fetch_trakt_list")
+                except concurrent.futures.TimeoutError:
+                    log_error("API Error", f"Letterboxd list fetch timed out after 5 minutes", module="api_endpoints", function="fetch_trakt_list")
+                    raise HTTPException(status_code=504, detail="Letterboxd list fetch timed out")
+                except Exception as e:
+                    log_error("API Error", f"Error in Letterboxd list fetch thread: {e}", module="api_endpoints", function="fetch_trakt_list")
+                    raise
+        else:
+            from seerr.trakt_lists import fetch_trakt_list
+            items = fetch_trakt_list(list_id, limit=limit if limit else None)
+        
+        return {
+            "success": True,
+            "items": items,
+            "count": len(items)
+        }
+    except ValueError as e:
+        log_error("API Error", f"Error fetching list: {e}", module="api_endpoints", function="fetch_trakt_list")
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        log_error("API Error", f"Error fetching list: {e}", module="api_endpoints", function="fetch_trakt_list")
+        raise HTTPException(status_code=500, detail=str(e))
+
+class TraktSearchByImdbRequest(BaseModel):
+    imdb_id: str
+
+@app.post("/trakt-lists/search-by-imdb")
+async def search_trakt_by_imdb(request_data: TraktSearchByImdbRequest):
+    """Search Trakt by IMDB ID to get TMDB ID"""
+    try:
+        from seerr.trakt_lists import search_trakt_by_imdb_id
+        
+        imdb_id = request_data.imdb_id
+        
+        if not imdb_id:
+            raise HTTPException(status_code=400, detail="imdb_id is required")
+        
+        result = search_trakt_by_imdb_id(imdb_id)
+        
+        if result and result.get('tmdb_id'):
+            return {
+                "success": True,
+                "tmdb_id": result['tmdb_id']
+            }
+        else:
+            return {
+                "success": False,
+                "error": "No TMDB ID found"
+            }
+    except Exception as e:
+        log_error("API Error", f"Error searching Trakt by IMDB: {e}", module="api_endpoints", function="search_trakt_by_imdb")
+        raise HTTPException(status_code=500, detail=str(e))
+
+class TraktSearchByTitleRequest(BaseModel):
+    title: str
+    year: Optional[int] = None
+    media_type: str = 'movie'
+
+@app.post("/trakt-lists/search-by-title")
+async def search_trakt_by_title(request_data: TraktSearchByTitleRequest):
+    """Search Trakt by title and year to get TMDB ID"""
+    try:
+        from seerr.trakt_lists import search_trakt_by_title
+        
+        title = request_data.title
+        year = request_data.year
+        media_type = request_data.media_type
+        
+        if not title:
+            raise HTTPException(status_code=400, detail="title is required")
+        
+        result = search_trakt_by_title(title, year, media_type)
+        
+        if result and result.get('tmdb_id'):
+            return {
+                "success": True,
+                "tmdb_id": result['tmdb_id']
+            }
+        else:
+            return {
+                "success": False,
+                "error": "No TMDB ID found"
+            }
+    except Exception as e:
+        log_error("API Error", f"Error searching Trakt by title: {e}", module="api_endpoints", function="search_trakt_by_title")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/trakt-lists/get-or-create")
+async def get_or_create_list(request_data: TraktListFetchRequest):
+    """Get or create a Trakt list in the database"""
+    try:
+        from seerr.trakt_list_manager import get_or_create_trakt_list
+        
+        list_identifier = request_data.listId
+        list_name = request_data.listId  # Use listId as name by default
+        list_type = request_data.listType
+        
+        trakt_list = get_or_create_trakt_list(
+            list_identifier=list_identifier,
+            list_type=list_type,
+            list_name=list_name
+        )
+        
+        # trakt_list is now a dictionary, not a SQLAlchemy object
+        return {
+            "success": True,
+            "listId": trakt_list['id'],
+            "listIdentifier": trakt_list['list_identifier'],
+            "listName": trakt_list['list_name'],
+            "listType": trakt_list['list_type'],
+            "syncCount": trakt_list.get('sync_count', 0) or 0
+        }
+    except Exception as e:
+        log_error("API Error", f"Error getting/creating Trakt list: {e}", module="api_endpoints", function="get_or_create_list")
+        raise HTTPException(status_code=500, detail=str(e))
+
+class CreateSyncHistoryRequest(BaseModel):
+    traktListId: int
+    syncType: str = 'manual'
+    totalItems: int = 0
+
+@app.post("/trakt-lists/create-sync-history")
+async def create_sync_history(request_data: CreateSyncHistoryRequest):
+    """Create a new sync history record"""
+    try:
+        from seerr.trakt_list_manager import create_sync_history
+        
+        sync_history = create_sync_history(
+            trakt_list_id=request_data.traktListId,
+            sync_type=request_data.syncType,
+            total_items=request_data.totalItems
+        )
+        
+        # sync_history is now a dictionary, not a SQLAlchemy object
+        return {
+            "success": True,
+            "sessionId": sync_history['sessionId'],
+            "syncHistoryId": sync_history['id']
+        }
+    except Exception as e:
+        log_error("API Error", f"Error creating sync history: {e}", module="api_endpoints", function="create_sync_history")
+        raise HTTPException(status_code=500, detail=str(e))
+
+class SaveSyncItemRequest(BaseModel):
+    sessionId: str
+    item: dict
+    status: str
+    matchMethod: Optional[str] = None
+    errorMessage: Optional[str] = None
+    overseerrRequestId: Optional[int] = None
+
+@app.post("/trakt-lists/save-sync-item")
+async def save_sync_item(request_data: SaveSyncItemRequest):
+    """Save a sync item to the database"""
+    try:
+        from seerr.trakt_list_manager import get_sync_history_by_session, save_sync_item
+        
+        # Get sync history to get the ID
+        sync_history = get_sync_history_by_session(request_data.sessionId)
+        if not sync_history:
+            raise HTTPException(status_code=404, detail="Sync history not found")
+        
+        item_id = save_sync_item(
+            sync_history_id=sync_history.id,
+            item=request_data.item,
+            status=request_data.status,
+            match_method=request_data.matchMethod,
+            error_message=request_data.errorMessage,
+            overseerr_request_id=request_data.overseerrRequestId
+        )
+        
+        return {
+            "success": True,
+            "itemId": item_id
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        log_error("API Error", f"Error saving sync item: {e}", module="api_endpoints", function="save_sync_item")
+        raise HTTPException(status_code=500, detail=str(e))
+
+class UpdateSyncHistoryRequest(BaseModel):
+    sessionId: str
+    status: str
+    itemsRequested: int = 0
+    itemsAlreadyRequested: int = 0
+    itemsAlreadyAvailable: int = 0
+    itemsNotFound: int = 0
+    itemsErrors: int = 0
+    errorMessage: Optional[str] = None
+    details: Optional[dict] = None
+
+@app.post("/trakt-lists/update-sync-history")
+async def update_sync_history(request_data: UpdateSyncHistoryRequest):
+    """Update sync history with final results"""
+    try:
+        from seerr.trakt_list_manager import update_sync_history
+        
+        success = update_sync_history(
+            session_id=request_data.sessionId,
+            status=request_data.status,
+            items_requested=request_data.itemsRequested,
+            items_already_requested=request_data.itemsAlreadyRequested,
+            items_already_available=request_data.itemsAlreadyAvailable,
+            items_not_found=request_data.itemsNotFound,
+            items_errors=request_data.itemsErrors,
+            error_message=request_data.errorMessage
+        )
+        
+        return {
+            "success": success
+        }
+    except Exception as e:
+        log_error("API Error", f"Error updating sync history: {e}", module="api_endpoints", function="update_sync_history")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/trakt-lists")
+async def get_trakt_lists(active_only: bool = True):
+    """Get all Trakt lists"""
+    try:
+        from seerr.trakt_list_manager import get_trakt_lists_with_totals
+        
+        lists_with_totals = get_trakt_lists_with_totals(active_only=active_only)
+        
+        return {
+            "success": True,
+            "lists": [
+                {
+                    "id": item['list']['id'],
+                    "listIdentifier": item['list']['list_identifier'],
+                    "listName": item['list']['list_name'],
+                    "listType": item['list']['list_type'],
+                    "itemCount": item['total_items'],  # Total items from get_sync_items_for_list
+                    "syncCount": item['list']['sync_count'],
+                    "lastSynced": item['list']['last_synced'],
+                    "lastSyncStatus": item['list']['last_sync_status'],
+                    "autoSync": item['list']['auto_sync'],
+                    "syncIntervalHours": item['list']['sync_interval_hours'],
+                    "isActive": item['list']['is_active'],
+                    "createdAt": item['list']['created_at'],
+                    "updatedAt": item['list']['updated_at']
+                }
+                for item in lists_with_totals
+            ]
+        }
+    except Exception as e:
+        log_error("API Error", f"Error getting Trakt lists: {e}", module="api_endpoints", function="get_trakt_lists")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/trakt-lists/history/{session_id}/items")
+async def get_sync_history_items(session_id: str):
+    """Get all items for a specific sync session"""
+    import asyncio
+    from concurrent.futures import ThreadPoolExecutor
+    
+    def _get_items_sync():
+        """Synchronous function to run in thread pool"""
+        from seerr.trakt_list_manager import get_sync_history_by_session
+        from seerr.database import TraktListSyncItem, get_db
+        
+        # First verify the sync history exists
+        sync_history = get_sync_history_by_session(session_id)
+        if not sync_history:
+            return None
+        
+        # Query items directly to avoid lazy loading issues
+        db = get_db()
+        try:
+            items = db.query(TraktListSyncItem).filter(
+                TraktListSyncItem.sync_history_id == sync_history.id
+            ).order_by(TraktListSyncItem.synced_at.desc()).all()
+            
+            # Convert to dicts while session is still open
+            items_data = [
+                {
+                    "id": item.id,
+                    "title": item.title,
+                    "year": item.year,
+                    "mediaType": item.media_type,
+                    "tmdbId": item.tmdb_id,
+                    "imdbId": item.imdb_id,
+                    "seasonNumber": item.season_number,
+                    "status": item.status,
+                    "matchMethod": item.match_method,
+                    "errorMessage": item.error_message,
+                    "overseerrRequestId": item.overseerr_request_id,
+                    "unifiedMediaId": item.unified_media_id,
+                    "syncedAt": item.synced_at.isoformat() if item.synced_at else None
+                }
+                for item in items
+            ]
+            return items_data
+        finally:
+            db.close()
+    
+    try:
+        # Run database operations in thread pool to avoid blocking event loop
+        loop = asyncio.get_event_loop()
+        with ThreadPoolExecutor() as executor:
+            items_data = await loop.run_in_executor(executor, _get_items_sync)
+        
+        if items_data is None:
+            raise HTTPException(status_code=404, detail="Sync history not found")
+        
+        return {
+            "success": True,
+            "items": items_data
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        log_error("API Error", f"Error getting sync history items: {e}", module="api_endpoints", function="get_sync_history_items")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/trakt-lists/history")
+async def get_all_sync_history(limit: int = 100):
+    """Get all sync history records across all lists"""
+    try:
+        from seerr.trakt_list_manager import get_all_sync_history
+        
+        history = get_all_sync_history(limit=limit)
+        
+        return {
+            "success": True,
+            "history": history,
+            "count": len(history)
+        }
+    except Exception as e:
+        log_error("API Error", f"Error getting all sync history: {e}", module="api_endpoints", function="get_all_sync_history")
+        raise HTTPException(status_code=500, detail=str(e))
+
+# IMPORTANT: More specific routes must be defined BEFORE more general ones
+# /trakt-lists/{list_id}/items must come before /trakt-lists/{list_id}/history
+@app.get("/trakt-lists/{list_id}/items")
+async def get_list_items(list_id: int):
+    """Get all unique items from database sync history for a specific list"""
+    try:
+        from seerr.trakt_list_manager import get_sync_items_for_list
+        
+        log_info("API", f"Getting items for list ID: {list_id}", module="api_endpoints", function="get_list_items")
+        
+        items = get_sync_items_for_list(list_id, limit=1000)
+        
+        log_info("API", f"Found {len(items)} items for list ID: {list_id}", module="api_endpoints", function="get_list_items")
+        
+        # Convert to format expected by frontend
+        items_formatted = [
+            {
+                "title": item.get("title"),
+                "year": item.get("year"),
+                "media_type": item.get("media_type"),
+                "tmdb_id": item.get("tmdb_id"),
+                "imdb_id": item.get("imdb_id"),
+                "overview": item.get("overview"),
+                "status": item.get("status"),
+                "match_method": item.get("match_method"),
+                "error_message": item.get("error_message"),
+                "unified_media_id": item.get("unified_media_id"),
+                # Cached image information - ONLY cached images, no external URLs
+                "has_poster_image": item.get("has_poster_image", False),
+                "poster_image_format": item.get("poster_image_format"),
+                "has_thumb_image": item.get("has_thumb_image", False),
+                "thumb_image_format": item.get("thumb_image_format"),
+                "has_fanart_image": item.get("has_fanart_image", False),
+                "fanart_image_format": item.get("fanart_image_format")
+            }
+            for item in items
+        ]
+        
+        return {
+            "success": True,
+            "items": items_formatted,
+            "count": len(items_formatted),
+            "source": "database"  # Indicate these came from database, not Trakt API
+        }
+    except Exception as e:
+        log_error("API Error", f"Error getting list items: {e}", module="api_endpoints", function="get_list_items")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/trakt-lists/{list_id}/history")
+async def get_list_sync_history(list_id: int, limit: int = 50):
+    """Get sync history for a specific list"""
+    try:
+        from seerr.trakt_list_manager import get_sync_history
+        
+        history = get_sync_history(trakt_list_id=list_id, limit=limit)
+        
+        return {
+            "success": True,
+            "history": [
+                {
+                    "id": h.id,
+                    "sessionId": h.session_id,
+                    "syncType": h.sync_type,
+                    "status": h.status,
+                    "startTime": h.start_time.isoformat(),
+                    "endTime": h.end_time.isoformat() if h.end_time else None,
+                    "totalItems": h.total_items,
+                    "itemsRequested": h.items_requested,
+                    "itemsAlreadyRequested": h.items_already_requested,
+                    "itemsAlreadyAvailable": h.items_already_available,
+                    "itemsNotFound": h.items_not_found,
+                    "itemsErrors": h.items_errors,
+                    "errorMessage": h.error_message
+                }
+                for h in history
+            ]
+        }
+    except Exception as e:
+        log_error("API Error", f"Error getting sync history: {e}", module="api_endpoints", function="get_list_sync_history")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.delete("/trakt-lists/{list_id}")
+async def delete_trakt_list_endpoint(list_id: int):
+    """Delete a Trakt list"""
+    try:
+        from seerr.trakt_list_manager import delete_trakt_list
+        
+        success = delete_trakt_list(list_id)
+        
+        if success:
+            return {
+                "success": True,
+                "message": "List deleted successfully"
+            }
+        else:
+            raise HTTPException(status_code=404, detail="List not found")
+    except HTTPException:
+        raise
+    except Exception as e:
+        log_error("API Error", f"Error deleting Trakt list: {e}", module="api_endpoints", function="delete_trakt_list_endpoint")
+        raise HTTPException(status_code=500, detail=str(e))
 
 if __name__ == "__main__":
     import uvicorn

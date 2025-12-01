@@ -310,15 +310,29 @@ export default defineEventHandler(async (event) => {
       return mediaItem
     }).filter((item: any) => item !== null)
     
-    // Get statistics - we'll calculate these after processing the media items
-    // to ensure consistency with display_status logic
+    // Get statistics directly from unified_media table
+    // This ensures we're checking the actual database status, not just fetched results
     const statsQuery = `
       SELECT 
         COUNT(*) as total_media,
         COUNT(CASE WHEN media_type = 'movie' THEN 1 END) as total_movies,
         COUNT(CASE WHEN media_type = 'tv' THEN 1 END) as total_tv_shows,
         COUNT(CASE WHEN is_subscribed = TRUE THEN 1 END) as subscribed_count,
-        COUNT(CASE WHEN created_at >= DATE_SUB(NOW(), INTERVAL 24 HOUR) THEN 1 END) as recent_activity_24h
+        COUNT(CASE WHEN created_at >= DATE_SUB(NOW(), INTERVAL 24 HOUR) THEN 1 END) as recent_activity_24h,
+        -- Completed items: status = 'completed' in unified_media table
+        COUNT(CASE WHEN status = 'completed' THEN 1 END) as completed_count,
+        COUNT(CASE WHEN status = 'completed' AND media_type = 'movie' THEN 1 END) as movies_completed,
+        COUNT(CASE WHEN status = 'completed' AND media_type = 'tv' THEN 1 END) as tv_completed,
+        -- Processing items: status = 'processing' in unified_media table
+        COUNT(CASE WHEN status = 'processing' THEN 1 END) as processing_count,
+        COUNT(CASE WHEN status = 'processing' AND media_type = 'movie' THEN 1 END) as movies_processing,
+        COUNT(CASE WHEN status = 'processing' AND media_type = 'tv' THEN 1 END) as tv_processing,
+        -- Failed items: status = 'failed' in unified_media table
+        COUNT(CASE WHEN status = 'failed' THEN 1 END) as failed_count,
+        COUNT(CASE WHEN status = 'failed' AND media_type = 'movie' THEN 1 END) as movies_failed,
+        COUNT(CASE WHEN status = 'failed' AND media_type = 'tv' THEN 1 END) as tv_failed,
+        -- Pending items: status = 'pending' in unified_media table
+        COUNT(CASE WHEN status = 'pending' THEN 1 END) as pending_count
       FROM unified_media
       ${whereClause}
     `
@@ -328,46 +342,21 @@ export default defineEventHandler(async (event) => {
       : await db.execute(statsQuery, [])
     const baseStats = (statsResult as any)[0][0]
     
-    // Calculate status-based statistics using the same logic as display_status
-    let completedCount = 0
-    let processingCount = 0
-    let failedCount = 0
-    let pendingCount = 0
-    let moviesCompleted = 0
-    let moviesProcessing = 0
-    let moviesFailed = 0
-    let tvCompleted = 0
-    let tvProcessing = 0
-    let tvFailed = 0
-    
-    media.forEach((mediaItem: any) => {
-      const displayStatus = mediaItem.display_status || mediaItem.status
-      
-      // Count by display status - handle the new season-based logic
-      if (displayStatus === 'completed') {
-        completedCount++
-        if (mediaItem.media_type === 'movie') moviesCompleted++
-        if (mediaItem.media_type === 'tv') tvCompleted++
-      } else if (displayStatus === 'processing') {
-        processingCount++
-        if (mediaItem.media_type === 'movie') moviesProcessing++
-        if (mediaItem.media_type === 'tv') tvProcessing++
-      } else if (displayStatus === 'failed') {
-        failedCount++
-        if (mediaItem.media_type === 'movie') moviesFailed++
-        if (mediaItem.media_type === 'tv') tvFailed++
-      } else if (typeof displayStatus === 'string' && displayStatus.includes('/')) {
-        // Handle progress format like "9/9" - count as processing for TV shows
-        processingCount++
-        if (mediaItem.media_type === 'tv') tvProcessing++
-      } else {
-        // Everything else (pending, ignored, etc.) counts as pending
-        pendingCount++
-      }
-    })
+    // Use the database counts directly from unified_media table
+    const completedCount = parseInt(baseStats.completed_count) || 0
+    const processingCount = parseInt(baseStats.processing_count) || 0
+    const failedCount = parseInt(baseStats.failed_count) || 0
+    const pendingCount = parseInt(baseStats.pending_count) || 0
+    const moviesCompleted = parseInt(baseStats.movies_completed) || 0
+    const moviesProcessing = parseInt(baseStats.movies_processing) || 0
+    const moviesFailed = parseInt(baseStats.movies_failed) || 0
+    const tvCompleted = parseInt(baseStats.tv_completed) || 0
+    const tvProcessing = parseInt(baseStats.tv_processing) || 0
+    const tvFailed = parseInt(baseStats.tv_failed) || 0
     
     const stats = {
       ...baseStats,
+      // Use database counts directly from unified_media table
       completed_count: completedCount,
       processing_count: processingCount,
       failed_count: failedCount,

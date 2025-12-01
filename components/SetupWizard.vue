@@ -1,5 +1,9 @@
 <template>
-  <div class="min-h-screen bg-background flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8">
+  <!-- Backend Initializing Screen -->
+  <BackendInitializing v-if="showBackendLoading" @ready="handleBackendReady" />
+  
+  <!-- Setup Wizard -->
+  <div v-else class="min-h-screen bg-background flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8">
     <div class="max-w-5xl w-full space-y-8">
       <div class="text-center">
         <h2 class="mt-6 text-3xl font-extrabold text-foreground">
@@ -295,8 +299,8 @@
                     </div>
                     
                     <!-- Greet first Jellyfin user -->
-                    <div v-if="testResults.overseerr.data?.first_jellyfin_username" class="bg-gradient-to-r from-purple-100 to-pink-100 dark:from-purple-900/30 dark:to-pink-900/30 border border-purple-300 dark:border-purple-700 rounded-lg p-4 mb-4">
-                      <p class="text-sm text-center font-medium text-purple-900 dark:text-purple-100">
+                    <div v-if="testResults.overseerr.data?.first_jellyfin_username" class="bg-gradient-to-r from-primary/10 to-primary/5 border border-primary/30 rounded-lg p-4 mb-4">
+                      <p class="text-sm text-center font-medium text-primary">
                         👋 Hello <span class="font-bold">{{ testResults.overseerr.data.first_jellyfin_username }}</span>!
                       </p>
                     </div>
@@ -367,7 +371,7 @@
               </div>
               
               <!-- Success State with Confetti -->
-              <div v-if="testResults.trakt.success" class="bg-gradient-to-br from-green-50 to-purple-50 dark:from-green-900/20 dark:to-purple-900/20 border-2 border-green-500 rounded-lg p-6 relative overflow-hidden animate-pulse">
+              <div v-if="testResults.trakt.success" class="bg-gradient-to-br from-green-50 to-primary/10 dark:from-green-900/20 dark:to-primary/20 border-2 border-green-500 rounded-lg p-6 relative overflow-hidden animate-pulse">
                 <div class="absolute inset-0 pointer-events-none">
                   <div v-for="(particle, index) in traktParticles" :key="index" 
                        class="absolute w-2 h-2 bg-yellow-400 rounded-full animate-ping"
@@ -389,13 +393,13 @@
                                :alt="testResults.trakt.mediaData.title" 
                                class="w-24 h-36 object-cover rounded-lg shadow-md" />
                         </div>
-                        <div v-else class="flex-shrink-0 w-24 h-36 bg-gradient-to-br from-purple-400 to-blue-500 rounded-lg shadow-md flex items-center justify-center">
+                        <div v-else class="flex-shrink-0 w-24 h-36 bg-gradient-to-br from-primary/60 to-blue-500 rounded-lg shadow-md flex items-center justify-center">
                           <Icon name="lucide:tv" class="w-8 h-8 text-white" />
                         </div>
                         <div class="flex-1">
                           <h5 class="text-lg font-bold text-foreground">{{ testResults.trakt.mediaData.title }}</h5>
                           <p class="text-sm text-muted-foreground">{{ testResults.trakt.mediaData.year }}</p>
-                          <p v-if="testResults.trakt.mediaData.tagline" class="text-sm text-purple-600 dark:text-purple-400 italic mt-1">
+                          <p v-if="testResults.trakt.mediaData.tagline" class="text-sm text-primary italic mt-1">
                             "{{ testResults.trakt.mediaData.tagline }}"
                           </p>
                           <p class="text-sm text-foreground mt-2 line-clamp-3">{{ testResults.trakt.mediaData.overview }}</p>
@@ -579,6 +583,7 @@ const isSkippingSetup = ref(false)
 const setupSkipped = ref(false)
 const envVarsAvailable = ref(false)
 const testing = ref([false, false, false, false])
+const showBackendLoading = ref(false)
 
 const steps = ref([
   { id: 'dmm', name: 'DMM Config', testStatus: null },
@@ -1350,10 +1355,8 @@ const completeSetup = async () => {
       // Show success message
       console.log('Setup completed successfully!')
       
-      // Wait a moment then redirect to dashboard
-      setTimeout(() => {
-        navigateTo('/dashboard')
-      }, 1000)
+      // Show backend initialization loading screen
+      showBackendLoading.value = true
     } else {
       console.error('Setup failed:', response.error)
       alert('Setup failed: ' + (response.error || 'Unknown error'))
@@ -1410,5 +1413,10 @@ const loadExistingConfig = async () => {
   } catch (error) {
     console.error('Error loading existing config:', error)
   }
+}
+
+const handleBackendReady = () => {
+  // Backend is ready, redirect to dashboard
+  navigateTo('/dashboard')
 }
 </script>

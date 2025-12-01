@@ -372,6 +372,10 @@ def start_media_processing(tmdb_id: int, imdb_id: str, trakt_id: str, media_type
         if existing_media:
             # Update existing record - but preserve status if already completed or processing
             current_status = existing_media.status
+            was_newly_created = False  # Track if this was just created (for notification)
+            
+            # Check if this is a very recent creation (within last 5 seconds) - might be from track_media_request
+            time_since_creation = (datetime.utcnow() - existing_media.created_at).total_seconds() if existing_media.created_at else 999
             
             # Check released_date first to determine if media should be unreleased
             should_be_unreleased = False
@@ -506,6 +510,40 @@ def start_media_processing(tmdb_id: int, imdb_id: str, trakt_id: str, media_type
             
             db.commit()
             log_info("Media Processing", f"Updated existing media record for {title} (TMDB: {tmdb_id})")
+            
+            # Check if this is a new request being added (overseerr_request_id being set for first time)
+            # This indicates a new request even if the media record already existed
+            is_new_request = (overseerr_request_id and 
+                            existing_media.overseerr_request_id is None and 
+                            time_since_creation > 10)  # Not just created, so this is a new request for existing media
+            
+            # Only create "New Media Added" notification if this was just created (within last 2 seconds)
+            # AND it doesn't already have an overseerr_request_id (meaning track_media_request hasn't run yet)
+            # This prevents duplicate notifications when both functions run
+            if time_since_creation < 2 and existing_media.overseerr_request_id is None:
+                create_notification(
+                    type='info',
+                    title='New Media Added',
+                    message=f"New {media_type.upper()} added: {title} ({year})",
+                    media_id=existing_media.id,
+                    media_type=media_type,
+                    media_title=title,
+                    old_status=None,
+                    new_status=existing_media.status
+                )
+            elif is_new_request:
+                # New request for existing media - notify as new request
+                create_notification(
+                    type='info',
+                    title='New Media Request',
+                    message=f"New {media_type.upper()} request: {title} ({year})",
+                    media_id=existing_media.id,
+                    media_type=media_type,
+                    media_title=title,
+                    old_status=current_status,
+                    new_status=existing_media.status
+                )
+            
             return existing_media.id
         else:
             # Create new record
@@ -651,6 +689,19 @@ def start_media_processing(tmdb_id: int, imdb_id: str, trakt_id: str, media_type
             db.commit()
             
             log_info("Media Processing", f"Started tracking media processing for {title} (TMDB: {tmdb_id})")
+            
+            # Create notification for new media item
+            create_notification(
+                type='info',
+                title='New Media Added',
+                message=f"New {media_type.upper()} added: {title} ({year})",
+                media_id=new_media.id,
+                media_type=media_type,
+                media_title=title,
+                old_status=None,
+                new_status=initial_status
+            )
+            
             return new_media.id
             
     except Exception as e:
@@ -754,9 +805,9 @@ def update_media_processing_status(media_id: int, status: str, processing_stage:
         
         log_info("Media Update", f"Updated media {media.title} (ID: {media_id}) status to {status}")
         
-        # Create notification for status changes
-        if old_status != status and status in ['processing', 'completed', 'failed']:
-            # Determine notification type and message
+        # Create notification for status changes (but skip if going from None/None to a status - that's initial creation)
+        if old_status != status and old_status is not None:
+            # Determine notification type and message based on status
             if status == 'completed':
                 notif_type = 'success'
                 notif_title = 'Media Completed'
@@ -768,13 +819,28 @@ def update_media_processing_status(media_id: int, status: str, processing_stage:
                 if error_message:
                     notif_message += f": {error_message[:100]}"
             elif status == 'processing':
+                # Only notify if coming from a different status (not from None/pending on initial creation)
+                # But always notify if coming from 'failed' (retry scenario)
+                if old_status in [None, 'pending']:
+                    return True  # Skip notification for initial processing status (handled by "New Media Added")
                 notif_type = 'info'
                 notif_title = 'Media Processing Started'
                 notif_message = f"{media.title} is now being processed"
+            elif status == 'pending':
+                # Don't notify for pending status (handled by "New Media Added")
+                return True
+            elif status == 'skipped':
+                notif_type = 'warning'
+                notif_title = 'Media Skipped'
+                notif_message = f"{media.title} was skipped"
+            elif status == 'unreleased':
+                notif_type = 'info'
+                notif_title = 'Media Unreleased'
+                notif_message = f"{media.title} is not yet released"
             else:
                 notif_type = 'info'
-                notif_title = f'Media Status: {status}'
-                notif_message = f"{media.title} status changed to {status}"
+                notif_title = f'Media Status Changed'
+                notif_message = f"{media.title} status changed from {old_status} to {status}"
             
             # Create notification
             create_notification(
@@ -1047,6 +1113,19 @@ def track_media_request(overseerr_request_id: int, overseerr_media_id: int, tmdb
             db.commit()
             
             log_info("Media Request", f"Created new media record for request {overseerr_request_id}")
+            
+            # Create notification for new media item
+            create_notification(
+                type='info',
+                title='New Media Added',
+                message=f"New {media_type.upper()} added: {title} ({year})",
+                media_id=new_media.id,
+                media_type=media_type,
+                media_title=title,
+                old_status=None,
+                new_status='pending'
+            )
+            
             return new_media.id
             
     except Exception as e:

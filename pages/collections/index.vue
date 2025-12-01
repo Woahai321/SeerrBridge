@@ -1,24 +1,24 @@
 <template>
-  <div class="space-y-8">
+  <div class="space-y-4 sm:space-y-6 lg:space-y-8">
     <!-- Header -->
-    <div class="space-y-4">
-      <div class="flex items-center justify-between">
-        <div>
-          <h1 class="text-3xl font-bold text-foreground">Collections</h1>
-          <p class="text-muted-foreground mt-1">
+    <div class="space-y-3 sm:space-y-4">
+      <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 sm:gap-4">
+        <div class="flex-1 min-w-0">
+          <h1 class="text-2xl sm:text-3xl font-bold text-foreground">Collections</h1>
+          <p class="text-sm sm:text-base text-muted-foreground mt-1">
             Browse your movie collections by franchise
           </p>
         </div>
         
-        <div class="flex items-center gap-4">
-          <div class="text-sm text-muted-foreground">
-            <span v-if="pagination">
+        <div class="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4">
+          <div class="text-xs sm:text-sm text-muted-foreground">
+            <span v-if="pagination" class="block sm:inline">
               Showing {{ (pagination.page - 1) * pagination.limit + 1 }} - {{ Math.min(pagination.page * pagination.limit, pagination.total) }} of {{ pagination.total }} collections
             </span>
-            <span v-else-if="collections.length > 0">
+            <span v-else-if="collections.length > 0" class="block sm:inline">
               {{ collections.length }} collections
             </span>
-            <span v-if="totalMovies > 0" class="ml-2">
+            <span v-if="totalMovies > 0" class="block sm:inline sm:ml-2">
               • {{ totalMovies }} movies total
             </span>
           </div>
@@ -27,6 +27,7 @@
             :disabled="loading"
             variant="outline"
             size="sm"
+            class="w-full sm:w-auto"
           >
             <AppIcon 
               icon="lucide:refresh-cw" 
@@ -64,18 +65,17 @@
     </div>
 
     <!-- Random Collections Badges Section -->
-    <div v-if="randomCollections.length > 0 && !searchQuery" class="space-y-4">
-      <div class="flex items-center gap-3">
+    <div v-if="randomCollections.length > 0 && !searchQuery" class="space-y-3 sm:space-y-4">
+      <div class="flex items-center justify-between gap-2 sm:gap-3">
         <div class="flex items-center gap-2">
-          <AppIcon icon="lucide:shuffle" size="24" class="text-primary" />
-          <h2 class="text-2xl font-bold text-foreground">Discover Collections</h2>
+          <AppIcon icon="lucide:shuffle" size="20" class="sm:w-6 sm:h-6 text-primary" />
+          <h2 class="text-xl sm:text-2xl font-bold text-foreground">Discover Collections</h2>
         </div>
-        <div class="flex-1 h-px bg-gradient-to-r from-primary/30 via-primary/10 to-transparent"></div>
         <Button
           @click="loadRandomCollections"
           variant="ghost"
           size="sm"
-          class="text-xs"
+          class="text-xs flex-shrink-0"
           :disabled="loadingRandomCollections"
         >
           <AppIcon 
@@ -84,22 +84,26 @@
             class="mr-1"
             :class="{ 'animate-spin': loadingRandomCollections }"
           />
-          Shuffle
+          <span class="hidden sm:inline">Shuffle</span>
         </Button>
       </div>
-      <p class="text-sm text-muted-foreground mb-4">50 randomly selected collections • Click to explore</p>
+      <p class="text-xs sm:text-sm text-muted-foreground mb-3 sm:mb-4">
+        <span class="hidden sm:inline">50 randomly selected collections</span>
+        <span class="sm:hidden">10 randomly selected collections</span>
+        • Click to explore
+      </p>
       
-      <div class="flex flex-wrap gap-2">
+      <div class="grid grid-cols-2 sm:flex sm:flex-wrap gap-1.5 sm:gap-2">
         <Button
-          v-for="collection in randomCollections"
+          v-for="collection in displayedRandomCollections"
           :key="collection.franchise_name"
           @click="viewCollection(collection)"
           variant="outline"
           size="sm"
-          class="text-sm font-medium hover:bg-primary hover:text-primary-foreground hover:border-primary transition-colors"
+          class="text-xs sm:text-sm font-medium hover:bg-primary hover:text-primary-foreground hover:border-primary transition-colors w-full sm:w-auto justify-start sm:justify-center"
         >
-          {{ collection.franchise_name }}
-          <span v-if="collection.total_movies > 0" class="ml-2 text-xs text-muted-foreground">
+          <span class="truncate text-left sm:text-center">{{ collection.franchise_name }}</span>
+          <span v-if="collection.total_movies > 0" class="ml-1 sm:ml-2 text-[10px] sm:text-xs text-muted-foreground flex-shrink-0">
             ({{ collection.total_movies }})
           </span>
         </Button>
@@ -107,27 +111,60 @@
     </div>
 
     <!-- Vardarr's Choice Section -->
-    <div v-if="vardarrChoice.length > 0 && !searchQuery" class="space-y-4">
-      <div class="flex items-center gap-3">
+    <div v-if="vardarrChoice.length > 0 && !searchQuery" class="space-y-3 sm:space-y-4">
+      <div class="flex items-center justify-between gap-2 sm:gap-3">
         <div class="flex items-center gap-2">
-          <AppIcon icon="lucide:star" size="24" class="text-primary" />
-          <h2 class="text-2xl font-bold text-foreground">Vardarr's Choice</h2>
+          <AppIcon icon="lucide:star" size="20" class="sm:w-6 sm:h-6 text-primary" />
+          <h2 class="text-xl sm:text-2xl font-bold text-foreground">Vardarr's Choice</h2>
         </div>
-        <div class="flex-1 h-px bg-gradient-to-r from-primary/30 via-primary/10 to-transparent"></div>
+        <!-- View Toggle -->
+        <div class="flex items-center gap-1 p-1 bg-muted rounded-lg flex-shrink-0">
+          <button
+            @click="viewMode = 'grid'"
+            :class="[
+              'p-1.5 rounded transition-colors',
+              viewMode === 'grid' 
+                ? 'bg-background text-primary shadow-sm' 
+                : 'text-muted-foreground hover:text-foreground'
+            ]"
+            title="Grid View"
+          >
+            <AppIcon icon="lucide:grid-3x3" size="16" class="sm:w-4.5 sm:h-4.5" />
+          </button>
+          <button
+            @click="viewMode = 'list'"
+            :class="[
+              'p-1.5 rounded transition-colors',
+              viewMode === 'list' 
+                ? 'bg-background text-primary shadow-sm' 
+                : 'text-muted-foreground hover:text-foreground'
+            ]"
+            title="List View"
+          >
+            <AppIcon icon="lucide:list" size="16" class="sm:w-4.5 sm:h-4.5" />
+          </button>
+        </div>
       </div>
-      <p class="text-sm text-muted-foreground mb-4">Hand-picked favorite collections</p>
+      <p class="text-xs sm:text-sm text-muted-foreground mb-3 sm:mb-4">Hand-picked favorite collections</p>
       
-      <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-6">
+      <!-- Vardarr's Choice Grid View -->
+      <div v-if="viewMode === 'grid'" class="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-2 sm:gap-3">
         <div
-          v-for="collection in vardarrChoice"
+          v-for="(collection, index) in vardarrChoice"
           :key="collection.franchise_name"
+          :style="{ animationDelay: `${index * 50}ms` }"
           @click="viewCollection(collection)"
-          class="group relative bg-card rounded-2xl cursor-pointer transition-all duration-300 hover:shadow-2xl hover:-translate-y-1 border-2 border-primary/30 hover:border-primary/60"
+          class="group relative glass-card-enhanced rounded-2xl cursor-pointer transition-all duration-500 animate-fade-in-up will-change-transform h-full flex flex-col overflow-hidden"
         >
+          <!-- Glow Effect on Hover -->
+          <div class="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none z-0">
+            <div class="absolute inset-0 bg-gradient-to-br from-primary/20 via-primary/10 to-transparent blur-2xl rounded-3xl"></div>
+          </div>
+          
           <!-- Collection Card with Stacked Posters -->
-          <div class="relative aspect-[2/3] bg-gradient-to-br from-primary/10 to-primary/5 overflow-hidden rounded-t-2xl">
+          <div class="relative flex-1 aspect-[2/3] bg-gradient-to-br from-primary/10 via-primary/5 to-muted/50 overflow-hidden rounded-t-2xl">
             <!-- Stacked Poster Cards (up to 3) - Book/Collection Style -->
-            <div class="absolute inset-0 flex items-center justify-center" style="padding: 1.5rem;">
+            <div class="absolute inset-0 flex items-center justify-center" style="padding: 0.75rem;">
               <template v-if="hasAnyPoster(collection)">
                 <template v-for="(movie, index) in getMoviesWithPosters(collection)" :key="`${movie.title}-${index}`">
                   <!-- Third Poster (back, if 3 movies) - Largest rotation, most offset -->
@@ -135,12 +172,12 @@
                     v-if="index === 2"
                     class="absolute transform"
                     :style="{
-                      transform: 'translateX(-32px) translateY(-6px) rotate(10deg) scale(0.88)',
+                      transform: isMobile ? 'translateX(-16px) translateY(-3px) rotate(8deg) scale(0.85)' : 'translateX(-32px) translateY(-6px) rotate(10deg) scale(0.88)',
                       zIndex: 1,
                       filter: 'brightness(0.7) contrast(0.95)'
                     }"
                   >
-                    <div class="w-56 h-80 md:w-64 md:h-96 rounded-lg overflow-hidden shadow-[0_20px_60px_-12px_rgba(0,0,0,0.5)] border-2 border-black/20 bg-card">
+                    <div class="w-32 h-48 sm:w-40 sm:h-60 md:w-56 md:h-80 lg:w-64 lg:h-96 rounded-lg overflow-hidden shadow-[0_20px_60px_-12px_rgba(0,0,0,0.5)] border-2 border-black/20 bg-card">
                       <img
                         v-if="getPosterUrl(movie)"
                         :src="getPosterUrl(movie)"
@@ -156,12 +193,12 @@
                     v-if="index === 1"
                     class="absolute transform"
                     :style="{
-                      transform: 'translateX(-16px) translateY(-3px) rotate(-8deg) scale(0.94)',
+                      transform: isMobile ? 'translateX(-8px) translateY(-1.5px) rotate(-6deg) scale(0.90)' : 'translateX(-16px) translateY(-3px) rotate(-8deg) scale(0.94)',
                       zIndex: 2,
                       filter: 'brightness(0.8) contrast(0.98)'
                     }"
                   >
-                    <div class="w-56 h-80 md:w-64 md:h-96 rounded-lg overflow-hidden shadow-[0_20px_60px_-12px_rgba(0,0,0,0.5)] border-2 border-black/30 bg-card">
+                    <div class="w-32 h-48 sm:w-40 sm:h-60 md:w-56 md:h-80 lg:w-64 lg:h-96 rounded-lg overflow-hidden shadow-[0_20px_60px_-12px_rgba(0,0,0,0.5)] border-2 border-black/30 bg-card">
                       <img
                         v-if="getPosterUrl(movie)"
                         :src="getPosterUrl(movie)"
@@ -175,13 +212,14 @@
                   <!-- First Poster (front, main) - Slight rotation, on top -->
                   <div
                     v-if="index === 0"
-                    class="absolute transform transition-all duration-300 group-hover:scale-105 group-hover:rotate-0"
+                    class="absolute transform transition-all duration-300"
+                    :class="!isMobile && 'group-hover:scale-105 group-hover:rotate-0'"
                     :style="{
-                      transform: 'translateX(0px) translateY(0px) rotate(3deg) scale(1)',
+                      transform: isMobile ? 'translateX(0px) translateY(0px) rotate(2deg) scale(1)' : 'translateX(0px) translateY(0px) rotate(3deg) scale(1)',
                       zIndex: 3
                     }"
                   >
-                    <div class="w-56 h-80 md:w-64 md:h-96 rounded-lg overflow-hidden shadow-[0_25px_70px_-12px_rgba(0,0,0,0.6)] border-4 border-black/40 bg-card">
+                    <div class="w-32 h-48 sm:w-40 sm:h-60 md:w-56 md:h-80 lg:w-64 lg:h-96 rounded-lg overflow-hidden shadow-[0_25px_70px_-12px_rgba(0,0,0,0.6)] border-2 sm:border-4 border-black/40 bg-card">
                       <img
                         v-if="getPosterUrl(movie)"
                         :src="getPosterUrl(movie)"
@@ -208,86 +246,220 @@
               </div>
             </div>
             
-            <!-- Collection Info Overlay -->
-            <div class="absolute inset-0 bg-gradient-to-t from-primary/90 via-primary/40 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex items-end">
-              <div class="p-4 w-full">
-                <h3 class="text-white font-bold text-lg mb-1 line-clamp-1">
-                  {{ collection.franchise_name }}
-                </h3>
-                <p class="text-white/80 text-sm">
-                  {{ collection.total_movies }} {{ collection.total_movies === 1 ? 'movie' : 'movies' }}
-                </p>
-                <div v-if="collection.years.length > 0" class="text-white/70 text-xs mt-1">
-                  {{ collection.years[0] }} - {{ collection.years[collection.years.length - 1] }}
-                </div>
-              </div>
-            </div>
-            
             <!-- Vardarr's Choice Badge -->
-            <div class="absolute top-3 left-3">
-              <div class="bg-primary/90 backdrop-blur-sm text-primary-foreground px-3 py-1 rounded-full text-xs font-semibold shadow-lg flex items-center gap-1">
-                <AppIcon icon="lucide:star" size="12" />
-                <span>Vardarr's Choice</span>
+            <div class="absolute top-1.5 left-1.5 sm:top-3 sm:left-3 z-20">
+              <div class="bg-primary/90 backdrop-blur-sm text-primary-foreground px-2 sm:px-3 py-0.5 sm:py-1 rounded-full text-[10px] sm:text-xs font-semibold shadow-lg flex items-center gap-0.5 sm:gap-1">
+                <AppIcon icon="lucide:star" size="10" class="sm:w-3 sm:h-3" />
+                <span class="hidden sm:inline">Vardarr's Choice</span>
+                <span class="sm:hidden">VC</span>
               </div>
             </div>
             
             <!-- Movie Count Badge -->
-            <div class="absolute top-3 right-3">
-              <div class="bg-primary/90 backdrop-blur-sm text-primary-foreground px-3 py-1 rounded-full text-xs font-semibold shadow-lg">
+            <div class="absolute top-1.5 right-1.5 sm:top-3 sm:right-3 z-20">
+              <div class="bg-primary/90 backdrop-blur-sm text-primary-foreground px-2 sm:px-3 py-0.5 sm:py-1 rounded-full text-[10px] sm:text-xs font-semibold shadow-lg">
                 {{ collection.total_movies }}
+              </div>
+            </div>
+            
+            <!-- Collection Info Overlay -->
+            <div 
+              class="absolute inset-0 bg-gradient-to-t from-primary/90 via-primary/40 to-transparent transition-opacity duration-300 flex items-end z-10"
+              :class="{
+                'opacity-100': isMobile,
+                'opacity-0 group-hover:opacity-100': !isMobile
+              }"
+            >
+              <div class="p-2 sm:p-3 lg:p-4 w-full">
+                <h3 class="text-white font-bold text-xs sm:text-sm lg:text-lg mb-0.5 sm:mb-1 line-clamp-1">
+                  {{ collection.franchise_name }}
+                </h3>
+                <p class="text-white/80 text-[10px] sm:text-xs lg:text-sm">
+                  {{ collection.total_movies }} {{ collection.total_movies === 1 ? 'movie' : 'movies' }}
+                </p>
+                <div v-if="collection.years.length > 0" class="text-white/70 text-[9px] sm:text-[10px] lg:text-xs mt-0.5 sm:mt-1">
+                  {{ collection.years[0] }} - {{ collection.years[collection.years.length - 1] }}
+                </div>
               </div>
             </div>
           </div>
           
           <!-- Collection Footer -->
-          <div class="p-4">
-            <h3 class="font-semibold text-foreground mb-1 line-clamp-1">
+          <div class="relative p-3 sm:p-4 space-y-2 bg-gradient-to-b from-card/95 via-card/90 to-card backdrop-blur-sm flex-shrink-0 rounded-b-2xl">
+            <h3 class="text-xs sm:text-sm font-bold text-foreground line-clamp-1 transition-all duration-300 group-hover:text-primary">
               {{ collection.franchise_name }}
             </h3>
-            <p class="text-xs text-muted-foreground mb-3">
-              {{ collection.total_movies }} {{ collection.total_movies === 1 ? 'movie' : 'movies' }}
+            <div class="flex items-center justify-between text-[10px] sm:text-xs text-muted-foreground">
+              <span>{{ collection.total_movies }} {{ collection.total_movies === 1 ? 'movie' : 'movies' }}</span>
               <span v-if="collection.years.length > 0">
-                • {{ collection.years[0] }}-{{ collection.years[collection.years.length - 1] }}
+                {{ collection.years[0] }}-{{ collection.years[collection.years.length - 1] }}
               </span>
-            </p>
+            </div>
             <!-- Request Entire Collection Button -->
             <Button
               @click.stop="handleRequestCollection(collection)"
               :disabled="requestingCollections.has(collection.franchise_name)"
               size="sm"
               variant="outline"
-              class="w-full"
+              class="w-full text-xs sm:text-sm mt-2"
             >
               <AppIcon 
                 v-if="requestingCollections.has(collection.franchise_name)"
                 icon="lucide:loader-2" 
-                size="14" 
-                class="mr-2 animate-spin"
+                size="12" 
+                class="sm:w-3.5 sm:h-3.5 mr-1.5 sm:mr-2 animate-spin"
               />
               <AppIcon 
                 v-else
                 icon="lucide:plus-circle" 
-                size="14" 
-                class="mr-2"
+                size="12" 
+                class="sm:w-3.5 sm:h-3.5 mr-1.5 sm:mr-2"
               />
-              <span v-if="requestingCollections.has(collection.franchise_name)">
+              <span v-if="requestingCollections.has(collection.franchise_name)" class="truncate">
                 {{ getCollectionProgressText(collection.franchise_name) }}
               </span>
-              <span v-else>Request Entire Collection</span>
+              <span v-else class="truncate">Request Entire Collection</span>
             </Button>
+          </div>
+        </div>
+      </div>
+      
+      <!-- Vardarr's Choice List View -->
+      <div v-else class="space-y-2 sm:space-y-3 lg:space-y-4">
+        <div
+          v-for="collection in vardarrChoice"
+          :key="collection.franchise_name"
+          @click="viewCollection(collection)"
+          class="group relative bg-card rounded-lg sm:rounded-xl lg:rounded-2xl cursor-pointer transition-all duration-300 hover:shadow-lg hover:border-primary border-2 border-primary/30 hover:border-primary/60 overflow-hidden"
+        >
+          <div class="flex flex-row gap-2 sm:gap-3 lg:gap-4">
+            <!-- Poster Thumbnail -->
+            <div class="flex-shrink-0 w-16 h-24 sm:w-20 sm:h-30 md:w-24 md:h-36 lg:w-28 lg:h-42 bg-gradient-to-br from-primary/10 to-primary/5 rounded-l-lg sm:rounded-l-xl lg:rounded-l-2xl overflow-hidden relative">
+              <template v-if="hasAnyPoster(collection)">
+                <img
+                  v-if="getPosterUrl(getMoviesWithPosters(collection)[0])"
+                  :src="getPosterUrl(getMoviesWithPosters(collection)[0])"
+                  :alt="collection.franchise_name"
+                  class="w-full h-full object-cover"
+                  @error="handleImageError"
+                />
+              </template>
+              <div v-else class="w-full h-full flex items-center justify-center">
+                <div class="w-8 h-8 sm:w-10 sm:h-10 rounded-lg bg-primary/20 flex items-center justify-center">
+                  <AppIcon icon="lucide:folder" size="16" class="sm:w-5 sm:h-5 text-primary" />
+                </div>
+              </div>
+              
+              <!-- Vardarr's Choice Badge -->
+              <div class="absolute top-1 left-1 sm:top-1.5 sm:left-1.5 z-20">
+                <div class="bg-primary/90 backdrop-blur-sm text-primary-foreground px-1.5 sm:px-2 py-0.5 rounded-full text-[9px] sm:text-[10px] font-semibold shadow-lg flex items-center gap-0.5">
+                  <AppIcon icon="lucide:star" size="8" class="sm:w-2.5 sm:h-2.5" />
+                  <span class="hidden sm:inline">VC</span>
+                </div>
+              </div>
+            </div>
+            
+            <!-- Collection Info -->
+            <div class="flex-1 min-w-0 flex flex-col justify-between py-2 sm:py-3 pr-2 sm:pr-3 lg:pr-4 lg:py-4">
+              <div class="min-w-0">
+                <div class="flex items-start justify-between gap-2 mb-1 sm:mb-2">
+                  <h3 class="text-sm sm:text-base lg:text-lg font-semibold text-foreground line-clamp-1 group-hover:text-primary transition-colors flex-1 min-w-0">
+                    {{ collection.franchise_name }}
+                  </h3>
+                  <div class="flex items-center gap-1.5 sm:gap-2 flex-shrink-0">
+                    <div class="bg-primary/90 backdrop-blur-sm text-primary-foreground px-1.5 sm:px-2 py-0.5 rounded-full text-[10px] sm:text-xs font-semibold whitespace-nowrap">
+                      {{ collection.total_movies }} {{ collection.total_movies === 1 ? 'movie' : 'movies' }}
+                    </div>
+                  </div>
+                </div>
+                
+                <div class="flex flex-wrap items-center gap-1.5 sm:gap-2 text-[10px] sm:text-xs text-muted-foreground mb-1.5 sm:mb-2">
+                  <span v-if="collection.years.length > 0" class="flex items-center gap-0.5 sm:gap-1">
+                    <AppIcon icon="lucide:calendar" size="10" class="sm:w-3 sm:h-3" />
+                    {{ collection.years[0] }}-{{ collection.years[collection.years.length - 1] }}
+                  </span>
+                  <span v-if="collection.genres && collection.genres.length > 0" class="flex items-center gap-0.5 sm:gap-1">
+                    <AppIcon icon="lucide:tag" size="10" class="sm:w-3 sm:h-3" />
+                    <span class="line-clamp-1">{{ collection.genres.slice(0, 2).join(', ') }}</span>
+                  </span>
+                </div>
+              </div>
+              
+              <!-- Action Button -->
+              <div class="flex items-center gap-1.5 sm:gap-2">
+                <Button
+                  @click.stop="handleRequestCollection(collection)"
+                  :disabled="requestingCollections.has(collection.franchise_name)"
+                  size="sm"
+                  variant="outline"
+                  class="text-[10px] sm:text-xs h-7 sm:h-8 px-2 sm:px-3 flex-1 sm:flex-initial"
+                >
+                  <AppIcon 
+                    v-if="requestingCollections.has(collection.franchise_name)"
+                    icon="lucide:loader-2" 
+                    size="10" 
+                    class="sm:w-3 sm:h-3 mr-1 sm:mr-1.5 animate-spin"
+                  />
+                  <AppIcon 
+                    v-else
+                    icon="lucide:plus-circle" 
+                    size="10" 
+                    class="sm:w-3 sm:h-3 mr-1 sm:mr-1.5"
+                  />
+                  <span v-if="requestingCollections.has(collection.franchise_name)" class="truncate text-[10px] sm:text-xs">
+                    {{ getCollectionProgressText(collection.franchise_name) }}
+                  </span>
+                  <span v-else class="truncate text-[10px] sm:text-xs">Request Collection</span>
+                </Button>
+                <Button
+                  @click.stop="viewCollection(collection)"
+                  size="sm"
+                  variant="ghost"
+                  class="text-[10px] sm:text-xs h-7 sm:h-8 px-2 sm:px-3 flex-shrink-0"
+                >
+                  <AppIcon icon="lucide:arrow-right" size="10" class="sm:w-3 sm:h-3" />
+                </Button>
+              </div>
+            </div>
           </div>
         </div>
       </div>
     </div>
 
     <!-- All Collections Section -->
-    <div v-if="!searchQuery && vardarrChoice.length > 0" class="space-y-4 pt-8">
-      <div class="flex items-center gap-3">
+    <div v-if="!searchQuery && vardarrChoice.length > 0" class="space-y-3 sm:space-y-4 pt-6 sm:pt-8">
+      <div class="flex items-center justify-between gap-2 sm:gap-3">
         <div class="flex items-center gap-2">
-          <AppIcon icon="lucide:folder" size="24" class="text-muted-foreground" />
-          <h2 class="text-2xl font-bold text-foreground">All Collections</h2>
+          <AppIcon icon="lucide:folder" size="20" class="sm:w-6 sm:h-6 text-muted-foreground" />
+          <h2 class="text-xl sm:text-2xl font-bold text-foreground">All Collections</h2>
         </div>
-        <div class="flex-1 h-px bg-gradient-to-r from-border via-border/50 to-transparent"></div>
+        <!-- View Toggle -->
+        <div class="flex items-center gap-1 p-1 bg-muted rounded-lg flex-shrink-0">
+          <button
+            @click="viewMode = 'grid'"
+            :class="[
+              'p-1.5 rounded transition-colors',
+              viewMode === 'grid' 
+                ? 'bg-background text-primary shadow-sm' 
+                : 'text-muted-foreground hover:text-foreground'
+            ]"
+            title="Grid View"
+          >
+            <AppIcon icon="lucide:grid-3x3" size="16" class="sm:w-4.5 sm:h-4.5" />
+          </button>
+          <button
+            @click="viewMode = 'list'"
+            :class="[
+              'p-1.5 rounded transition-colors',
+              viewMode === 'list' 
+                ? 'bg-background text-primary shadow-sm' 
+                : 'text-muted-foreground hover:text-foreground'
+            ]"
+            title="List View"
+          >
+            <AppIcon icon="lucide:list" size="16" class="sm:w-4.5 sm:h-4.5" />
+          </button>
+        </div>
       </div>
     </div>
 
@@ -303,18 +475,24 @@
       </div>
     </div>
 
-    <!-- Collections Grid -->
-    <div v-else-if="collections.length > 0" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-6">
+    <!-- Collections Grid View -->
+    <div v-else-if="collections.length > 0 && viewMode === 'grid'" class="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-2 sm:gap-3">
       <div
-        v-for="collection in collections"
+        v-for="(collection, index) in collections"
         :key="collection.franchise_name"
+        :style="{ animationDelay: `${index * 50}ms` }"
         @click="viewCollection(collection)"
-        class="group relative bg-card rounded-2xl cursor-pointer transition-all duration-300 hover:shadow-2xl hover:-translate-y-1 border border-border"
+        class="group relative glass-card-enhanced rounded-2xl cursor-pointer transition-all duration-500 animate-fade-in-up will-change-transform h-full flex flex-col overflow-hidden"
       >
+        <!-- Glow Effect on Hover -->
+        <div class="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none z-0">
+          <div class="absolute inset-0 bg-gradient-to-br from-primary/20 via-primary/10 to-transparent blur-2xl rounded-3xl"></div>
+        </div>
+        
         <!-- Collection Card with Stacked Posters -->
-        <div class="relative aspect-[2/3] bg-gradient-to-br from-muted to-muted/50 overflow-hidden rounded-t-2xl">
+        <div class="relative flex-1 aspect-[2/3] bg-gradient-to-br from-muted via-muted/80 to-muted/60 overflow-hidden rounded-t-2xl">
           <!-- Stacked Poster Cards (up to 3) - Book/Collection Style -->
-          <div class="absolute inset-0 flex items-center justify-center" style="padding: 1.5rem;">
+          <div class="absolute inset-0 flex items-center justify-center" style="padding: 0.75rem;">
             <template v-if="hasAnyPoster(collection)">
               <template v-for="(movie, index) in getMoviesWithPosters(collection)" :key="`${movie.title}-${index}`">
                 <!-- Third Poster (back, if 3 movies) - Largest rotation, most offset -->
@@ -322,12 +500,12 @@
                   v-if="index === 2"
                   class="absolute transform"
                   :style="{
-                    transform: 'translateX(-32px) translateY(-6px) rotate(10deg) scale(0.88)',
+                    transform: isMobile ? 'translateX(-16px) translateY(-3px) rotate(8deg) scale(0.85)' : 'translateX(-32px) translateY(-6px) rotate(10deg) scale(0.88)',
                     zIndex: 1,
                     filter: 'brightness(0.7) contrast(0.95)'
                   }"
                 >
-                  <div class="w-56 h-80 md:w-64 md:h-96 rounded-lg overflow-hidden shadow-[0_20px_60px_-12px_rgba(0,0,0,0.5)] border-2 border-black/20 bg-card">
+                  <div class="w-32 h-48 sm:w-40 sm:h-60 md:w-56 md:h-80 lg:w-64 lg:h-96 rounded-lg overflow-hidden shadow-[0_20px_60px_-12px_rgba(0,0,0,0.5)] border-2 border-black/20 bg-card">
                     <img
                       v-if="getPosterUrl(movie)"
                       :src="getPosterUrl(movie)"
@@ -343,12 +521,12 @@
                   v-if="index === 1"
                   class="absolute transform"
                   :style="{
-                    transform: 'translateX(-16px) translateY(-3px) rotate(-8deg) scale(0.94)',
+                    transform: isMobile ? 'translateX(-8px) translateY(-1.5px) rotate(-6deg) scale(0.90)' : 'translateX(-16px) translateY(-3px) rotate(-8deg) scale(0.94)',
                     zIndex: 2,
                     filter: 'brightness(0.8) contrast(0.98)'
                   }"
                 >
-                  <div class="w-56 h-80 md:w-64 md:h-96 rounded-lg overflow-hidden shadow-[0_20px_60px_-12px_rgba(0,0,0,0.5)] border-2 border-black/30 bg-card">
+                  <div class="w-32 h-48 sm:w-40 sm:h-60 md:w-56 md:h-80 lg:w-64 lg:h-96 rounded-lg overflow-hidden shadow-[0_20px_60px_-12px_rgba(0,0,0,0.5)] border-2 border-black/30 bg-card">
                     <img
                       v-if="getPosterUrl(movie)"
                       :src="getPosterUrl(movie)"
@@ -362,13 +540,14 @@
                 <!-- First Poster (front, main) - Slight rotation, on top -->
                 <div
                   v-if="index === 0"
-                  class="absolute transform transition-all duration-300 group-hover:scale-105 group-hover:rotate-0"
+                  class="absolute transform transition-all duration-300"
+                  :class="!isMobile && 'group-hover:scale-105 group-hover:rotate-0'"
                   :style="{
-                    transform: 'translateX(0px) translateY(0px) rotate(3deg) scale(1)',
+                    transform: isMobile ? 'translateX(0px) translateY(0px) rotate(2deg) scale(1)' : 'translateX(0px) translateY(0px) rotate(3deg) scale(1)',
                     zIndex: 3
                   }"
                 >
-                  <div class="w-56 h-80 md:w-64 md:h-96 rounded-lg overflow-hidden shadow-[0_25px_70px_-12px_rgba(0,0,0,0.6)] border-4 border-black/40 bg-card">
+                  <div class="w-32 h-48 sm:w-40 sm:h-60 md:w-56 md:h-80 lg:w-64 lg:h-96 rounded-lg overflow-hidden shadow-[0_25px_70px_-12px_rgba(0,0,0,0.6)] border-2 sm:border-4 border-black/40 bg-card">
                     <img
                       v-if="getPosterUrl(movie)"
                       :src="getPosterUrl(movie)"
@@ -395,35 +574,35 @@
             </div>
           </div>
           
-          <!-- Collection Info Overlay -->
-          <div class="absolute inset-0 bg-gradient-to-t from-black/80 via-black/40 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex items-end">
-            <div class="p-4 w-full">
-              <h3 class="text-white font-bold text-lg mb-1 line-clamp-1">
-                {{ collection.franchise_name }}
-              </h3>
-              <p class="text-white/80 text-sm">
-                {{ collection.total_movies }} {{ collection.total_movies === 1 ? 'movie' : 'movies' }}
-              </p>
-              <div v-if="collection.years.length > 0" class="text-white/70 text-xs mt-1">
-                {{ collection.years[0] }} - {{ collection.years[collection.years.length - 1] }}
-              </div>
+          <!-- Movie Count Badge -->
+          <div class="absolute top-1.5 right-1.5 sm:top-3 sm:right-3 z-20">
+            <div class="bg-primary/90 backdrop-blur-sm text-primary-foreground px-2 sm:px-3 py-0.5 sm:py-1 rounded-full text-[10px] sm:text-xs font-semibold shadow-lg">
+              {{ collection.total_movies }}
             </div>
           </div>
           
-          <!-- Movie Count Badge -->
-          <div class="absolute top-3 right-3">
-            <div class="bg-primary/90 backdrop-blur-sm text-primary-foreground px-3 py-1 rounded-full text-xs font-semibold shadow-lg">
-              {{ collection.total_movies }}
+          <!-- Collection Info Overlay -->
+          <div class="absolute inset-0 bg-gradient-to-t from-black/80 via-black/40 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex items-end z-10">
+            <div class="p-2 sm:p-3 lg:p-4 w-full">
+              <h3 class="text-white font-bold text-xs sm:text-sm lg:text-lg mb-0.5 sm:mb-1 line-clamp-1">
+                {{ collection.franchise_name }}
+              </h3>
+              <p class="text-white/80 text-[10px] sm:text-xs lg:text-sm">
+                {{ collection.total_movies }} {{ collection.total_movies === 1 ? 'movie' : 'movies' }}
+              </p>
+              <div v-if="collection.years.length > 0" class="text-white/70 text-[9px] sm:text-[10px] lg:text-xs mt-0.5 sm:mt-1">
+                {{ collection.years[0] }} - {{ collection.years[collection.years.length - 1] }}
+              </div>
             </div>
           </div>
         </div>
         
         <!-- Card Footer -->
-        <div class="p-4 bg-card border-t border-border">
-          <h3 class="font-semibold text-foreground line-clamp-1 mb-1">
+        <div class="relative p-3 sm:p-4 space-y-2 bg-gradient-to-b from-card/95 via-card/90 to-card backdrop-blur-sm flex-shrink-0 rounded-b-2xl">
+          <h3 class="text-xs sm:text-sm font-bold text-foreground line-clamp-1 transition-all duration-300 group-hover:text-primary">
             {{ collection.franchise_name }}
           </h3>
-          <div class="flex items-center justify-between text-sm text-muted-foreground mb-3">
+          <div class="flex items-center justify-between text-[10px] sm:text-xs text-muted-foreground">
             <span>{{ collection.total_movies }} {{ collection.total_movies === 1 ? 'movie' : 'movies' }}</span>
             <span v-if="collection.years.length > 0">
               {{ collection.years[0] }}-{{ collection.years[collection.years.length - 1] }}
@@ -435,31 +614,124 @@
             :disabled="requestingCollections.has(collection.franchise_name)"
             size="sm"
             variant="outline"
-            class="w-full"
+            class="w-full text-xs sm:text-sm mt-2"
           >
             <AppIcon 
               v-if="requestingCollections.has(collection.franchise_name)"
               icon="lucide:loader-2" 
-              size="14" 
-              class="mr-2 animate-spin"
+              size="12" 
+              class="sm:w-3.5 sm:h-3.5 mr-1.5 sm:mr-2 animate-spin"
             />
             <AppIcon 
               v-else
               icon="lucide:plus-circle" 
-              size="14" 
-              class="mr-2"
+              size="12" 
+              class="sm:w-3.5 sm:h-3.5 mr-1.5 sm:mr-2"
             />
-            <span v-if="requestingCollections.has(collection.franchise_name)">
+            <span v-if="requestingCollections.has(collection.franchise_name)" class="truncate">
               {{ getCollectionProgressText(collection.franchise_name) }}
             </span>
-            <span v-else>Request Entire Collection</span>
+            <span v-else class="truncate">Request Entire Collection</span>
           </Button>
         </div>
       </div>
     </div>
 
+    <!-- Collections List View -->
+    <div v-else-if="collections.length > 0 && viewMode === 'list'" class="space-y-2 sm:space-y-3 lg:space-y-4">
+      <div
+        v-for="collection in collections"
+        :key="collection.franchise_name"
+        @click="viewCollection(collection)"
+        class="group relative bg-card rounded-lg sm:rounded-xl lg:rounded-2xl cursor-pointer transition-all duration-300 hover:shadow-lg hover:border-primary border border-border overflow-hidden"
+      >
+        <div class="flex flex-row gap-2 sm:gap-3 lg:gap-4">
+          <!-- Poster Thumbnail -->
+          <div class="flex-shrink-0 w-16 h-24 sm:w-20 sm:h-30 md:w-24 md:h-36 lg:w-28 lg:h-42 bg-gradient-to-br from-muted to-muted/50 rounded-l-lg sm:rounded-l-xl lg:rounded-l-2xl overflow-hidden">
+            <template v-if="hasAnyPoster(collection)">
+              <img
+                v-if="getPosterUrl(getMoviesWithPosters(collection)[0])"
+                :src="getPosterUrl(getMoviesWithPosters(collection)[0])"
+                :alt="collection.franchise_name"
+                class="w-full h-full object-cover"
+                @error="handleImageError"
+              />
+            </template>
+            <div v-else class="w-full h-full flex items-center justify-center">
+              <div class="w-8 h-8 sm:w-10 sm:h-10 rounded-lg bg-primary/10 flex items-center justify-center">
+                <AppIcon icon="lucide:folder" size="16" class="sm:w-5 sm:h-5 text-primary" />
+              </div>
+            </div>
+          </div>
+          
+          <!-- Collection Info -->
+          <div class="flex-1 min-w-0 flex flex-col justify-between py-2 sm:py-3 pr-2 sm:pr-3 lg:pr-4 lg:py-4">
+            <div class="min-w-0">
+              <div class="flex items-start justify-between gap-2 mb-1 sm:mb-2">
+                <h3 class="text-sm sm:text-base lg:text-lg font-semibold text-foreground line-clamp-1 group-hover:text-primary transition-colors flex-1 min-w-0">
+                  {{ collection.franchise_name }}
+                </h3>
+                <div class="flex items-center gap-1.5 sm:gap-2 flex-shrink-0">
+                  <div class="bg-primary/90 backdrop-blur-sm text-primary-foreground px-1.5 sm:px-2 py-0.5 rounded-full text-[10px] sm:text-xs font-semibold whitespace-nowrap">
+                    {{ collection.total_movies }} {{ collection.total_movies === 1 ? 'movie' : 'movies' }}
+                  </div>
+                </div>
+              </div>
+              
+              <div class="flex flex-wrap items-center gap-1.5 sm:gap-2 text-[10px] sm:text-xs text-muted-foreground mb-1.5 sm:mb-2">
+                <span v-if="collection.years.length > 0" class="flex items-center gap-0.5 sm:gap-1">
+                  <AppIcon icon="lucide:calendar" size="10" class="sm:w-3 sm:h-3" />
+                  {{ collection.years[0] }}-{{ collection.years[collection.years.length - 1] }}
+                </span>
+                <span v-if="collection.genres && collection.genres.length > 0" class="flex items-center gap-0.5 sm:gap-1">
+                  <AppIcon icon="lucide:tag" size="10" class="sm:w-3 sm:h-3" />
+                  <span class="line-clamp-1">{{ collection.genres.slice(0, 2).join(', ') }}</span>
+                </span>
+              </div>
+            </div>
+            
+            <!-- Action Button -->
+            <div class="flex items-center gap-1.5 sm:gap-2">
+              <Button
+                @click.stop="handleRequestCollection(collection)"
+                :disabled="requestingCollections.has(collection.franchise_name)"
+                size="sm"
+                variant="outline"
+                class="text-[10px] sm:text-xs h-7 sm:h-8 px-2 sm:px-3 flex-1 sm:flex-initial"
+              >
+                <AppIcon 
+                  v-if="requestingCollections.has(collection.franchise_name)"
+                  icon="lucide:loader-2" 
+                  size="10" 
+                  class="sm:w-3 sm:h-3 mr-1 sm:mr-1.5 animate-spin"
+                />
+                <AppIcon 
+                  v-else
+                  icon="lucide:plus-circle" 
+                  size="10" 
+                  class="sm:w-3 sm:h-3 mr-1 sm:mr-1.5"
+                />
+                <span v-if="requestingCollections.has(collection.franchise_name)" class="truncate text-[10px] sm:text-xs">
+                  {{ getCollectionProgressText(collection.franchise_name) }}
+                </span>
+                <span v-else class="truncate text-[10px] sm:text-xs">Request Collection</span>
+              </Button>
+              <Button
+                @click.stop="viewCollection(collection)"
+                size="sm"
+                variant="ghost"
+                class="text-[10px] sm:text-xs h-7 sm:h-8 px-2 sm:px-3 flex-shrink-0"
+              >
+                <AppIcon icon="lucide:arrow-right" size="10" class="sm:w-3 sm:h-3" />
+              </Button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
     <!-- Empty State -->
-    <div v-else class="flex flex-col items-center justify-center py-24 text-center">
+    <div v-else-if="collections.length === 0 && !loading" class="flex flex-col items-center justify-center py-24 text-center">
       <div class="w-24 h-24 rounded-full bg-muted flex items-center justify-center mb-6">
         <AppIcon icon="lucide:folder-x" size="48" class="text-muted-foreground" />
       </div>
@@ -470,18 +742,18 @@
     </div>
 
     <!-- Pagination Controls -->
-    <div v-if="pagination && pagination.total_pages > 1" class="space-y-4 pt-6">
+    <div v-if="pagination && pagination.total_pages > 1" class="space-y-3 sm:space-y-4 pt-4 sm:pt-6">
       <!-- Main Pagination -->
-      <div class="flex flex-wrap items-center justify-center gap-2">
+      <div class="flex flex-wrap items-center justify-center gap-1.5 sm:gap-2">
         <!-- First Page -->
         <Button
           @click="goToPage(1)"
           :disabled="pagination.page === 1 || loading"
           variant="outline"
           size="sm"
-          class="gap-1"
+          class="gap-1 p-1.5 sm:px-3 sm:py-2"
         >
-          <AppIcon icon="lucide:chevrons-left" size="16" />
+          <AppIcon icon="lucide:chevrons-left" size="14" class="sm:w-4 sm:h-4" />
           <span class="hidden sm:inline">First</span>
         </Button>
         
@@ -491,14 +763,14 @@
           :disabled="!pagination.has_prev || loading"
           variant="outline"
           size="sm"
-          class="gap-1"
+          class="gap-1 p-1.5 sm:px-3 sm:py-2"
         >
-          <AppIcon icon="lucide:chevron-left" size="16" />
+          <AppIcon icon="lucide:chevron-left" size="14" class="sm:w-4 sm:h-4" />
           <span class="hidden sm:inline">Previous</span>
         </Button>
         
         <!-- Page Numbers -->
-        <div class="flex items-center gap-1 flex-wrap justify-center">
+        <div class="flex items-center gap-0.5 sm:gap-1 flex-wrap justify-center">
           <template v-if="pagination.total_pages <= 20">
             <!-- Show all pages if 20 or less -->
             <Button
@@ -508,7 +780,7 @@
               :disabled="loading"
               :variant="pageNum === pagination.page ? 'default' : 'outline'"
               size="sm"
-              class="min-w-[40px]"
+              class="min-w-[32px] sm:min-w-[40px] p-1.5 sm:px-3 sm:py-2 text-xs sm:text-sm"
             >
               {{ pageNum }}
             </Button>
@@ -521,13 +793,13 @@
               :disabled="loading"
               :variant="pagination.page === 1 ? 'default' : 'outline'"
               size="sm"
-              class="min-w-[40px]"
+              class="min-w-[32px] sm:min-w-[40px] p-1.5 sm:px-3 sm:py-2 text-xs sm:text-sm"
             >
               1
             </Button>
             
             <!-- Ellipsis before current range -->
-            <span v-if="pagination.page > 4" class="px-2 text-muted-foreground">...</span>
+            <span v-if="pagination.page > 4" class="px-1 sm:px-2 text-xs sm:text-sm text-muted-foreground">...</span>
             
             <!-- Pages around current page -->
             <Button
@@ -537,13 +809,13 @@
               :disabled="loading"
               :variant="pageNum === pagination.page ? 'default' : 'outline'"
               size="sm"
-              class="min-w-[40px]"
+              class="min-w-[32px] sm:min-w-[40px] p-1.5 sm:px-3 sm:py-2 text-xs sm:text-sm"
             >
               {{ pageNum }}
             </Button>
             
             <!-- Ellipsis after current range -->
-            <span v-if="pagination.page < pagination.total_pages - 3" class="px-2 text-muted-foreground">...</span>
+            <span v-if="pagination.page < pagination.total_pages - 3" class="px-1 sm:px-2 text-xs sm:text-sm text-muted-foreground">...</span>
             
             <!-- Last page -->
             <Button
@@ -551,7 +823,7 @@
               :disabled="loading"
               :variant="pagination.page === pagination.total_pages ? 'default' : 'outline'"
               size="sm"
-              class="min-w-[40px]"
+              class="min-w-[32px] sm:min-w-[40px] p-1.5 sm:px-3 sm:py-2 text-xs sm:text-sm"
             >
               {{ pagination.total_pages }}
             </Button>
@@ -564,10 +836,10 @@
           :disabled="!pagination.has_next || loading"
           variant="outline"
           size="sm"
-          class="gap-1"
+          class="gap-1 p-1.5 sm:px-3 sm:py-2"
         >
           <span class="hidden sm:inline">Next</span>
-          <AppIcon icon="lucide:chevron-right" size="16" />
+          <AppIcon icon="lucide:chevron-right" size="14" class="sm:w-4 sm:h-4" />
         </Button>
         
         <!-- Last Page -->
@@ -576,21 +848,21 @@
           :disabled="pagination.page === pagination.total_pages || loading"
           variant="outline"
           size="sm"
-          class="gap-1"
+          class="gap-1 p-1.5 sm:px-3 sm:py-2"
         >
           <span class="hidden sm:inline">Last</span>
-          <AppIcon icon="lucide:chevrons-right" size="16" />
+          <AppIcon icon="lucide:chevrons-right" size="14" class="sm:w-4 sm:h-4" />
         </Button>
       </div>
       
       <!-- Page Jump Dropdown -->
-      <div class="flex items-center justify-center gap-2">
-        <span class="text-sm text-muted-foreground">Jump to:</span>
+      <div class="flex flex-col sm:flex-row items-center justify-center gap-2">
+        <span class="text-xs sm:text-sm text-muted-foreground">Jump to:</span>
         <select
           v-model="selectedPageChunk"
           @change="handlePageChunkChange"
           :disabled="loading"
-          class="px-3 py-1.5 text-sm rounded-md border border-border bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent disabled:opacity-50 disabled:cursor-not-allowed"
+          class="px-2 sm:px-3 py-1 sm:py-1.5 text-xs sm:text-sm rounded-md border border-border bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent disabled:opacity-50 disabled:cursor-not-allowed w-full sm:w-auto max-w-xs"
         >
           <option value="">Select page range...</option>
           <optgroup v-for="chunk in pageChunks" :key="chunk.label" :label="chunk.label">
@@ -604,7 +876,7 @@
             </option>
           </optgroup>
         </select>
-        <span class="text-sm text-muted-foreground">
+        <span class="text-xs sm:text-sm text-muted-foreground">
           (Page {{ pagination.page }} of {{ pagination.total_pages }})
         </span>
       </div>
@@ -682,6 +954,42 @@ const loadingRandomCollections = ref(false)
 const currentPage = ref(1)
 const itemsPerPage = ref(20)
 const searchQuery = ref('')
+
+// View mode (grid/list)
+const viewMode = ref<'grid' | 'list'>('grid')
+
+// Load view mode from localStorage
+if (process.client) {
+  const savedViewMode = localStorage.getItem('collections-view-mode')
+  if (savedViewMode === 'grid' || savedViewMode === 'list') {
+    viewMode.value = savedViewMode
+  }
+}
+
+// Save view mode to localStorage
+watch(viewMode, (newMode) => {
+  if (process.client) {
+    localStorage.setItem('collections-view-mode', newMode)
+  }
+})
+
+// Mobile detection
+const isMobile = ref(false)
+
+const checkIsMobile = () => {
+  if (process.client) {
+    isMobile.value = window.innerWidth < 640 // Tailwind's 'sm' breakpoint
+  }
+}
+
+
+// Limit displayed random collections to 10 on mobile
+const displayedRandomCollections = computed(() => {
+  if (isMobile.value) {
+    return randomCollections.value.slice(0, 10)
+  }
+  return randomCollections.value
+})
 
 // Track collections being requested
 const requestingCollections = ref<Set<string>>(new Set())
@@ -1213,6 +1521,12 @@ const loadVardarrChoice = async () => {
 
 // Load collections on mount
 onMounted(async () => {
+  // Check if mobile
+  checkIsMobile()
+  if (process.client) {
+    window.addEventListener('resize', checkIsMobile)
+  }
+  
   // Initialize search from URL params
   const searchFromUrl = (route.query.search as string) || ''
   if (searchFromUrl) {
@@ -1231,6 +1545,12 @@ onMounted(async () => {
   
   // Don't calculate requestable counts on initial load - too many requests
   // Calculate them lazily when user interacts with collections
+})
+
+onUnmounted(() => {
+  if (process.client) {
+    window.removeEventListener('resize', checkIsMobile)
+  }
 })
 
 // Watch for query param changes

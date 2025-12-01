@@ -1,13 +1,15 @@
 <template>
   <ClientOnly>
-    <Icon 
-      v-if="icon"
-      :name="icon" 
-      :size="size" 
-      :class="className"
-    />
+    <span class="icon-wrapper">
+      <Icon 
+        v-if="icon"
+        :name="icon" 
+        :size="size" 
+        :class="[className, 'icon-base']"
+      />
+    </span>
     <template #fallback>
-      <span :class="className" :style="{ width: size + 'px', height: size + 'px' }"></span>
+      <span :class="[className, 'icon-base']" :style="{ width: size + 'px', height: size + 'px' }"></span>
     </template>
   </ClientOnly>
 </template>
@@ -38,3 +40,37 @@ const className = computed(() => {
   return ''
 })
 </script>
+
+<style scoped>
+.icon-wrapper {
+  display: inline-block;
+  line-height: 0;
+  vertical-align: middle;
+  flex-shrink: 0;
+  margin: 0;
+  padding: 0;
+}
+
+.icon-base {
+  display: block;
+  line-height: 0;
+  margin: 0;
+  padding: 0;
+}
+
+.icon-base :deep(svg) {
+  display: block;
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  padding: 0;
+  line-height: 0;
+  vertical-align: top;
+}
+
+.icon-base :deep(*) {
+  margin: 0;
+  padding: 0;
+  line-height: 0;
+}
+</style>

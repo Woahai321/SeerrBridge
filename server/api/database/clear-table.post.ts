@@ -1,4 +1,5 @@
 import { getDatabaseConnection } from '~/server/utils/database'
+import { readBody } from 'h3'
 
 export default defineEventHandler(async (event) => {
   try {
@@ -39,8 +40,20 @@ export default defineEventHandler(async (event) => {
     const [countResult] = await db.execute(`SELECT COUNT(*) as count FROM \`${tableName}\``)
     const rowCount = (countResult as any)[0].count
 
-    // Clear the table
-    await db.execute(`TRUNCATE TABLE \`${tableName}\``)
+    try {
+      // Disable foreign key checks to allow truncating tables with foreign key constraints
+      await db.execute('SET FOREIGN_KEY_CHECKS = 0')
+      
+      // Clear the table
+      await db.execute(`TRUNCATE TABLE \`${tableName}\``)
+      
+      // Re-enable foreign key checks
+      await db.execute('SET FOREIGN_KEY_CHECKS = 1')
+    } catch (truncateError) {
+      // Re-enable foreign key checks even if truncate fails
+      await db.execute('SET FOREIGN_KEY_CHECKS = 1')
+      throw truncateError
+    }
 
     console.log(`Table '${tableName}' cleared successfully. Removed ${rowCount} rows.`)
 

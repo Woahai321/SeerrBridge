@@ -1,26 +1,26 @@
 <template>
-  <div class="space-y-8">
+  <div class="space-y-4 sm:space-y-6 lg:space-y-8">
     <!-- Header -->
-    <div v-if="collection" class="space-y-4">
-      <div class="flex items-start justify-between gap-4">
-        <div class="flex-1">
+    <div v-if="collection" class="space-y-3 sm:space-y-4">
+      <div class="flex items-start justify-between gap-3 sm:gap-4">
+        <div class="flex-1 min-w-0">
           <Button 
             @click="router.back()"
             variant="ghost"
             size="sm"
-            class="mb-4"
+            class="mb-3 sm:mb-4 w-full sm:w-auto"
           >
             <AppIcon icon="lucide:arrow-left" size="16" class="mr-2" />
             Back to Collections
           </Button>
           
-          <h1 class="text-4xl font-bold text-foreground mb-2">
+          <h1 class="text-2xl sm:text-3xl lg:text-4xl font-bold text-foreground mb-2 break-words">
             {{ collection.franchise_name }}
           </h1>
           
-          <div class="flex flex-wrap items-center gap-4 text-muted-foreground">
+          <div class="flex flex-col sm:flex-row sm:flex-wrap items-start sm:items-center gap-2 sm:gap-3 lg:gap-4 text-xs sm:text-sm text-muted-foreground">
             <span class="flex items-center gap-1">
-              <AppIcon icon="lucide:film" size="16" />
+              <AppIcon icon="lucide:film" size="14" class="sm:w-4 sm:h-4" />
               <span v-if="pagination">
                 Showing {{ (pagination.page - 1) * pagination.limit + 1 }} - {{ Math.min(pagination.page * pagination.limit, pagination.total) }} of {{ pagination.total }} {{ pagination.total === 1 ? 'movie' : 'movies' }}
               </span>
@@ -29,16 +29,16 @@
               </span>
             </span>
             <span v-if="collection.years.length > 0" class="flex items-center gap-1">
-              <AppIcon icon="lucide:calendar" size="16" />
+              <AppIcon icon="lucide:calendar" size="14" class="sm:w-4 sm:h-4" />
               {{ collection.years[0] }} - {{ collection.years[collection.years.length - 1] }}
             </span>
-            <div v-if="collection.genres.length > 0" class="flex items-center gap-2">
-              <AppIcon icon="lucide:tag" size="16" />
+            <div v-if="collection.genres.length > 0" class="flex items-center gap-1.5 sm:gap-2 flex-wrap">
+              <AppIcon icon="lucide:tag" size="14" class="sm:w-4 sm:h-4 flex-shrink-0" />
               <div class="flex gap-1 flex-wrap">
                 <span
                   v-for="genre in collection.genres"
                   :key="genre"
-                  class="px-2 py-0.5 bg-muted rounded-md text-xs capitalize"
+                  class="px-1.5 sm:px-2 py-0.5 bg-muted rounded-md text-[10px] sm:text-xs capitalize"
                 >
                   {{ genre.replace('-', ' ') }}
                 </span>
@@ -46,29 +46,29 @@
             </div>
           </div>
           
-          <div class="flex items-center gap-3 mt-4">
+          <div class="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 sm:gap-3 mt-3 sm:mt-4">
             <Button
               @click="handleRequestCollection"
               :disabled="requestingCollection || (requestableMovieCount !== null && requestableMovieCount === 0)"
               size="lg"
-              class="bg-primary text-primary-foreground hover:bg-primary/90"
+              class="bg-primary text-primary-foreground hover:bg-primary/90 w-full sm:w-auto text-sm sm:text-base"
             >
               <AppIcon 
                 v-if="requestingCollection"
                 icon="lucide:loader-2" 
-                size="18" 
-                class="mr-2 animate-spin"
+                size="16" 
+                class="sm:w-4.5 sm:h-4.5 mr-1.5 sm:mr-2 animate-spin"
               />
               <AppIcon 
                 v-else
                 icon="lucide:plus-circle" 
-                size="18" 
-                class="mr-2"
+                size="16" 
+                class="sm:w-4.5 sm:h-4.5 mr-1.5 sm:mr-2"
               />
-              <span v-if="requestingCollection">
+              <span v-if="requestingCollection" class="truncate">
                 {{ getCollectionProgressText() }}
               </span>
-              <span v-else>
+              <span v-else class="truncate">
                 {{ getRequestableCountText }}
               </span>
             </Button>
@@ -78,9 +78,9 @@
               :href="collection.franchise_url"
               target="_blank"
               rel="noopener noreferrer"
-              class="inline-flex items-center gap-2 text-sm text-primary hover:underline"
+              class="inline-flex items-center justify-center gap-1.5 sm:gap-2 text-xs sm:text-sm text-primary hover:underline px-3 py-2 sm:py-0"
             >
-              <AppIcon icon="lucide:external-link" size="14" />
+              <AppIcon icon="lucide:external-link" size="12" class="sm:w-3.5 sm:h-3.5" />
               View on Source
             </a>
           </div>
@@ -124,66 +124,77 @@
     </div>
 
     <!-- Movies Grid -->
-    <div v-else-if="collection && collection.movies.length > 0" class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 2xl:grid-cols-7 gap-4">
+    <div v-else-if="collection && collection.movies.length > 0" class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 2xl:grid-cols-7 gap-2 sm:gap-3">
       <div
         v-for="(movie, index) in collection.movies"
         :key="`${movie.title}-${movie.year}-${index}`"
+        :style="{ animationDelay: `${index * 50}ms` }"
         @click="openMovieModal(movie)"
-        class="group relative bg-card rounded-xl overflow-hidden cursor-pointer transition-all duration-300 hover:shadow-xl hover:-translate-y-1 border border-border"
+        class="group relative glass-card-enhanced rounded-2xl overflow-hidden cursor-pointer transition-all duration-500 animate-fade-in-up will-change-transform h-full flex flex-col"
       >
+        <!-- Glow Effect on Hover -->
+        <div class="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none z-0">
+          <div class="absolute inset-0 bg-gradient-to-br from-primary/20 via-primary/10 to-transparent blur-2xl rounded-3xl"></div>
+        </div>
+        
         <!-- Movie Poster -->
-        <div class="relative aspect-[2/3] bg-gradient-to-br from-muted to-muted/50 overflow-hidden">
+        <div class="relative flex-1 bg-gradient-to-br from-muted via-muted/80 to-muted/60 overflow-hidden rounded-t-2xl">
           <img
             v-if="getPosterUrl(movie)"
             :src="getPosterUrl(movie)"
             :alt="movie.title"
-            class="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110"
+            class="w-full h-full object-cover transition-all duration-700 group-hover:scale-110 group-hover:brightness-110"
             @error="handleImageError"
+            loading="lazy"
           />
-          <div v-else class="w-full h-full flex flex-col items-center justify-center p-4">
-            <div class="w-16 h-16 rounded-lg bg-muted flex items-center justify-center mb-3">
-              <AppIcon icon="lucide:film" size="32" class="text-muted-foreground" />
+          <div v-else class="w-full h-full flex items-center justify-center p-6 bg-gradient-to-br from-primary/10 via-primary/5 to-muted/50">
+            <div class="text-center transform group-hover:scale-110 transition-transform duration-300">
+              <div class="w-16 h-16 mx-auto mb-3 rounded-2xl bg-gradient-to-br from-primary/20 to-primary/10 backdrop-blur-sm flex items-center justify-center border border-primary/20 shadow-lg">
+                <AppIcon icon="lucide:film" size="32" class="text-primary" />
+              </div>
+              <p class="text-xs text-foreground font-semibold line-clamp-2 drop-shadow-sm">
+                {{ movie.title }}
+              </p>
             </div>
-            <p class="text-xs text-muted-foreground text-center line-clamp-2 font-medium">
-              {{ movie.title }}
-            </p>
           </div>
           
           <!-- Year Badge -->
-          <div class="absolute top-2 left-2">
-            <div class="bg-black/60 backdrop-blur-sm text-white px-2 py-0.5 rounded-md text-xs font-semibold">
+          <div class="absolute top-3 left-3 z-20">
+            <div class="bg-black/60 backdrop-blur-sm text-white px-2 py-1 rounded-md text-[10px] sm:text-xs font-semibold">
               {{ movie.year }}
             </div>
           </div>
           
           <!-- Rating Badge -->
-          <div v-if="movie.trakt?.rating" class="absolute top-2 right-2">
-            <div class="bg-primary/90 backdrop-blur-sm text-primary-foreground px-2 py-0.5 rounded-md text-xs font-semibold flex items-center gap-1">
-              <AppIcon icon="lucide:star" size="12" class="fill-current" />
-              {{ movie.trakt.rating.toFixed(1) }}
+          <div v-if="movie.trakt?.rating" class="absolute top-3 right-3 z-20">
+            <div class="flex items-center gap-1 text-[10px] sm:text-xs bg-amber-500/20 px-2 py-0.5 rounded-full border border-amber-500/30 backdrop-blur-sm">
+              <AppIcon icon="lucide:star" size="10" class="sm:w-3 sm:h-3 text-amber-400 fill-amber-400" />
+              <span class="font-bold text-amber-400">{{ movie.trakt.rating.toFixed(1) }}</span>
             </div>
           </div>
           
           <!-- Hover Overlay -->
-          <div class="absolute inset-0 bg-gradient-to-t from-black/90 via-black/50 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex items-end">
-            <div class="p-3 w-full">
-              <h3 class="text-white font-bold text-sm mb-1 line-clamp-2">
+          <div class="absolute inset-0 bg-gradient-to-t from-black/90 via-black/50 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex items-end z-10">
+            <div class="p-2 sm:p-3 w-full">
+              <h3 class="text-white font-bold text-xs sm:text-sm mb-1 line-clamp-2">
                 {{ movie.title }}
               </h3>
-              <p v-if="movie.trakt?.overview" class="text-white/90 text-xs line-clamp-2 mb-2">
+              <p v-if="movie.trakt?.overview" class="text-white/90 text-[10px] sm:text-xs line-clamp-2 mb-1.5 sm:mb-2">
                 {{ movie.trakt.overview }}
               </p>
               <!-- Availability Badge -->
-              <div v-if="isMovieAvailableInOverseerr(movie)" class="mb-2">
-                <div class="w-full bg-emerald-500/20 border border-emerald-500/30 text-emerald-400 px-3 py-1.5 rounded-md text-xs font-semibold flex items-center justify-center gap-1.5">
-                  <AppIcon icon="lucide:check-circle-2" size="12" />
-                  Available in Overseerr
+              <div v-if="isMovieAvailableInOverseerr(movie)" class="mb-1.5 sm:mb-2">
+                <div class="w-full bg-emerald-500/20 border border-emerald-500/30 text-emerald-400 px-2 sm:px-3 py-1 sm:py-1.5 rounded-md text-[10px] sm:text-xs font-semibold flex items-center justify-center gap-1 sm:gap-1.5">
+                  <AppIcon icon="lucide:check-circle-2" size="10" class="sm:w-3 sm:h-3" />
+                  <span class="hidden sm:inline">Available in Overseerr</span>
+                  <span class="sm:hidden">Available</span>
                 </div>
               </div>
-              <div v-else-if="isMovieRequestedInOverseerr(movie)" class="mb-2">
-                <div class="w-full bg-amber-500/20 border border-amber-500/30 text-amber-400 px-3 py-1.5 rounded-md text-xs font-semibold flex items-center justify-center gap-1.5">
-                  <AppIcon icon="lucide:clock" size="12" />
-                  Already Requested
+              <div v-else-if="isMovieRequestedInOverseerr(movie)" class="mb-1.5 sm:mb-2">
+                <div class="w-full bg-amber-500/20 border border-amber-500/30 text-amber-400 px-2 sm:px-3 py-1 sm:py-1.5 rounded-md text-[10px] sm:text-xs font-semibold flex items-center justify-center gap-1 sm:gap-1.5">
+                  <AppIcon icon="lucide:clock" size="10" class="sm:w-3 sm:h-3" />
+                  <span class="hidden sm:inline">Already Requested</span>
+                  <span class="sm:hidden">Requested</span>
                 </div>
               </div>
               
@@ -193,19 +204,19 @@
                 @click.stop="handleRequest(movie)"
                 :disabled="requestingMovies.has(getMovieId(movie))"
                 size="sm"
-                class="w-full"
+                class="w-full text-xs sm:text-sm"
               >
                 <AppIcon 
                   v-if="requestingMovies.has(getMovieId(movie))"
                   icon="lucide:loader-2" 
-                  size="14" 
-                  class="mr-2 animate-spin"
+                  size="12" 
+                  class="sm:w-3.5 sm:h-3.5 mr-1.5 sm:mr-2 animate-spin"
                 />
                 <AppIcon 
                   v-else
                   icon="lucide:plus" 
-                  size="14" 
-                  class="mr-2"
+                  size="12" 
+                  class="sm:w-3.5 sm:h-3.5 mr-1.5 sm:mr-2"
                 />
                 {{ requestingMovies.has(getMovieId(movie)) ? 'Requesting...' : 'Request' }}
               </Button>
@@ -214,20 +225,21 @@
                 @click.stop="viewMovieInDatabase(movie)"
                 size="sm"
                 variant="outline"
-                class="w-full bg-primary/20 border-primary/30 text-primary hover:bg-primary/30"
+                class="w-full bg-primary/20 border-primary/30 text-primary hover:bg-primary/30 text-xs sm:text-sm"
               >
-                <AppIcon icon="lucide:external-link" size="14" class="mr-2" />
-                View Item
+                <AppIcon icon="lucide:external-link" size="12" class="sm:w-3.5 sm:h-3.5 mr-1.5 sm:mr-2" />
+                <span class="hidden sm:inline">View Item</span>
+                <span class="sm:hidden">View</span>
               </Button>
               <Button
                 v-else-if="isMovieAvailableInOverseerr(movie)"
                 @click.stop
                 size="sm"
                 variant="outline"
-                class="w-full bg-emerald-500/20 border-emerald-500/30 text-emerald-400"
+                class="w-full bg-emerald-500/20 border-emerald-500/30 text-emerald-400 text-xs sm:text-sm"
                 disabled
               >
-                <AppIcon icon="lucide:check-circle-2" size="14" class="mr-2" />
+                <AppIcon icon="lucide:check-circle-2" size="12" class="sm:w-3.5 sm:h-3.5 mr-1.5 sm:mr-2" />
                 Available
               </Button>
               <Button
@@ -235,46 +247,44 @@
                 @click.stop
                 size="sm"
                 variant="outline"
-                class="w-full bg-amber-500/20 border-amber-500/30 text-amber-400"
+                class="w-full bg-amber-500/20 border-amber-500/30 text-amber-400 text-xs sm:text-sm"
                 disabled
               >
-                <AppIcon icon="lucide:clock" size="14" class="mr-2" />
-                Already Requested
+                <AppIcon icon="lucide:clock" size="12" class="sm:w-3.5 sm:h-3.5 mr-1.5 sm:mr-2" />
+                <span class="hidden sm:inline">Already Requested</span>
+                <span class="sm:hidden">Requested</span>
               </Button>
               <Button
                 v-else-if="isMovieRequested(movie) && !isMovieInDatabase(movie)"
                 @click.stop
                 size="sm"
                 variant="outline"
-                class="w-full bg-amber-500/20 border-amber-500/30 text-amber-400"
+                class="w-full bg-amber-500/20 border-amber-500/30 text-amber-400 text-xs sm:text-sm"
                 disabled
               >
-                <AppIcon icon="lucide:check-circle" size="14" class="mr-2" />
-                Already Requested
+                <AppIcon icon="lucide:check-circle" size="12" class="sm:w-3.5 sm:h-3.5 mr-1.5 sm:mr-2" />
+                <span class="hidden sm:inline">Already Requested</span>
+                <span class="sm:hidden">Requested</span>
               </Button>
             </div>
           </div>
         </div>
         
-        <!-- Movie Info -->
-        <div class="p-3 bg-card">
-          <h3 class="font-semibold text-sm text-foreground line-clamp-1 mb-1">
+        <!-- Enhanced Card Info with Glassmorphic Background -->
+        <div class="relative p-3 sm:p-4 space-y-2 bg-gradient-to-b from-card/95 via-card/90 to-card backdrop-blur-sm flex-shrink-0 rounded-b-2xl">
+          <!-- Title -->
+          <h3 class="text-xs sm:text-sm font-bold text-foreground line-clamp-1 transition-all duration-300 group-hover:text-primary">
             {{ movie.title }}
           </h3>
-          <div class="flex items-center justify-between text-xs text-muted-foreground">
-            <span>{{ movie.year }}</span>
-            <span v-if="movie.trakt?.runtime" class="flex items-center gap-1">
-              <AppIcon icon="lucide:clock" size="12" />
+          
+          <!-- Year and Runtime Row -->
+          <div class="flex items-center justify-between gap-2">
+            <p class="text-[10px] sm:text-xs text-muted-foreground font-medium">
+              {{ movie.year }}
+            </p>
+            <span v-if="movie.trakt?.runtime" class="flex items-center gap-1 text-[10px] sm:text-xs text-muted-foreground">
+              <AppIcon icon="lucide:clock" size="10" class="sm:w-3 sm:h-3" />
               {{ movie.trakt.runtime }}m
-            </span>
-          </div>
-          <div v-if="movie.trakt?.genres && movie.trakt.genres.length > 0" class="mt-2 flex gap-1 flex-wrap">
-            <span
-              v-for="genre in movie.trakt.genres.slice(0, 2)"
-              :key="genre"
-              class="px-1.5 py-0.5 bg-muted rounded text-xs capitalize"
-            >
-              {{ genre.replace('-', ' ') }}
             </span>
           </div>
         </div>
@@ -297,18 +307,19 @@
     </div>
 
     <!-- Pagination Controls -->
-    <div v-if="pagination && pagination.total_pages > 1" class="flex items-center justify-center gap-2 pt-4">
+    <div v-if="pagination && pagination.total_pages > 1" class="flex flex-wrap items-center justify-center gap-1.5 sm:gap-2 pt-3 sm:pt-4">
       <Button
         @click="goToPage(pagination.page - 1)"
         :disabled="!pagination.has_prev || loading"
         variant="outline"
         size="sm"
+        class="p-1.5 sm:px-3 sm:py-2"
       >
-        <AppIcon icon="lucide:chevron-left" size="16" class="mr-1" />
-        Previous
+        <AppIcon icon="lucide:chevron-left" size="14" class="sm:w-4 sm:h-4 mr-0.5 sm:mr-1" />
+        <span class="hidden sm:inline">Previous</span>
       </Button>
       
-      <div class="flex items-center gap-1">
+      <div class="flex items-center gap-0.5 sm:gap-1">
         <Button
           v-for="pageNum in visiblePages"
           :key="pageNum"
@@ -316,7 +327,7 @@
           :disabled="loading"
           :variant="pageNum === pagination.page ? 'default' : 'outline'"
           size="sm"
-          class="min-w-[40px]"
+          class="min-w-[32px] sm:min-w-[40px] p-1.5 sm:px-3 sm:py-2 text-xs sm:text-sm"
         >
           {{ pageNum }}
         </Button>
@@ -327,9 +338,10 @@
         :disabled="!pagination.has_next || loading"
         variant="outline"
         size="sm"
+        class="p-1.5 sm:px-3 sm:py-2"
       >
-        Next
-        <AppIcon icon="lucide:chevron-right" size="16" class="ml-1" />
+        <span class="hidden sm:inline">Next</span>
+        <AppIcon icon="lucide:chevron-right" size="14" class="sm:w-4 sm:h-4 ml-0.5 sm:ml-1" />
       </Button>
     </div>
     
