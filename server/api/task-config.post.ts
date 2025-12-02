@@ -1,5 +1,6 @@
 import { defineEventHandler, readBody } from 'h3'
-import { getDatabaseConnection } from '~/server/utils/database'
+import { writeEnvFile } from '~/server/utils/env-file'
+import { envConfig } from '~/server/utils/env-config'
 
 export default defineEventHandler(async (event) => {
   try {
@@ -13,94 +14,64 @@ export default defineEventHandler(async (event) => {
       }
     }
     
-    const db = await getDatabaseConnection()
-    
-    // Validate config type
-    const validTypes = ['string', 'int', 'float', 'bool', 'json']
-    if (!validTypes.includes(configType)) {
+    // Get environment variable name
+    const envKey = envConfig.mapToEnvVars[configKey]
+    if (!envKey) {
       return {
         success: false,
-        error: `Invalid config type. Must be one of: ${validTypes.join(', ')}`
+        error: `No environment variable mapping for config key: ${configKey}`
       }
     }
     
-    // Convert value to string for storage
-    let stringValue
-    if (configType === 'json') {
-      stringValue = JSON.stringify(value)
+    // Convert value based on type
+    let envValue: string | boolean | number
+    if (configType === 'bool') {
+      envValue = value === true || value === 'true' || value === '1' ? 'true' : 'false'
+    } else if (configType === 'int' || configType === 'float') {
+      envValue = String(value)
     } else {
-      stringValue = String(value)
+      envValue = String(value)
     }
     
-    // Check if config exists
-    const [existingConfig] = await db.execute(`
-      SELECT id FROM system_config WHERE config_key = ?
-    `, [configKey])
-    
-    if ((existingConfig as any[]).length > 0) {
-      // Update existing config
-      await db.execute(`
-        UPDATE system_config 
-        SET config_value = ?, config_type = ?, description = ?, updated_at = NOW()
-        WHERE config_key = ?
-      `, [stringValue, configType, description || `Configuration for ${configKey}`, configKey])
-    } else {
-      // Insert new config
-      await db.execute(`
-        INSERT INTO system_config (config_key, config_value, config_type, description, is_active, created_at, updated_at)
-        VALUES (?, ?, ?, ?, 1, NOW(), NOW())
-      `, [configKey, stringValue, configType, description || `Configuration for ${configKey}`])
-    }
+    // Write to .env file
+    writeEnvFile({ [envKey]: envValue })
     
     // Trigger background task refresh if this is a task-related config
     const taskConfigKeys = [
       'enable_automatic_background_task',
       'enable_show_subscription_task',
       'refresh_interval_minutes',
-      'movie_queue_maxsize',
-      'tv_queue_maxsize',
-      'token_refresh_interval_minutes',
-      'movie_processing_check_interval_minutes',
-      'library_refresh_interval_minutes',
-      'subscription_check_interval_minutes',
-      'background_tasks_enabled',
-      'queue_processing_enabled',
-      'scheduler_enabled'
+      'headless_mode',
+      'torrent_filter_regex',
+      'max_movie_size',
+      'max_episode_size'
     ]
     
     if (taskConfigKeys.includes(configKey)) {
       // Trigger a refresh of background tasks
       try {
-        // Call the SeerrBridge API to reload environment variables
         const seerrbridgeUrl = process.env.SEERRBRIDGE_URL || 'http://localhost:8777'
-        
-        const refreshResponse = await fetch(`${seerrbridgeUrl}/reload-env`, {
+        await fetch(`${seerrbridgeUrl}/reload-env`, {
           method: 'POST',
-          headers: {
-            'Content-Type': 'application/json'
-          }
+          headers: { 'Content-Type': 'application/json' },
+          signal: AbortSignal.timeout(2000)
         })
-        
-        if (refreshResponse.ok) {
-          console.log(`Task configuration updated: ${configKey} = ${value}. Background tasks refresh triggered successfully.`)
-        } else {
-          console.warn(`Failed to trigger background task refresh: ${refreshResponse.statusText}`)
-        }
+        console.log(`Task configuration updated: ${configKey} = ${value}. Background tasks refresh triggered.`)
       } catch (error) {
-        console.warn('Failed to trigger background task refresh:', error)
+        console.debug('Backend not available for immediate refresh, changes will be picked up on next reload')
       }
     }
     
     return {
       success: true,
-      message: `Configuration ${configKey} updated successfully`
+      message: `Configuration ${configKey} updated successfully in .env file`
     }
-  } catch (error) {
+  } catch (error: any) {
     console.error('Error updating task configuration:', error)
     return {
       success: false,
       error: 'Failed to update task configuration',
-      details: error instanceof Error ? error.message : 'Unknown error'
+      details: error.message || 'Unknown error'
     }
   }
 })

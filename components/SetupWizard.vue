@@ -1,9 +1,6 @@
 <template>
-  <!-- Backend Initializing Screen -->
-  <BackendInitializing v-if="showBackendLoading" @ready="handleBackendReady" />
-  
   <!-- Setup Wizard -->
-  <div v-else class="min-h-screen bg-background flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8">
+  <div class="min-h-screen bg-background flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8">
     <div class="max-w-5xl w-full space-y-8">
       <div class="text-center">
         <h2 class="mt-6 text-3xl font-extrabold text-foreground">
@@ -583,7 +580,7 @@ const isSkippingSetup = ref(false)
 const setupSkipped = ref(false)
 const envVarsAvailable = ref(false)
 const testing = ref([false, false, false, false])
-const showBackendLoading = ref(false)
+// Removed showBackendLoading - no longer blocking setup with loading screen
 
 const steps = ref([
   { id: 'dmm', name: 'DMM Config', testStatus: null },
@@ -1355,8 +1352,8 @@ const completeSetup = async () => {
       // Show success message
       console.log('Setup completed successfully!')
       
-      // Show backend initialization loading screen
-      showBackendLoading.value = true
+      // Redirect directly to dashboard without showing loading screen
+      navigateTo('/dashboard')
     } else {
       console.error('Setup failed:', response.error)
       alert('Setup failed: ' + (response.error || 'Unknown error'))
@@ -1415,8 +1412,5 @@ const loadExistingConfig = async () => {
   }
 }
 
-const handleBackendReady = () => {
-  // Backend is ready, redirect to dashboard
-  navigateTo('/dashboard')
-}
+// Removed handleBackendReady - setup now redirects directly to dashboard
 </script>

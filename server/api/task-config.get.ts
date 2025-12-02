@@ -1,70 +1,56 @@
-import { defineEventHandler, getQuery } from 'h3'
-import { getDatabaseConnection } from '~/server/utils/database'
+import { defineEventHandler } from 'h3'
+import { readEnvFile } from '~/server/utils/env-file'
+import { envConfig } from '~/server/utils/env-config'
 
 export default defineEventHandler(async (event) => {
   try {
-    const db = await getDatabaseConnection()
+    // Read from .env file
+    const envValues = readEnvFile()
     
-    // Get all task-related configurations
-    const [configs] = await db.execute(`
-      SELECT config_key, config_value, config_type, description, is_active
-      FROM system_config 
-      WHERE config_key IN (
-        'enable_automatic_background_task',
-        'enable_show_subscription_task',
-        'refresh_interval_minutes',
-        'movie_queue_maxsize',
-        'tv_queue_maxsize',
-        'token_refresh_interval_minutes',
-        'movie_processing_check_interval_minutes',
-        'library_refresh_interval_minutes',
-        'subscription_check_interval_minutes',
-        'background_tasks_enabled',
-        'queue_processing_enabled',
-        'scheduler_enabled',
-        'overseerr_base',
-        'headless_mode',
-        'torrent_filter_regex',
-        'max_movie_size',
-        'max_episode_size'
-      )
-      AND is_active = 1
-      ORDER BY config_key
-    `)
+    // Task-related config keys
+    const taskConfigKeys = [
+      'enable_automatic_background_task',
+      'enable_show_subscription_task',
+      'refresh_interval_minutes',
+      'headless_mode',
+      'torrent_filter_regex',
+      'max_movie_size',
+      'max_episode_size'
+    ]
     
     // Convert to object format
-    const taskConfig = {}
-    for (const config of configs) {
-      let value = config.config_value
+    const taskConfig: Record<string, any> = {}
+    for (const configKey of taskConfigKeys) {
+      const envKey = envConfig.mapToEnvVars[configKey]
+      if (!envKey) continue
+      
+      const value = envValues[envKey] || process.env[envKey]
+      if (value === undefined || value === '') continue
       
       // Convert value based on type
-      switch (config.config_type) {
-        case 'bool':
-          value = value === 'true' || value === '1'
-          break
-        case 'int':
-          value = parseInt(value)
-          break
-        case 'float':
-          value = parseFloat(value)
-          break
-        case 'json':
-          try {
-            value = JSON.parse(value)
-          } catch (e) {
-            value = value
-          }
-          break
-        default:
-          // string - keep as is
-          break
+      let convertedValue: any = value
+      let configType = 'string'
+      
+      if (['HEADLESS_MODE', 'ENABLE_AUTOMATIC_BACKGROUND_TASK', 'ENABLE_SHOW_SUBSCRIPTION_TASK'].includes(envKey)) {
+        configType = 'bool'
+        convertedValue = value === 'true' || value === '1'
+      } else if (['REFRESH_INTERVAL_MINUTES', 'MAX_MOVIE_SIZE', 'MAX_EPISODE_SIZE'].includes(envKey)) {
+        configType = 'int'
+        convertedValue = parseInt(value, 10)
+        if (isNaN(convertedValue)) {
+          convertedValue = value
+          configType = 'string'
+        }
+      } else {
+        configType = 'string'
+        convertedValue = value
       }
       
-      taskConfig[config.config_key] = {
-        value,
-        type: config.config_type,
-        description: config.description,
-        isActive: config.is_active
+      taskConfig[configKey] = {
+        value: convertedValue,
+        type: configType,
+        description: `Configuration for ${configKey}`,
+        isActive: true
       }
     }
     
@@ -72,7 +58,7 @@ export default defineEventHandler(async (event) => {
       success: true,
       data: taskConfig
     }
-  } catch (error) {
+  } catch (error: any) {
     console.error('Error fetching task configuration:', error)
     return {
       success: false,

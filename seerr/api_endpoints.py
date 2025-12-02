@@ -11,7 +11,8 @@ import json
 from seerr.task_config_manager import task_config
 from seerr.background_tasks import refresh_all_scheduled_tasks, refresh_queue_sizes
 from seerr.db_logger import log_info, log_error
-from seerr.secure_config_manager import secure_config
+from seerr.env_file_manager import env_file
+import os
 
 app = FastAPI(title="SeerrBridge API", version="1.0.0")
 
@@ -153,8 +154,30 @@ async def retry_failed_items():
 async def get_config():
     """Get all configuration values with proper masking for sensitive data"""
     try:
-        # Get all configurations using the secure config manager
-        configs = secure_config.get_all_configs()
+        # Map config keys to environment variable names
+        config_to_env = {
+            'rd_access_token': 'RD_ACCESS_TOKEN',
+            'rd_refresh_token': 'RD_REFRESH_TOKEN',
+            'rd_client_id': 'RD_CLIENT_ID',
+            'rd_client_secret': 'RD_CLIENT_SECRET',
+            'overseerr_base': 'OVERSEERR_BASE',
+            'overseerr_api_key': 'OVERSEERR_API_KEY',
+            'trakt_api_key': 'TRAKT_API_KEY',
+            'discord_webhook_url': 'DISCORD_WEBHOOK_URL',
+            'headless_mode': 'HEADLESS_MODE',
+            'enable_automatic_background_task': 'ENABLE_AUTOMATIC_BACKGROUND_TASK',
+            'enable_show_subscription_task': 'ENABLE_SHOW_SUBSCRIPTION_TASK',
+            'refresh_interval_minutes': 'REFRESH_INTERVAL_MINUTES',
+            'torrent_filter_regex': 'TORRENT_FILTER_REGEX',
+            'max_movie_size': 'MAX_MOVIE_SIZE',
+            'max_episode_size': 'MAX_EPISODE_SIZE',
+            'db_host': 'DB_HOST',
+            'db_port': 'DB_PORT',
+            'db_name': 'DB_NAME',
+            'db_user': 'DB_USER',
+            'db_password': 'DB_PASSWORD',
+            'mysql_root_password': 'MYSQL_ROOT_PASSWORD'
+        }
         
         # Define sensitive keys that should be masked
         sensitive_keys = {
@@ -163,43 +186,54 @@ async def get_config():
             'db_password', 'mysql_root_password'
         }
         
+        # Read from .env file
+        env = env_file.read_env()
+        # Also check process.env for runtime values
+        all_env = {**env, **os.environ}
+        
         # Convert to the format expected by the frontend
         config_list = []
-        for key, value in configs.items():
+        for config_key, env_key in config_to_env.items():
+            value = all_env.get(env_key)
+            
+            if value is None or value == '':
+                continue
+            
             # Determine config type based on value
-            if isinstance(value, bool):
+            if value.lower() in ('true', 'false'):
                 config_type = 'bool'
-            elif isinstance(value, int):
-                config_type = 'int'
-            elif isinstance(value, float):
-                config_type = 'float'
+                value_bool = value.lower() == 'true'
+            elif value.replace('.', '', 1).isdigit():
+                if '.' in value:
+                    config_type = 'float'
+                    value_float = float(value)
+                else:
+                    config_type = 'int'
+                    value_int = int(value)
             else:
                 config_type = 'string'
             
             # Mask sensitive values for security
             display_value = value
-            is_encrypted = False
+            is_sensitive = config_key in sensitive_keys
             
-            if key in sensitive_keys and value and isinstance(value, str):
-                is_encrypted = True
+            if is_sensitive and value:
                 # Show first 3 and last 3 characters for sensitive values
                 if len(value) > 6:
                     display_value = f"{value[:3]}{'*' * (len(value) - 6)}{value[-3:]}"
                 elif len(value) > 3:
-                    # For medium length values, show first 2 and last 2
                     display_value = f"{value[:2]}{'*' * (len(value) - 4)}{value[-2:]}"
                 else:
-                    # For very short values, just show asterisks
                     display_value = '*' * len(value)
             
             config_list.append({
-                'config_key': key,
+                'config_key': config_key,
                 'config_value': display_value,
                 'config_type': config_type,
-                'description': f"Configuration for {key}",
+                'description': f"Configuration for {config_key}",
                 'is_active': True,
-                'is_encrypted': is_encrypted,
-                'has_value': bool(value)  # Indicate if the value exists (even if encrypted)
+                'is_encrypted': is_sensitive,
+                'has_value': bool(value)
             })
         
         return {
@@ -212,21 +246,37 @@ async def get_config():
 
 @app.get("/config/internal")
 async def get_config_internal():
-    """Get raw decrypted configuration values (INTERNAL USE ONLY)"""
+    """Get raw configuration values from .env (INTERNAL USE ONLY)"""
     try:
-        # Get all configurations using the secure config manager (already decrypted)
-        configs = secure_config.get_all_configs()
+        # Read from .env file
+        env = env_file.read_env()
+        # Also check process.env for runtime values
+        all_env = {**env, **os.environ}
         
-        # Convert to dictionary format
+        # Map to config keys
+        env_to_config = {
+            'RD_ACCESS_TOKEN': 'rd_access_token',
+            'RD_REFRESH_TOKEN': 'rd_refresh_token',
+            'RD_CLIENT_ID': 'rd_client_id',
+            'RD_CLIENT_SECRET': 'rd_client_secret',
+            'OVERSEERR_BASE': 'overseerr_base',
+            'OVERSEERR_API_KEY': 'overseerr_api_key',
+            'TRAKT_API_KEY': 'trakt_api_key',
+            'DISCORD_WEBHOOK_URL': 'discord_webhook_url',
+            'HEADLESS_MODE': 'headless_mode',
+            'ENABLE_AUTOMATIC_BACKGROUND_TASK': 'enable_automatic_background_task',
+            'ENABLE_SHOW_SUBSCRIPTION_TASK': 'enable_show_subscription_task',
+            'REFRESH_INTERVAL_MINUTES': 'refresh_interval_minutes',
+            'TORRENT_FILTER_REGEX': 'torrent_filter_regex',
+            'MAX_MOVIE_SIZE': 'max_movie_size',
+            'MAX_EPISODE_SIZE': 'max_episode_size'
+        }
+        
         config_dict = {}
-        for key, value in configs.items():
-            # Store as string representation for consistency
-            if isinstance(value, (bool, int, float)):
-                config_dict[key] = str(value)
-            elif value is None:
-                config_dict[key] = ""
-            else:
-                config_dict[key] = value
+        for env_key, config_key in env_to_config.items():
+            value = all_env.get(env_key)
+            if value:
+                config_dict[config_key] = value
         
         return {
             "success": True,
@@ -238,60 +288,87 @@ async def get_config_internal():
 
 @app.post("/config")
 async def update_config(config_data: dict):
-    """Update configuration values using the secure config manager"""
+    """Update configuration values in .env file"""
     try:
         configs = config_data.get('configs', [])
         
         if not configs or not isinstance(configs, list):
             raise HTTPException(status_code=400, detail="Invalid configuration data")
         
+        # Map config keys to environment variable names
+        config_to_env = {
+            'rd_access_token': 'RD_ACCESS_TOKEN',
+            'rd_refresh_token': 'RD_REFRESH_TOKEN',
+            'rd_client_id': 'RD_CLIENT_ID',
+            'rd_client_secret': 'RD_CLIENT_SECRET',
+            'overseerr_base': 'OVERSEERR_BASE',
+            'overseerr_api_key': 'OVERSEERR_API_KEY',
+            'trakt_api_key': 'TRAKT_API_KEY',
+            'discord_webhook_url': 'DISCORD_WEBHOOK_URL',
+            'headless_mode': 'HEADLESS_MODE',
+            'enable_automatic_background_task': 'ENABLE_AUTOMATIC_BACKGROUND_TASK',
+            'enable_show_subscription_task': 'ENABLE_SHOW_SUBSCRIPTION_TASK',
+            'refresh_interval_minutes': 'REFRESH_INTERVAL_MINUTES',
+            'torrent_filter_regex': 'TORRENT_FILTER_REGEX',
+            'max_movie_size': 'MAX_MOVIE_SIZE',
+            'max_episode_size': 'MAX_EPISODE_SIZE',
+            'db_host': 'DB_HOST',
+            'db_port': 'DB_PORT',
+            'db_name': 'DB_NAME',
+            'db_user': 'DB_USER',
+            'db_password': 'DB_PASSWORD',
+            'mysql_root_password': 'MYSQL_ROOT_PASSWORD'
+        }
+        
         updated_count = 0
         errors = []
+        env_updates = {}
         
         for config in configs:
             try:
                 config_key = config.get('config_key')
                 config_value = config.get('config_value')
                 config_type = config.get('config_type', 'string')
-                description = config.get('description', f"Configuration for {config_key}")
                 
                 if not config_key:
                     errors.append("Missing config_key")
                     continue
                 
-                # Use the secure config manager to set the configuration
-                success = secure_config.set_config(
-                    key=config_key,
-                    value=config_value,
-                    config_type=config_type,
-                    description=description
-                )
+                # Get environment variable name
+                env_key = config_to_env.get(config_key)
+                if not env_key:
+                    errors.append(f"No environment variable mapping for {config_key}")
+                    continue
                 
-                if success:
-                    updated_count += 1
-                    log_info("API", f"Updated configuration: {config_key}", module="api_endpoints", function="update_config")
+                # Convert value based on type
+                if config_value is None or config_value == '':
+                    continue
+                
+                if config_type == 'bool':
+                    env_value = 'true' if config_value else 'false'
+                elif config_type in ('int', 'float'):
+                    env_value = str(config_value)
                 else:
-                    errors.append(f"Failed to update {config_key}")
+                    env_value = str(config_value)
+                
+                env_updates[env_key] = env_value
+                updated_count += 1
+                log_info("API", f"Updated configuration: {config_key}", module="api_endpoints", function="update_config")
                     
             except Exception as e:
                 error_msg = f"Error updating {config.get('config_key', 'unknown')}: {str(e)}"
                 errors.append(error_msg)
                 log_error("API Error", error_msg, module="api_endpoints", function="update_config")
         
+        # Write all updates to .env file
+        if env_updates:
+            env_file.update_env(env_updates)
+        
         # Check if any task-related configurations were updated
         task_config_keys = [
             'enable_automatic_background_task',
             'enable_show_subscription_task',
             'refresh_interval_minutes',
-            'movie_queue_maxsize',
-            'tv_queue_maxsize',
-            'token_refresh_interval_minutes',
-            'movie_processing_check_interval_minutes',
-            'library_refresh_interval_minutes',
-            'subscription_check_interval_minutes',
-            'background_tasks_enabled',
-            'queue_processing_enabled',
-            'scheduler_enabled',
             'headless_mode',
             'torrent_filter_regex',
             'max_movie_size',
@@ -310,7 +387,7 @@ async def update_config(config_data: dict):
         
         return {
             "success": True,
-            "message": f"Updated {updated_count} configuration values",
+            "message": f"Updated {updated_count} configuration values in .env file",
             "updated_count": updated_count,
             "errors": errors,
             "task_refresh_triggered": has_task_config_changes

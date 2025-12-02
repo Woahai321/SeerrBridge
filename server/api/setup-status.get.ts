@@ -1,40 +1,29 @@
 import { defineEventHandler } from 'h3'
-import { getDatabaseConnection } from '~/server/utils/database'
+import { readEnvFile } from '~/server/utils/env-file'
+import { envConfig } from '~/server/utils/env-config'
 
 export default defineEventHandler(async (event) => {
   try {
-    const db = await getDatabaseConnection()
+    // Read from .env file
+    const envValues = readEnvFile()
     
-    // Check if setup is required
-    const [setupRequired] = await db.execute(`
-      SELECT config_value FROM system_config 
-      WHERE config_key = 'setup_required'
-    `)
+    // Also check process.env for runtime values
+    const allEnv = { ...envValues, ...process.env }
     
-    const [onboardingCompleted] = await db.execute(`
-      SELECT config_value FROM system_config 
-      WHERE config_key = 'onboarding_completed'
-    `)
+    // Check setup status flags from .env
+    const setupRequired = allEnv['SETUP_REQUIRED']?.toLowerCase() === 'true'
+    const onboardingCompleted = allEnv['ONBOARDING_COMPLETED']?.toLowerCase() === 'true'
     
-    // Check for required configurations in database
+    // Check for required configurations in .env
     const requiredConfigs = [
       'rd_access_token', 'rd_refresh_token', 'rd_client_id', 'rd_client_secret',
       'overseerr_base', 'overseerr_api_key', 'trakt_api_key'
     ]
     
-    const missingConfigs = []
-    for (const configKey of requiredConfigs) {
-      const [result] = await db.execute(`
-        SELECT config_value FROM system_config 
-        WHERE config_key = ? AND config_value IS NOT NULL AND config_value != ''
-      `, [configKey])
-      
-      if ((result as any[]).length === 0) {
-        missingConfigs.push(configKey)
-      }
-    }
+    const missingConfigs: string[] = []
+    const envVarsAvailable: string[] = []
+    const envVarsMissing: string[] = []
     
-    // Check for environment variables as fallback
     const envVarMap: Record<string, string> = {
       'rd_access_token': 'RD_ACCESS_TOKEN',
       'rd_refresh_token': 'RD_REFRESH_TOKEN',
@@ -45,14 +34,15 @@ export default defineEventHandler(async (event) => {
       'trakt_api_key': 'TRAKT_API_KEY'
     }
     
-    const envVarsAvailable: string[] = []
-    const envVarsMissing: string[] = []
-    
     for (const configKey of requiredConfigs) {
       const envVar = envVarMap[configKey]
-      if (envVar && process.env[envVar]) {
+      if (!envVar) continue
+      
+      const value = allEnv[envVar]
+      if (value && value.trim() !== '') {
         envVarsAvailable.push(configKey)
-      } else if (envVar) {
+      } else {
+        missingConfigs.push(configKey)
         envVarsMissing.push(configKey)
       }
     }
@@ -60,8 +50,11 @@ export default defineEventHandler(async (event) => {
     // If all env vars are available, we can skip setup
     const canSkipSetup = envVarsAvailable.length === requiredConfigs.length
     
-    const needsSetup = (setupRequired as any[])[0]?.config_value === 'true' || 
-                      (onboardingCompleted as any[])[0]?.config_value === 'false' ||
+    // Setup is needed if:
+    // 1. SETUP_REQUIRED is explicitly true AND onboarding is not completed
+    // 2. Any required configs are missing (and we can't skip setup)
+    // If all configs are present, setup is complete regardless of flags
+    const needsSetup = (setupRequired && onboardingCompleted !== true) || 
                       (missingConfigs.length > 0 && !canSkipSetup)
     
     return {
@@ -69,8 +62,8 @@ export default defineEventHandler(async (event) => {
       data: {
         needsSetup,
         missingConfigs,
-        setupRequired: (setupRequired as any[])[0]?.config_value === 'true',
-        onboardingCompleted: (onboardingCompleted as any[])[0]?.config_value === 'true',
+        setupRequired,
+        onboardingCompleted,
         envVarsAvailable,
         envVarsMissing,
         canSkipSetup

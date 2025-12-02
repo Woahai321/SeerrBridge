@@ -706,11 +706,7 @@ async def reload_environment():
         "REFRESH_INTERVAL_MINUTES": REFRESH_INTERVAL_MINUTES
     }
     
-    # Invalidate secure config cache to force reload from database
-    from seerr.secure_config_manager import secure_config
-    secure_config.invalidate_cache()
-    
-    # Reload configuration
+    # Reload configuration from .env file
     from seerr.config import load_config
     if not load_config(override=True):
         raise HTTPException(status_code=500, detail="Failed to reload environment variables")

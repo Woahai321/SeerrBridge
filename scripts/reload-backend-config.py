@@ -9,20 +9,13 @@ import sys
 sys.path.append('.')
 
 from seerr.config import load_config
-from seerr.secure_config_manager import secure_config
 
 def reload_backend_config():
     print("🔄 Reloading Backend Configuration")
     print("=" * 50)
     
-    # Clear the secure config cache
-    print("\n1️⃣ Clearing configuration cache...")
-    secure_config._cache = {}
-    secure_config._cache_timestamp = None
-    print("   ✅ Cache cleared")
-    
-    # Reload configuration
-    print("\n2️⃣ Reloading configuration...")
+    # Reload configuration from .env file
+    print("\n1️⃣ Reloading configuration from .env file...")
     success = load_config(override=True)
     
     if success:
@@ -37,11 +30,7 @@ def reload_backend_config():
         
         # Check if values look correct
         if OVERSEERR_API_KEY and OVERSEERR_BASE:
-            if len(OVERSEERR_API_KEY) > 50:
-                print("\n   ⚠️  API key still looks encrypted (too long)")
-                print("   💡 You may need to re-enter your credentials in the frontend")
-            else:
-                print("\n   ✅ API key looks correct")
+            print("\n   ✅ API key configured")
         else:
             print("\n   ❌ Missing API credentials")
             print("   💡 Please enter your credentials in the frontend settings")

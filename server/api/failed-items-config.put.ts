@@ -1,9 +1,10 @@
-import { getDatabaseConnection } from '~/server/utils/database'
+import { defineEventHandler, readBody, createError } from 'h3'
+import { writeEnvFile } from '~/server/utils/env-file'
+import { envConfig } from '~/server/utils/env-config'
 
 export default defineEventHandler(async (event) => {
   try {
     const body = await readBody(event)
-    const db = await getDatabaseConnection()
     
     const {
       enable_failed_item_retry,
@@ -60,37 +61,38 @@ export default defineEventHandler(async (event) => {
       }
     }
     
-    // Update configurations
-    const updatePromises = configs.map(async (config) => {
+    // Build updates for .env file
+    const envUpdates: Record<string, string | boolean | number> = {}
+    for (const config of configs) {
       if (config.value === undefined || config.value === null) {
-        return // Skip undefined values
+        continue // Skip undefined values
       }
       
-      const value = config.type === 'boolean' ? (config.value ? 'true' : 'false') : String(config.value)
+      const envKey = envConfig.mapToEnvVars[config.key]
+      if (!envKey) {
+        console.warn(`No environment variable mapping for config key: ${config.key}`)
+        continue
+      }
       
-      await db.execute(`
-        INSERT INTO system_config (config_key, config_value, config_type, description, is_active, updated_at)
-        VALUES (?, ?, ?, ?, TRUE, NOW())
-        ON DUPLICATE KEY UPDATE
-        config_value = VALUES(config_value),
-        updated_at = NOW()
-      `, [
-        config.key,
-        value,
-        config.type,
-        getConfigDescription(config.key)
-      ])
-    })
+      if (config.type === 'boolean') {
+        envUpdates[envKey] = config.value ? 'true' : 'false'
+      } else {
+        envUpdates[envKey] = String(config.value)
+      }
+    }
     
-    await Promise.all(updatePromises)
+    // Write to .env file
+    if (Object.keys(envUpdates).length > 0) {
+      writeEnvFile(envUpdates)
+    }
     
     return {
       success: true,
-      message: 'Failed items configuration updated successfully',
+      message: 'Failed items configuration updated successfully in .env file',
       updated_configs: configs.filter(c => c.value !== undefined && c.value !== null).map(c => c.key)
     }
     
-  } catch (error) {
+  } catch (error: any) {
     console.error('Error updating failed items configuration:', error)
     
     if (error.statusCode) {
@@ -103,16 +105,3 @@ export default defineEventHandler(async (event) => {
     })
   }
 })
-
-function getConfigDescription(key: string): string {
-  const descriptions: Record<string, string> = {
-    'enable_failed_item_retry': 'Enable or disable the automatic retry of failed media items',
-    'failed_item_retry_interval_minutes': 'Interval in minutes between failed item retry checks',
-    'failed_item_max_retry_attempts': 'Maximum number of retry attempts for failed items',
-    'failed_item_retry_delay_hours': 'Initial delay in hours before the first retry attempt for a failed item',
-    'failed_item_retry_backoff_multiplier': 'Multiplier for the retry delay (e.g., 2 for exponential backoff: 2h, 4h, 8h)',
-    'failed_item_max_retry_delay_hours': 'Maximum delay in hours between retry attempts for a failed item'
-  }
-  
-  return descriptions[key] || 'Configuration setting'
-}

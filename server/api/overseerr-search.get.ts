@@ -1,6 +1,4 @@
 import { defineEventHandler, getQuery } from 'h3'
-import { getDatabaseConnection } from '~/server/utils/database'
-import { configEncryption } from '~/server/utils/encryption'
 
 interface SearchResult {
   id: number

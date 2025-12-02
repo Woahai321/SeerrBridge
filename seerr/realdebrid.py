@@ -10,7 +10,7 @@ from loguru import logger
 
 from seerr.config import RD_CLIENT_ID, RD_CLIENT_SECRET, RD_REFRESH_TOKEN, RD_ACCESS_TOKEN, USE_DATABASE
 from seerr.db_logger import log_info, log_success, log_error
-from seerr.secure_config_manager import secure_config
+from seerr.env_file_manager import env_file
 
 def refresh_access_token():
     """
@@ -72,15 +72,8 @@ def refresh_access_token():
             import seerr.config
             seerr.config.RD_ACCESS_TOKEN = RD_ACCESS_TOKEN
             
-            # Save access token to secure config manager (encrypted)
-            if USE_DATABASE:
-                secure_config.set_config(
-                    'rd_access_token',
-                    RD_ACCESS_TOKEN,
-                    'string',
-                    'Real-Debrid Access Token (encrypted)',
-                    is_sensitive=True
-                )
+            # Save access token to .env file
+            env_file.set('RD_ACCESS_TOKEN', RD_ACCESS_TOKEN)
             
             # Check if the API returned a new refresh token and save it if present
             if 'refresh_token' in response_data and response_data['refresh_token']:
@@ -88,16 +81,9 @@ def refresh_access_token():
                 RD_REFRESH_TOKEN = new_refresh_token
                 seerr.config.RD_REFRESH_TOKEN = new_refresh_token
                 
-                # Save refresh token to secure config manager (encrypted)
-                if USE_DATABASE:
-                    secure_config.set_config(
-                        'rd_refresh_token',
-                        new_refresh_token,
-                        'string',
-                        'Real-Debrid Refresh Token (encrypted)',
-                        is_sensitive=True
-                    )
-                    logger.info("Successfully updated refresh token in database.")
+                # Save refresh token to .env file
+                env_file.set('RD_REFRESH_TOKEN', new_refresh_token)
+                logger.info("Successfully updated refresh token in .env file.")
             
             logger.info("Successfully refreshed access token.")
 
@@ -146,15 +132,8 @@ def refresh_access_token():
                     import seerr.config
                     seerr.config.RD_ACCESS_TOKEN = RD_ACCESS_TOKEN
                     
-                    # Save access token to secure config manager (encrypted)
-                    if USE_DATABASE:
-                        secure_config.set_config(
-                            'rd_access_token',
-                            RD_ACCESS_TOKEN,
-                            'string',
-                            'Real-Debrid Access Token (encrypted)',
-                            is_sensitive=True
-                        )
+                    # Save access token to .env file
+                    env_file.set('RD_ACCESS_TOKEN', RD_ACCESS_TOKEN)
                     
                     # Check if the API returned a new refresh token and save it if present
                     if 'refresh_token' in response_data and response_data['refresh_token']:
@@ -162,16 +141,9 @@ def refresh_access_token():
                         RD_REFRESH_TOKEN = new_refresh_token
                         seerr.config.RD_REFRESH_TOKEN = new_refresh_token
                         
-                        # Save refresh token to secure config manager (encrypted)
-                        if USE_DATABASE:
-                            secure_config.set_config(
-                                'rd_refresh_token',
-                                new_refresh_token,
-                                'string',
-                                'Real-Debrid Refresh Token (encrypted)',
-                                is_sensitive=True
-                            )
-                            logger.info("Successfully updated refresh token in database (fallback method).")
+                        # Save refresh token to .env file
+                        env_file.set('RD_REFRESH_TOKEN', new_refresh_token)
+                        logger.info("Successfully updated refresh token in .env file (fallback method).")
                     
                     logger.info("Successfully refreshed access token using fallback method.")
                     return True
@@ -188,22 +160,22 @@ def refresh_access_token():
                     error_description = response_data.get('error_description', 'Unknown error')
                     logger.error(f"Failed to refresh access token: {error_description}")
                     
-                    # If refresh token is invalid or expired, force setup mode
+                    # If refresh token is invalid or expired, mark setup as required
                     if response_data.get('error_code') == 2 or 'wrong_parameter' in str(response_data.get('error', '')).lower():
-                        logger.warning("Refresh token appears to be invalid or expired. Forcing setup mode...")
-                        if USE_DATABASE:
-                            secure_config.force_setup_mode(reason="Refresh token invalid or expired - requires re-authentication")
+                        logger.warning("Refresh token appears to be invalid or expired. Setup required...")
+                        env_file.set('SETUP_REQUIRED', 'true')
+                        env_file.set('ONBOARDING_COMPLETED', 'false')
                     
                     return False
             
             # If error_code is not 2, we didn't try the fallback, so handle the error here
             logger.error(f"Failed to refresh access token: {response_data.get('error_description', 'Unknown error')}")
             
-            # If refresh token is invalid or expired, force setup mode
+            # If refresh token is invalid or expired, mark setup as required
             if response_data.get('error_code') == 2 or 'wrong_parameter' in str(response_data.get('error', '')).lower():
-                logger.warning("Refresh token appears to be invalid or expired. Forcing setup mode...")
-                if USE_DATABASE:
-                    secure_config.force_setup_mode(reason="Refresh token invalid or expired - requires re-authentication")
+                logger.warning("Refresh token appears to be invalid or expired. Setup required...")
+                env_file.set('SETUP_REQUIRED', 'true')
+                env_file.set('ONBOARDING_COMPLETED', 'false')
             
             return False
     except Exception as e:
@@ -333,42 +305,46 @@ def check_and_refresh_access_token():
         return refresh_access_token()
 
 def _clear_corrupted_token():
-    """Clear corrupted access token from secure config and force setup mode"""
+    """Clear corrupted access token from .env and mark setup as required"""
     try:
-        if USE_DATABASE:
-            # Clear the corrupted token
-            secure_config.set_config(
-                'rd_access_token',
-                '',
-                'string',
-                'Real-Debrid Access Token (encrypted)',
-                is_sensitive=True
-            )
-            # Also clear the module-level variable
-            import seerr.config
-            seerr.config.RD_ACCESS_TOKEN = None
-            logger.info("Cleared corrupted access token from secure storage")
-            # Force setup mode since tokens are corrupted
-            secure_config.force_setup_mode(reason="Corrupted access token detected - requires re-authentication")
+        # Clear the corrupted token from .env
+        env_file.set('RD_ACCESS_TOKEN', '')
+        # Also clear the module-level variable
+        import seerr.config
+        seerr.config.RD_ACCESS_TOKEN = None
+        logger.info("Cleared corrupted access token from .env file")
+        # Mark setup as required since tokens are corrupted
+        env_file.set('SETUP_REQUIRED', 'true')
+        env_file.set('ONBOARDING_COMPLETED', 'false')
     except Exception as e:
         logger.error(f"Failed to clear corrupted token: {e}")
 
-def save_token_to_secure_config(token_type: str, token_value: str, expiry_time: int = None) -> bool:
+def save_token_to_env(token_type: str, token_value: str, expiry_time: int = None) -> bool:
     """
-    Save token information to secure config manager (encrypted)
+    Save token information to .env file
     
     Args:
         token_type (str): Type of token (rd_access_token, rd_refresh_token, etc.)
-        token_value (str): Token value to encrypt and store
+        token_value (str): Token value to store
         expiry_time (int): Expiry timestamp in milliseconds (optional)
         
     Returns:
         bool: True if successful, False otherwise
     """
-    if not USE_DATABASE:
-        return False
-    
     try:
+        # Map token type to environment variable name
+        token_to_env = {
+            'rd_access_token': 'RD_ACCESS_TOKEN',
+            'rd_refresh_token': 'RD_REFRESH_TOKEN',
+            'rd_client_id': 'RD_CLIENT_ID',
+            'rd_client_secret': 'RD_CLIENT_SECRET'
+        }
+        
+        env_key = token_to_env.get(token_type)
+        if not env_key:
+            log_error("Token Management", f"Unknown token type: {token_type}")
+            return False
+        
         # Create token data structure if expiry is provided
         if expiry_time:
             token_data = {
@@ -379,21 +355,11 @@ def save_token_to_secure_config(token_type: str, token_value: str, expiry_time: 
         else:
             token_json = token_value
         
-        # Save to secure config manager (automatically encrypted)
-        success = secure_config.set_config(
-            token_type,
-            token_json,
-            'string',
-            f'Real-Debrid {token_type.replace("rd_", "").replace("_", " ").title()} (encrypted)',
-            is_sensitive=True
-        )
+        # Save to .env file
+        env_file.set(env_key, token_json)
         
-        if success:
-            log_success("Token Management", f"Saved {token_type} token to secure config")
-        else:
-            log_error("Token Management", f"Failed to save {token_type} token to secure config")
-        
-        return success
+        log_success("Token Management", f"Saved {token_type} token to .env file")
+        return True
         
     except Exception as e:
         log_error("Token Management", f"Failed to save {token_type} token: {e}")

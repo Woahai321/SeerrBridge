@@ -51,23 +51,18 @@ services:
       DB_PASSWORD: ${DB_PASSWORD:-seerrbridge}
       USE_DATABASE: "true"
       
-      # Encryption Master Key - RECOMMENDED for production
-      # Required to decrypt sensitive configuration stored in the database
-      # If not set, a temporary key will be generated (data lost on restart)
-      SEERRBRIDGE_MASTER_KEY: ${SEERRBRIDGE_MASTER_KEY}
-      
       # Python Configuration
       PYTHONUNBUFFERED: "1"
       PYTHONDONTWRITEBYTECODE: "1"
       
-      # Note: All other configuration (API keys, tokens, advanced settings, etc.)
-      # is managed via the web interface and stored securely in the database.
+      # Note: All configuration (API keys, tokens, advanced settings, etc.)
+      # is managed via the web interface and stored in .env file.
     ports:
       - "8777:8777"  # SeerrBridge API
       - "8778:8778"  # Setup API server
     volumes:
       - ./logs:/app/logs  # Log files
-      - ./data:/app/data  # Application data
+      - ./data:/app/data  # Application data (includes .env file)
     networks:
       - seerrbridge-network
     healthcheck:
@@ -96,8 +91,6 @@ services:
     depends_on:
       mysql:
         condition: service_healthy
-      seerrbridge:
-        condition: service_started
     environment:
       # Database configuration
       DB_HOST: mysql
@@ -118,7 +111,7 @@ services:
       - "3777:3777"  # Nuxt frontend
     volumes:
       - ./logs:/app/logs  # Log files
-      - ./data:/app/data  # Application data
+      - ./data:/app/data  # Application data (includes .env file)
     networks:
       - seerrbridge-network
     healthcheck:

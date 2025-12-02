@@ -1,46 +1,70 @@
-import { getDatabaseConnection } from '~/server/utils/database'
+import { readEnvFile } from '~/server/utils/env-file'
+import { envConfig } from '~/server/utils/env-config'
 
 export default defineEventHandler(async (event) => {
   try {
-    const db = await getDatabaseConnection()
+    // Read from .env file
+    const envValues = readEnvFile()
     
-    // Get failed item retry configuration
-    const configQuery = `
-      SELECT 
-        config_key,
-        config_value,
-        config_type,
-        description,
-        is_active
-      FROM system_config
-      WHERE config_key LIKE 'failed_item_%'
-      ORDER BY config_key
-    `
+    // Failed items config keys
+    const failedItemConfigKeys = [
+      'enable_failed_item_retry',
+      'failed_item_retry_interval_minutes',
+      'failed_item_max_retry_attempts',
+      'failed_item_retry_delay_hours',
+      'failed_item_retry_backoff_multiplier',
+      'failed_item_max_retry_delay_hours'
+    ]
     
-    const [configResult] = await db.execute(configQuery)
-    const configs = (configResult as any[]).reduce((acc, row) => {
-      let value = row.config_value
+    // Convert to object format
+    const configs: Record<string, any> = {}
+    for (const configKey of failedItemConfigKeys) {
+      const envKey = envConfig.mapToEnvVars[configKey]
+      if (!envKey) continue
+      
+      const value = envValues[envKey] || process.env[envKey]
+      if (value === undefined || value === '') continue
       
       // Convert value based on type
-      if (row.config_type === 'boolean') {
-        value = value === 'true' || value === '1'
-      } else if (row.config_type === 'integer') {
-        value = parseInt(value, 10)
-      } else if (row.config_type === 'decimal') {
-        value = parseFloat(value)
+      let convertedValue: any = value
+      let configType = 'string'
+      
+      if (envKey === 'ENABLE_FAILED_ITEM_RETRY') {
+        configType = 'boolean'
+        convertedValue = value === 'true' || value === '1'
+      } else {
+        configType = 'integer'
+        convertedValue = parseInt(value, 10)
+        if (isNaN(convertedValue)) {
+          convertedValue = value
+          configType = 'string'
+        }
       }
       
-      acc[row.config_key] = {
-        value,
-        type: row.config_type,
-        description: row.description,
-        is_active: row.is_active
+      configs[configKey] = {
+        value: convertedValue,
+        type: configType,
+        description: getConfigDescription(configKey),
+        is_active: true
       }
-      
-      return acc
-    }, {})
+    }
     
-    // Get current failed items statistics
+    function getConfigDescription(key: string): string {
+      const descriptions: Record<string, string> = {
+        'enable_failed_item_retry': 'Enable or disable the automatic retry of failed media items',
+        'failed_item_retry_interval_minutes': 'Interval in minutes between failed item retry checks',
+        'failed_item_max_retry_attempts': 'Maximum number of retry attempts for failed items',
+        'failed_item_retry_delay_hours': 'Initial delay in hours before the first retry attempt',
+        'failed_item_retry_backoff_multiplier': 'Multiplier for the retry delay (e.g., 2 for exponential backoff: 2h, 4h, 8h)',
+        'failed_item_max_retry_delay_hours': 'Maximum delay in hours between retry attempts for a failed item'
+      }
+      return descriptions[key] || 'Configuration setting'
+    }
+    
+    // Get current failed items statistics (from database - this is application data, not config)
+    const { getDatabaseConnection } = await import('~/server/utils/database')
+    const db = await getDatabaseConnection()
+    
     const statsQuery = `
       SELECT 
         COUNT(*) as total_failed,

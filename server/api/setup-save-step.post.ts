@@ -29,23 +29,30 @@ export default defineEventHandler(async (event) => {
       `Setup step ${step} progress`
     ])
     
-    // Save individual config values
+    // Save individual config values to .env file (not database)
+    const { writeEnvFile } = await import('~/server/utils/env-file')
+    const { envConfig } = await import('~/server/utils/env-config')
+    
+    const envUpdates: Record<string, string | boolean | number> = {}
     for (const [key, value] of Object.entries(config)) {
       if (value !== null && value !== undefined && value !== '') {
-        await db.execute(`
-          INSERT INTO system_config (config_key, config_value, config_type, description, is_active, created_at, updated_at)
-          VALUES (?, ?, ?, ?, true, NOW(), NOW())
-          ON DUPLICATE KEY UPDATE 
-            config_value = VALUES(config_value),
-            updated_at = NOW()
-        `, [
-          key,
-          String(value),
-          typeof value === 'boolean' ? 'bool' : 
-          typeof value === 'number' ? 'int' : 'string',
-          `Configuration for ${key}`
-        ])
+        const envKey = envConfig.mapToEnvVars[key]
+        if (envKey) {
+          // Convert value based on type
+          if (typeof value === 'boolean') {
+            envUpdates[envKey] = value ? 'true' : 'false'
+          } else if (typeof value === 'number') {
+            envUpdates[envKey] = String(value)
+          } else {
+            envUpdates[envKey] = String(value)
+          }
+        }
       }
+    }
+    
+    // Write config values to .env file
+    if (Object.keys(envUpdates).length > 0) {
+      writeEnvFile(envUpdates)
     }
     
     // Update current step
