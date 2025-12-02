@@ -2,6 +2,7 @@ import { defineEventHandler } from 'h3'
 import { getDatabaseConnection } from '~/server/utils/database'
 import { execSync } from 'child_process'
 import { join } from 'path'
+import { nodeConfigEncryption } from '~/server/utils/node-encryption'
 
 export default defineEventHandler(async (event) => {
   try {
@@ -88,8 +89,14 @@ export default defineEventHandler(async (event) => {
     // If we have all required configs, save them to the database
     if (missingConfigs.length === 0 && foundConfigs.length > 0) {
       // Use the secure config endpoint to save (handles encryption for sensitive values)
+      // Try main API first, then setup API if main API is not available
       const seerrbridgeUrl = process.env.SEERRBRIDGE_URL || 'http://localhost:8777'
+      const setupApiUrl = process.env.SEERRBRIDGE_SETUP_URL || 'http://localhost:8778'
       
+      let apiSuccess = false
+      let lastError: Error | null = null
+      
+      // Try main API first (port 8777)
       try {
         const response = await fetch(`${seerrbridgeUrl}/api/config`, {
           method: 'POST',
@@ -99,10 +106,19 @@ export default defineEventHandler(async (event) => {
           body: JSON.stringify({ configs: foundConfigs })
         })
         
-        if (!response.ok) {
+        if (response.ok) {
+          apiSuccess = true
+        } else {
           const errorText = await response.text()
           throw new Error(`SeerrBridge API returned ${response.status}: ${errorText}`)
         }
+      } catch (apiError) {
+        console.warn('Main API (8777) not available, will try fallback:', apiError)
+        lastError = apiError as Error
+      }
+      
+      // If main API succeeded, continue with completion flags
+      if (apiSuccess) {
         
         // Mark setup as completed
         const db = await getDatabaseConnection()
@@ -148,10 +164,12 @@ export default defineEventHandler(async (event) => {
           configsLoaded: foundConfigs.length,
           configs: foundConfigs.map(c => ({ key: c.config_key, type: c.config_type }))
         }
-      } catch (apiError) {
-        console.error('Error calling SeerrBridge API, trying Python encryption script:', apiError)
+      }
+      
+      // Fallback: Save directly to database with Node.js encryption
+      if (!apiSuccess) {
+        console.log('Using fallback: saving directly to database with Node.js encryption')
         
-        // Fallback: Try to use Python encryption script directly
         const db = await getDatabaseConnection()
         const sensitiveKeys = ['rd_access_token', 'rd_refresh_token', 'rd_client_id', 'rd_client_secret', 'overseerr_api_key', 'trakt_api_key']
         
@@ -161,29 +179,43 @@ export default defineEventHandler(async (event) => {
         for (const config of foundConfigs) {
           let dbValue = String(config.config_value)
           
-          // Try to encrypt sensitive values using Python script
+          // Try to encrypt sensitive values using Node.js encryption (matches Python logic)
           if (sensitiveKeys.indexOf(config.config_key) !== -1) {
             try {
-              const projectRoot = process.cwd()
-              const encryptScriptPath = join(projectRoot, 'scripts', 'encrypt_value.py')
-              
-              // Call Python script to encrypt
-              const result = execSync(`python3 "${encryptScriptPath}"`, {
-                input: dbValue,
-                encoding: 'utf8',
-                maxBuffer: 10 * 1024 * 1024,
-                stdio: ['pipe', 'pipe', 'pipe'],
-                env: { ...process.env }
-              })
-              
-              const parsed = JSON.parse(result.trim())
-              if (parsed.value) {
-                dbValue = parsed.value
-              } else {
-                throw new Error('Encryption returned no value')
+              // First try Node.js encryption (works in prod without Python)
+              try {
+                dbValue = nodeConfigEncryption.encryptValue(dbValue)
+              } catch (nodeEncryptError) {
+                // If Node.js encryption fails (e.g., no master key), try Python as last resort
+                console.warn(`Node.js encryption failed for ${config.config_key}, trying Python:`, nodeEncryptError)
+                try {
+                  const projectRoot = process.cwd()
+                  const encryptScriptPath = join(projectRoot, 'scripts', 'encrypt_value.py')
+                  
+                  // Call Python script to encrypt (only works if Python is available)
+                  const result = execSync(`python3 "${encryptScriptPath}"`, {
+                    input: dbValue,
+                    encoding: 'utf8',
+                    maxBuffer: 10 * 1024 * 1024,
+                    stdio: ['pipe', 'pipe', 'pipe'],
+                    env: { ...process.env }
+                  })
+                  
+                  const parsed = JSON.parse(result.trim())
+                  if (parsed.value) {
+                    dbValue = parsed.value
+                  } else {
+                    throw new Error('Encryption returned no value')
+                  }
+                } catch (pythonEncryptError) {
+                  console.warn(`Failed to encrypt ${config.config_key} using both Node.js and Python:`, pythonEncryptError)
+                  failedKeys.push(config.config_key)
+                  allSaved = false
+                  continue
+                }
               }
             } catch (encryptError) {
-              console.warn(`Failed to encrypt ${config.config_key} using Python script:`, encryptError)
+              console.warn(`Failed to encrypt ${config.config_key}:`, encryptError)
               failedKeys.push(config.config_key)
               allSaved = false
               continue
@@ -249,14 +281,14 @@ export default defineEventHandler(async (event) => {
           
           return {
             success: true,
-            message: 'Configuration loaded from environment variables and saved successfully (using Python encryption)',
+            message: 'Configuration loaded from environment variables and saved successfully (using Node.js encryption)',
             configsLoaded: foundConfigs.length,
             configs: foundConfigs.map(c => ({ key: c.config_key, type: c.config_type }))
           }
         } else {
           return {
             success: false,
-            error: `Failed to encrypt and save some sensitive values: ${failedKeys.join(', ')}. Please ensure Python 3 and the encryption key are available.`,
+            error: `Failed to encrypt and save some sensitive values: ${failedKeys.join(', ')}. Please ensure SEERRBRIDGE_MASTER_KEY is set in your environment.`,
             message: 'Some configuration values could not be saved',
             configsLoaded: foundConfigs.length - failedKeys.length,
             failedKeys
