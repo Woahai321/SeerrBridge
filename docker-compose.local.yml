@@ -113,6 +113,7 @@ services:
       NODE_ENV: production
       NUXT_HOST: 0.0.0.0
       NUXT_PORT: 3777
+      PORT: 3777
     ports:
       - "3777:3777"  # Nuxt frontend
     volumes:

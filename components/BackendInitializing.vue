@@ -66,6 +66,14 @@
             :style="{ animationDelay: `${(i - 1) * 0.2}s` }"
           ></div>
         </div>
+
+        <!-- Close/Skip Button -->
+        <button
+          @click="handleClose"
+          class="mt-4 px-4 py-2 text-sm font-medium text-muted-foreground hover:text-foreground transition-colors duration-200 border border-border rounded-lg hover:border-primary/50 hover:bg-primary/5"
+        >
+          Skip and continue
+        </button>
       </div>
     </div>
   </div>
@@ -159,6 +167,16 @@ const updateProgress = () => {
 }
 
 const startTime = ref(Date.now())
+
+const handleClose = () => {
+  // Clear the interval if it's still running
+  if (checkInterval.value) {
+    clearInterval(checkInterval.value)
+    checkInterval.value = null
+  }
+  // Emit ready event to close the overlay
+  emit('ready')
+}
 
 onMounted(() => {
   // Start with first status active
