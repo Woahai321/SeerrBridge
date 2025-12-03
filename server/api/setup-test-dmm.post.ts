@@ -17,9 +17,11 @@ export default defineEventHandler(async (event) => {
     }
     
     // During setup, call the setup API server running on port 8778
-    // In Docker, we use the service name from docker-compose
-    // 'seerrbridge' is the service name in both prod and dev
-    const setupApiUrl = 'http://seerrbridge:8778'
+    // Use environment variable if set, otherwise try localhost (unified container) or seerrbridge (multi-container)
+    // In unified container, use localhost; in multi-container, use service name
+    const setupApiUrl = process.env.SETUP_API_URL || 
+                        process.env.SEERRBRIDGE_SETUP_URL || 
+                        'http://localhost:8778'
     
     try {
       const response = await fetch(`${setupApiUrl}/api/setup/test-dmm`, {

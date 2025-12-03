@@ -29,23 +29,13 @@ jobs:
         uses: docker/setup-buildx-action@v3
         with:
           install: true
-      # Metadata for seerrbridge
+      # Metadata for unified seerrbridge image
       - name: Docker metadata for seerrbridge
         id: meta_seerrbridge
         uses: docker/metadata-action@v5
         with:
           images: |
             ghcr.io/${{ github.repository_owner }}/seerrbridge
-          tags: |
-            type=semver,pattern={{version}}
-            type=raw,value=latest,enable={{is_default_branch}}
-      # Metadata for bridgeboard
-      - name: Docker metadata for bridgeboard
-        id: meta_bridgeboard
-        uses: docker/metadata-action@v5
-        with:
-          images: |
-            ghcr.io/${{ github.repository_owner }}/bridgeboard
           tags: |
             type=semver,pattern={{version}}
             type=raw,value=latest,enable={{is_default_branch}}
@@ -56,12 +46,12 @@ jobs:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
-      # Build and push seerrbridge
-      - name: Build and push seerrbridge
+      # Build and push unified seerrbridge image (includes MySQL + Backend + Frontend)
+      - name: Build and push unified seerrbridge
         uses: docker/build-push-action@v5
         with:
           context: .
-          file: ./Dockerfile
+          file: ./Dockerfile.unified
           platforms: linux/amd64,linux/arm64
           push: ${{ github.event_name != 'pull_request' }}
           tags: ${{ steps.meta_seerrbridge.outputs.tags }}
@@ -69,22 +59,6 @@ jobs:
           provenance: mode=max
           sbom: true
           cache-from: type=registry,ref=ghcr.io/${{ github.repository_owner }}/seerrbridge:latest
-          cache-to: type=inline
-          build-args: |
-            BUILDKIT_INLINE_CACHE=1
-      # Build and push bridgeboard
-      - name: Build and push bridgeboard
-        uses: docker/build-push-action@v5
-        with:
-          context: .
-          file: ./Dockerfile.nuxt
-          platforms: linux/amd64,linux/arm64
-          push: ${{ github.event_name != 'pull_request' }}
-          tags: ${{ steps.meta_bridgeboard.outputs.tags }}
-          labels: ${{ steps.meta_bridgeboard.outputs.labels }}
-          provenance: mode=max
-          sbom: true
-          cache-from: type=registry,ref=ghcr.io/${{ github.repository_owner }}/bridgeboard:latest
           cache-to: type=inline
           build-args: |
             BUILDKIT_INLINE_CACHE=1

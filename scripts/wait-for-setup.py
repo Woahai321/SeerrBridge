@@ -392,12 +392,57 @@ def health_check():
     """Health check endpoint"""
     return jsonify({"status": "ok", "service": "setup-wait"})
 
+def wait_for_database(timeout: int = 300) -> bool:
+    """Wait for MySQL database to be ready"""
+    log_status("Starting database health check...", "info")
+    
+    # Get database credentials from environment variables
+    # Default to 'localhost' for unified container, 'mysql' for multi-container
+    db_host = os.environ.get('DB_HOST', 'localhost')
+    db_port = int(os.environ.get('DB_PORT', '3306'))
+    db_user = os.environ.get('DB_USER', 'seerrbridge')
+    db_password = os.environ.get('DB_PASSWORD', 'seerrbridge')
+    db_name = os.environ.get('DB_NAME', 'seerrbridge')
+    
+    start_time = time.time()
+    attempt = 0
+    
+    while time.time() - start_time < timeout:
+        attempt += 1
+        elapsed = int(time.time() - start_time)
+        
+        try:
+            # Try to connect to MySQL
+            import pymysql
+            connection = pymysql.connect(
+                host=db_host,
+                port=db_port,
+                user=db_user,
+                password=db_password,
+                database=db_name,
+                connect_timeout=5
+            )
+            connection.close()
+            log_status(f"Database connection successful! (took {elapsed}s)", "success")
+            return True
+        except ImportError:
+            log_status("pymysql not available, skipping database check", "warning")
+            return True  # Continue if pymysql is not installed
+        except Exception as e:
+            if attempt % 6 == 0:  # Log every 30 seconds (6 * 5s)
+                log_status(f"Database not ready yet (attempt {attempt}, {elapsed}s elapsed): {str(e)[:100]}...", "progress")
+            time.sleep(5)
+    
+    log_status(f"Database failed to start within {timeout}s timeout", "error")
+    return False
+
 def wait_for_setup_completion(timeout: int = 600) -> bool:
     """Wait for setup wizard to be completed"""
     log_status("Starting setup wizard completion check...", "info")
-    # Try both production and dev URLs
+    # Try both production and dev URLs, plus localhost for unified container
     setup_api_urls = [
-        "http://darthvadarr-nuxt:3777/api/setup-status",  # Production
+        "http://localhost:3777/api/setup-status",  # Unified container
+        "http://darthvadarr-nuxt:3777/api/setup-status",  # Production multi-container
         "http://darthvadarr-nuxt-dev:3777/api/setup-status"  # Development
     ]
     start_time = time.time()
@@ -508,6 +553,12 @@ if __name__ == "__main__":
     log_status("Starting SeerrBridge setup wait process...", "info")
     log_status(f"Process initiated at {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}", "info")
     
+    # Step 1: Wait for database to be ready
+    log_status("Step 1/3: Waiting for MySQL database to be ready...", "info")
+    if not wait_for_database():
+        log_status("Startup failed: Database not ready", "error")
+        sys.exit(1)
+    
     # Start the setup API server in a separate thread
     api_thread = threading.Thread(target=start_setup_api_server, daemon=True)
     api_thread.start()
@@ -516,12 +567,14 @@ if __name__ == "__main__":
     time.sleep(2)
     log_status("Setup API server started on port 8778", "success")
     
-    # Wait for setup completion
+    # Step 2: Wait for setup completion
+    log_status("Step 2/3: Waiting for setup wizard completion...", "info")
     if not wait_for_setup_completion():
         log_status("Setup not completed, exiting...", "error")
         sys.exit(1)
     
-    # Start backend
+    # Step 3: Start backend
+    log_status("Step 3/3: Starting backend service...", "info")
     backend_process = start_backend()
     
     # Wait for backend to finish

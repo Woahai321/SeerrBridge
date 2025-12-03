@@ -1,0 +1,191 @@
+# Unified Dockerfile for SeerrBridge
+# Includes: MySQL + Python Backend + Nuxt Frontend in a single container
+
+# ==============================================================================
+# Stage 1: Python Builder
+# ==============================================================================
+FROM python:3.10-slim AS python-builder
+
+# Install build dependencies
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential \
+    gcc \
+    g++ \
+    && rm -rf /var/lib/apt/lists/*
+
+# Copy requirements and install Python dependencies
+COPY requirements.txt .
+RUN pip install --no-cache-dir --user -r requirements.txt
+
+# ==============================================================================
+# Stage 2: Node.js Builder (Frontend)
+# ==============================================================================
+FROM node:20-slim AS node-builder
+
+WORKDIR /app/frontend
+
+# Install build dependencies
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    python3 \
+    make \
+    g++ \
+    && rm -rf /var/lib/apt/lists/*
+
+# Copy package files
+COPY package*.json ./
+
+# Install dependencies
+RUN npm ci --legacy-peer-deps --omit=dev
+
+# Copy source code
+COPY . .
+
+# Set build environment variables
+ENV NODE_ENV=production
+ENV NUXT_HOST=0.0.0.0
+ENV NUXT_PORT=3777
+
+# Set database environment variables for build-time runtime config
+ARG DB_HOST=localhost
+ARG DB_PORT=3306
+ARG DB_NAME=seerrbridge
+ARG DB_USER=seerrbridge
+ARG DB_PASSWORD=seerrbridge
+ARG SEERRBRIDGE_URL=http://localhost:8777
+
+ENV DB_HOST=${DB_HOST}
+ENV DB_PORT=${DB_PORT}
+ENV DB_NAME=${DB_NAME}
+ENV DB_USER=${DB_USER}
+ENV DB_PASSWORD=${DB_PASSWORD}
+ENV SEERRBRIDGE_URL=${SEERRBRIDGE_URL}
+
+# Build the application
+RUN npm run build
+
+# ==============================================================================
+# Stage 3: Final Unified Image
+# ==============================================================================
+FROM python:3.10-slim
+
+# Install MariaDB (MySQL-compatible), Node.js, and all runtime dependencies
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    # MariaDB server (MySQL-compatible)
+    mariadb-server \
+    mariadb-client \
+    # Node.js runtime
+    curl \
+    gnupg \
+    && curl -fsSL https://deb.nodesource.com/setup_20.x | bash - \
+    && apt-get install -y --no-install-recommends nodejs \
+    # Runtime dependencies for Python/Chrome
+    wget \
+    unzip \
+    libnss3 \
+    libxss1 \
+    libasound2 \
+    fonts-liberation \
+    libappindicator3-1 \
+    libgbm-dev \
+    libgtk-3-0 \
+    libx11-xcb1 \
+    libxtst6 \
+    xdg-utils \
+    libglib2.0-0 \
+    libdrm2 \
+    libxrandr2 \
+    ca-certificates \
+    jq \
+    supervisor \
+    # Cleanup
+    && rm -rf /var/lib/apt/lists/* \
+    && apt-get clean
+
+# Install browser and driver based on architecture
+RUN arch=$(uname -m) && \
+    if [ "$arch" = "x86_64" ]; then \
+        PLATFORM="linux64" && \
+        CHROME_VERSION=$(curl -s "https://googlechromelabs.github.io/chrome-for-testing/last-known-good-versions-with-downloads.json" | \
+        jq -r '.channels.Stable.version') && \
+        CHROME_URL=$(curl -s "https://googlechromelabs.github.io/chrome-for-testing/last-known-good-versions-with-downloads.json" | \
+        jq -r ".channels.Stable.downloads.chrome[] | select(.platform == \"$PLATFORM\") | .url") && \
+        echo "Downloading Chrome version ${CHROME_VERSION} for $PLATFORM from: $CHROME_URL" && \
+        wget -O /tmp/chrome-$PLATFORM.zip $CHROME_URL && \
+        unzip /tmp/chrome-$PLATFORM.zip -d /opt/ && \
+        mv /opt/chrome-$PLATFORM /opt/chrome && \
+        ln -sf /opt/chrome/chrome /usr/bin/google-chrome && \
+        chmod +x /usr/bin/google-chrome && \
+        rm -f /tmp/chrome-$PLATFORM.zip && \
+        CHROMEDRIVER_URL=$(curl -s "https://googlechromelabs.github.io/chrome-for-testing/last-known-good-versions-with-downloads.json" | \
+        jq -r ".channels.Stable.downloads.chromedriver[] | select(.platform == \"$PLATFORM\") | .url") && \
+        echo "Downloading ChromeDriver for $PLATFORM from: $CHROMEDRIVER_URL" && \
+        wget -O /tmp/chromedriver-$PLATFORM.zip $CHROMEDRIVER_URL && \
+        unzip /tmp/chromedriver-$PLATFORM.zip -d /usr/local/bin/ && \
+        mv /usr/local/bin/chromedriver-$PLATFORM/chromedriver /usr/local/bin/chromedriver && \
+        chmod +x /usr/local/bin/chromedriver && \
+        rm -rf /tmp/chromedriver-$PLATFORM.zip /usr/local/bin/chromedriver-$PLATFORM; \
+    elif [ "$arch" = "aarch64" ]; then \
+        echo "deb http://deb.debian.org/debian bullseye main" > /etc/apt/sources.list && \
+        echo "deb http://deb.debian.org/debian-security bullseye-security main" >> /etc/apt/sources.list && \
+        apt-get update && \
+        apt-get install -y --no-install-recommends chromium chromium-driver && \
+        ln -sf /usr/bin/chromium /usr/bin/google-chrome && \
+        ln -sf /usr/bin/chromium-driver /usr/local/bin/chromedriver && \
+        rm -rf /var/lib/apt/lists/*; \
+    else \
+        echo "Unsupported architecture: $arch"; exit 1; \
+    fi
+
+# Copy Python packages from builder stage
+COPY --from=python-builder /root/.local /root/.local
+
+# Copy built Nuxt application from builder stage
+COPY --from=node-builder /app/frontend/.output /app/.output
+COPY --from=node-builder /app/frontend/package*.json /app/
+
+# Install only production Node.js dependencies
+WORKDIR /app
+RUN npm ci --legacy-peer-deps --omit=dev --ignore-scripts && \
+    npm cache clean --force
+
+# Copy application code
+COPY . .
+
+# Copy MySQL initialization scripts
+COPY mysql-init /docker-entrypoint-initdb.d/
+
+# Create necessary directories
+RUN mkdir -p /app/logs /app/data /var/lib/mysql /var/run/mysqld && \
+    chown -R mysql:mysql /var/lib/mysql /var/run/mysqld && \
+    chmod 755 /var/lib/mysql /var/run/mysqld
+
+# Copy supervisor configuration
+COPY supervisord.conf /etc/supervisor/conf.d/supervisord.conf
+
+# Copy startup scripts
+COPY scripts/start-unified.sh /usr/local/bin/start-unified.sh
+COPY scripts/wait-for-mysql.sh /app/scripts/wait-for-mysql.sh
+COPY scripts/wait-for-frontend.sh /app/scripts/wait-for-frontend.sh
+COPY scripts/start-services-sequentially.sh /app/scripts/start-services-sequentially.sh
+RUN chmod +x /usr/local/bin/start-unified.sh /app/scripts/wait-for-mysql.sh /app/scripts/wait-for-frontend.sh /app/scripts/start-services-sequentially.sh
+
+# Set environment variables
+ENV CHROME_BIN=/usr/bin/google-chrome
+ENV CHROME_DRIVER_PATH=/usr/local/bin/chromedriver
+ENV RUNNING_IN_DOCKER=true
+ENV PYTHONPATH=/app
+ENV PATH=/root/.local/bin:$PATH
+ENV NODE_ENV=production
+ENV NUXT_HOST=0.0.0.0
+ENV NUXT_PORT=3777
+
+# Expose ports
+EXPOSE 3306 3777 8777 8778
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=10s --start-period=120s --retries=3 \
+    CMD curl -f http://localhost:8777/status && curl -f http://localhost:3777/api/health || exit 1
+
+# Start unified container
+CMD ["/usr/local/bin/start-unified.sh"]
+

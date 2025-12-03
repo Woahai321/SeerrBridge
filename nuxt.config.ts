@@ -39,6 +39,7 @@ export default defineNuxtConfig({
   runtimeConfig: {
     // Private keys (only available on server-side)
     seerrbridgeUrl: process.env.SEERRBRIDGE_URL || 'http://localhost:8777',
+    setupApiUrl: process.env.SETUP_API_URL || process.env.SEERRBRIDGE_SETUP_URL || 'http://localhost:8778',
     dbHost: process.env.DB_HOST || 'localhost',
     dbPort: process.env.DB_PORT || '3307',
     dbName: process.env.DB_NAME || 'seerrbridge',

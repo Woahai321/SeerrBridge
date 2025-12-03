@@ -1,6 +1,6 @@
 export const useBackendReady = () => {
   const isBackendReady = ref(false)
-  const isChecking = ref(true)
+  const isChecking = ref(false) // Initialize to false - only set to true when explicitly starting checks
   const checkInterval = ref<ReturnType<typeof setInterval> | null>(null)
   const { fetchStatus } = useBridgeStatus()
 
@@ -29,6 +29,9 @@ export const useBackendReady = () => {
   }
 
   const startChecking = async () => {
+    // Set checking state to true when we start
+    isChecking.value = true
+    
     // Initial check - if backend is already ready, don't start polling
     const alreadyReady = await checkBackendStatus()
     if (alreadyReady) {
@@ -57,6 +60,7 @@ export const useBackendReady = () => {
   }
 
   const stopChecking = () => {
+    isChecking.value = false
     if (checkInterval.value) {
       clearInterval(checkInterval.value)
       checkInterval.value = null
