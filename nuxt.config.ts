@@ -41,7 +41,7 @@ export default defineNuxtConfig({
     seerrbridgeUrl: process.env.SEERRBRIDGE_URL || 'http://localhost:8777',
     setupApiUrl: process.env.SETUP_API_URL || process.env.SEERRBRIDGE_SETUP_URL || 'http://localhost:8778',
     dbHost: process.env.DB_HOST || 'localhost',
-    dbPort: process.env.DB_PORT || '3307',
+    dbPort: process.env.DB_PORT || '3306', // Default to 3306 for unified container (3307 is for external connections)
     dbName: process.env.DB_NAME || 'seerrbridge',
     dbUser: process.env.DB_USER || 'seerrbridge',
     dbPassword: process.env.DB_PASSWORD || 'seerrbridge',
@@ -145,14 +145,17 @@ export default defineNuxtConfig({
     // Exclude large directories from Nitro's file scanning
     // Specifically exclude images directory to avoid scanning 16,670+ image files
     // BUT ensure server/ directory is NOT ignored so API routes are included
-    // Note: 'logs/**' only matches root logs/ directory, NOT pages/logs/ (pages are handled separately)
+    // Note: scanDirs: ['server'] ensures only server/ is scanned, so ignore patterns
+    // here mainly affect other directories. We don't ignore logs/ here to avoid
+    // accidentally excluding server/api/logs/ routes.
     ignore: [
       'data/images/**',
       'data/images/movies/**',
       'seerr/**',
       'scripts/**',
-      'mysql-init/**',
-      'logs/**'  // Root logs directory only - pages/logs/ routes are unaffected
+      'mysql-init/**'
+      // Removed 'logs/**' to ensure server/api/logs/ routes are included
+      // Root logs/ directory won't be scanned anyway due to scanDirs: ['server']
     ],
     // Explicitly scan server directory for API routes
     scanDirs: ['server']

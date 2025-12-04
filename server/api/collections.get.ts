@@ -63,7 +63,35 @@ export default defineEventHandler(async (event) => {
     console.log('Collections API - rawSearch:', rawSearch, 'searchQuery:', searchQuery, 'page:', page, 'limit:', limit)
     
     const unifiedJsonPath = join(process.cwd(), 'data', 'unified.json')
-    const fileContent = await readFile(unifiedJsonPath, 'utf-8')
+    
+    // Check if file exists, return empty collections if not
+    let fileContent: string
+    try {
+      fileContent = await readFile(unifiedJsonPath, 'utf-8')
+    } catch (error: any) {
+      if (error.code === 'ENOENT') {
+        // File doesn't exist, return empty collections
+        console.warn('unified.json not found, returning empty collections')
+        return {
+          success: true,
+          data: {
+            collections: [],
+            pagination: {
+              page,
+              limit,
+              total: 0,
+              total_pages: 0,
+              has_next: false,
+              has_prev: false
+            },
+            total_collections: 0,
+            total_movies: 0
+          }
+        }
+      }
+      throw error
+    }
+    
     const data = JSON.parse(fileContent)
     
     const movies: Movie[] = data.movies || []

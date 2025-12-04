@@ -44,7 +44,21 @@ export default defineEventHandler(async (event) => {
     }
     
     const unifiedJsonPath = join(process.cwd(), 'data', 'unified.json')
-    const fileContent = await readFile(unifiedJsonPath, 'utf-8')
+    
+    // Check if file exists
+    let fileContent: string
+    try {
+      fileContent = await readFile(unifiedJsonPath, 'utf-8')
+    } catch (error: any) {
+      if (error.code === 'ENOENT') {
+        throw createError({
+          statusCode: 404,
+          statusMessage: 'Collections data not available. unified.json file is missing.'
+        })
+      }
+      throw error
+    }
+    
     const data = JSON.parse(fileContent)
     
     const movies: Movie[] = data.movies || []

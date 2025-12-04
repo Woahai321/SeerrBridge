@@ -159,6 +159,11 @@ RUN mkdir -p /app/logs /app/data /var/lib/mysql /var/run/mysqld && \
     chown -R mysql:mysql /var/lib/mysql /var/run/mysqld && \
     chmod 755 /var/lib/mysql /var/run/mysqld
 
+# Ensure data directory exists and has proper permissions
+# Note: data/ directory should be included in git repository for unified.json and other data files
+# If data files are missing, the API will handle it gracefully
+RUN chmod -R 755 /app/data || true
+
 # Copy supervisor configuration
 COPY supervisord.conf /etc/supervisor/conf.d/supervisord.conf
 

@@ -6,13 +6,17 @@ export async function getDatabaseConnection(): Promise<mysql.Connection> {
   if (!connection) {
     const config = useRuntimeConfig()
     
+    // Default to 3306 for unified container (MySQL runs on localhost:3306 inside container)
+    // 3307 is only for external connections
     const connectionConfig = {
       host: config.dbHost || process.env.DB_HOST || 'localhost',
-      port: parseInt(config.dbPort || process.env.DB_PORT || '3307'),
+      port: parseInt(config.dbPort || process.env.DB_PORT || '3306'),
       user: config.dbUser || process.env.DB_USER || 'seerrbridge',
       password: config.dbPassword || process.env.DB_PASSWORD || 'seerrbridge',
       database: config.dbName || process.env.DB_NAME || 'seerrbridge',
-      charset: 'utf8mb4'
+      charset: 'utf8mb4',
+      connectTimeout: 10000, // 10 second timeout
+      reconnect: true
     }
     
     // DO NOT log database password - only log non-sensitive connection info
@@ -26,9 +30,20 @@ export async function getDatabaseConnection(): Promise<mysql.Connection> {
     
     try {
       connection = await mysql.createConnection(connectionConfig)
+      // Test the connection
+      await connection.execute('SELECT 1')
       console.log('Database connection established successfully')
-    } catch (error) {
-      console.error('Failed to connect to database:', error)
+    } catch (error: any) {
+      console.error('Failed to connect to database:', {
+        message: error.message,
+        code: error.code,
+        errno: error.errno,
+        sqlState: error.sqlState,
+        host: connectionConfig.host,
+        port: connectionConfig.port,
+        database: connectionConfig.database
+      })
+      connection = null // Reset connection on error
       throw error
     }
   }
@@ -75,37 +90,50 @@ export interface LogStatistics {
 }
 
 export async function getLogEntries(page = 1, limit = 50, level?: string): Promise<{ entries: LogEntry[], total: number }> {
-  const db = await getDatabaseConnection()
-  const offset = (page - 1) * limit
-  
-  let whereClause = ''
-  let countParams: any[] = []
-  let queryParams: any[] = []
-  
-  if (level) {
-    whereClause = 'WHERE level = ?'
-    countParams = [level]
-    queryParams = [level, limit, offset]
-  } else {
-    queryParams = [limit, offset]
-  }
-  
-  // Get total count
-  const [countResult] = await db.execute(
-    `SELECT COUNT(*) as total FROM log_entries ${whereClause}`,
-    countParams
-  )
-  const total = (countResult as any)[0].total
-  
-  // Get entries
-  const [rows] = await db.execute(
-    `SELECT * FROM log_entries ${whereClause} ORDER BY timestamp DESC LIMIT ${parseInt(limit.toString())} OFFSET ${parseInt(offset.toString())}`,
-    level ? [level] : []
-  )
-  
-  return {
-    entries: rows as LogEntry[],
-    total
+  try {
+    const db = await getDatabaseConnection()
+    const offset = (page - 1) * limit
+    
+    let whereClause = ''
+    let countParams: any[] = []
+    let queryParams: any[] = []
+    
+    if (level) {
+      whereClause = 'WHERE level = ?'
+      countParams = [level]
+      queryParams = [level, limit, offset]
+    } else {
+      queryParams = [limit, offset]
+    }
+    
+    // Get total count
+    const [countResult] = await db.execute(
+      `SELECT COUNT(*) as total FROM log_entries ${whereClause}`,
+      countParams
+    )
+    const total = (countResult as any)[0].total
+    
+    // Get entries
+    const [rows] = await db.execute(
+      `SELECT * FROM log_entries ${whereClause} ORDER BY timestamp DESC LIMIT ${parseInt(limit.toString())} OFFSET ${parseInt(offset.toString())}`,
+      level ? [level] : []
+    )
+    
+    return {
+      entries: rows as LogEntry[],
+      total
+    }
+  } catch (error: any) {
+    // If table doesn't exist yet (database not initialized), return empty result
+    if (error.code === 'ER_NO_SUCH_TABLE' || error.code === '42S02') {
+      console.warn('log_entries table does not exist yet, returning empty logs')
+      return {
+        entries: [],
+        total: 0
+      }
+    }
+    // Re-throw other errors
+    throw error
   }
 }
 
