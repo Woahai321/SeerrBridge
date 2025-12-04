@@ -46,7 +46,7 @@ venv.bak/
 
 # Logs
 *.log*
-logs/
+/logs/
 *.log
 !pages/logs/
 
