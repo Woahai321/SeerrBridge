@@ -32,7 +32,7 @@ export const useLogs = () => {
   const { apiCall } = useApi()
 
   const fetchLogs = async (): Promise<LogsResponse> => {
-    return await apiCall<LogsResponse>('/logs')
+    return await apiCall<LogsResponse>('/logs-statistics')
   }
 
   const fetchLogEntries = async (page = 1, limit = 50): Promise<{ entries: LogEntry[], total: number }> => {
