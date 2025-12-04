@@ -48,6 +48,7 @@ venv.bak/
 *.log*
 logs/
 *.log
+!pages/logs/
 
 # Database
 *.db
