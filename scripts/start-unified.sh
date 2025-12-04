@@ -40,6 +40,7 @@ log "Step 1/5: Initializing MariaDB..."
 if [ -d "/var/lib/mysql/mysql" ] && [ "$(ls -A /var/lib/mysql/mysql 2>/dev/null)" ]; then
     log "MariaDB data directory already exists and contains data, skipping initialization..."
     log "Database is already initialized, proceeding to start services..."
+    log "Note: Database user will be verified/created after MySQL starts via ensure-db-user.sh"
 else
     log "MariaDB data directory doesn't exist or is empty, initializing..."
     # Create MariaDB data directory if it doesn't exist

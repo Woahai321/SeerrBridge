@@ -167,7 +167,8 @@ COPY scripts/start-unified.sh /usr/local/bin/start-unified.sh
 COPY scripts/wait-for-mysql.sh /app/scripts/wait-for-mysql.sh
 COPY scripts/wait-for-frontend.sh /app/scripts/wait-for-frontend.sh
 COPY scripts/start-services-sequentially.sh /app/scripts/start-services-sequentially.sh
-RUN chmod +x /usr/local/bin/start-unified.sh /app/scripts/wait-for-mysql.sh /app/scripts/wait-for-frontend.sh /app/scripts/start-services-sequentially.sh
+COPY scripts/ensure-db-user.sh /app/scripts/ensure-db-user.sh
+RUN chmod +x /usr/local/bin/start-unified.sh /app/scripts/wait-for-mysql.sh /app/scripts/wait-for-frontend.sh /app/scripts/start-services-sequentially.sh /app/scripts/ensure-db-user.sh
 
 # Set environment variables
 ENV CHROME_BIN=/usr/bin/google-chrome

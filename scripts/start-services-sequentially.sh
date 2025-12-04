@@ -28,6 +28,10 @@ done
 log "Waiting for MySQL to be fully ready..."
 /app/scripts/wait-for-mysql.sh
 
+# Ensure database user exists with correct password (important when DB is already initialized)
+log "Ensuring database user exists with correct password..."
+/app/scripts/ensure-db-user.sh
+
 # Step 2: Start frontend
 log "Starting Nuxt frontend..."
 supervisorctl start nuxt-frontend
