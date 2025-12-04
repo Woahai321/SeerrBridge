@@ -13,9 +13,10 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     g++ \
     && rm -rf /var/lib/apt/lists/*
 
-# Copy requirements and install Python dependencies
+# Copy requirements and install Python dependencies with cache mount
 COPY requirements.txt .
-RUN pip install --no-cache-dir --user -r requirements.txt
+RUN --mount=type=cache,target=/root/.cache/pip \
+    pip install --no-cache-dir --user -r requirements.txt
 
 # ==============================================================================
 # Stage 2: Node.js Builder (Frontend)
@@ -34,8 +35,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # Copy package files
 COPY package*.json ./
 
-# Install dependencies
-RUN npm ci --legacy-peer-deps --omit=dev
+# Install dependencies with cache mount
+RUN --mount=type=cache,target=/root/.npm \
+    npm ci --legacy-peer-deps --omit=dev
 
 # Copy source code
 COPY . .
@@ -139,14 +141,12 @@ RUN arch=$(uname -m) && \
 # Copy Python packages from builder stage
 COPY --from=python-builder /root/.local /root/.local
 
-# Copy built Nuxt application from builder stage
+# Copy built Nuxt application and node_modules from builder stage
 COPY --from=node-builder /app/frontend/.output /app/.output
 COPY --from=node-builder /app/frontend/package*.json /app/
+COPY --from=node-builder /app/frontend/node_modules /app/node_modules
 
-# Install only production Node.js dependencies
 WORKDIR /app
-RUN npm ci --legacy-peer-deps --omit=dev --ignore-scripts && \
-    npm cache clean --force
 
 # Copy application code
 COPY . .
