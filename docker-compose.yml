@@ -1,47 +1,17 @@
 services:
   # ==============================================================================
-  # MySQL Database Service
-  # ==============================================================================
-  mysql:
-    image: mysql:8.0
-    container_name: seerrbridge-mysql
-    restart: unless-stopped
-    environment:
-      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-seerrbridge_root}
-      MYSQL_DATABASE: ${DB_NAME:-seerrbridge}
-      MYSQL_USER: ${DB_USER:-seerrbridge}
-      MYSQL_PASSWORD: ${DB_PASSWORD:-seerrbridge}
-      MYSQL_INITDB_SKIP_TZINFO: 1
-    ports:
-      - "3306:3306"
-    volumes:
-      - mysql_data:/var/lib/mysql
-      - ./mysql-init:/docker-entrypoint-initdb.d
-    command: --default-authentication-plugin=mysql_native_password
-    healthcheck:
-      test: ["CMD-SHELL", "mysqladmin ping -h localhost -u root -p${MYSQL_ROOT_PASSWORD:-seerrbridge_root}"]
-      timeout: 10s
-      retries: 15
-      interval: 10s
-      start_period: 40s
-    networks:
-      - seerrbridge_network
-
-  # ==============================================================================
-  # SeerrBridge Backend Service
+  # Unified SeerrBridge Container
+  # Includes: MySQL + Python Backend + Nuxt Frontend
+  # Uses pre-built image from GitHub Container Registry
   # ==============================================================================
   seerrbridge:
     image: ghcr.io/woahai321/seerrbridge:latest
     container_name: seerrbridge
     restart: unless-stopped
-    depends_on:
-      mysql:
-        condition: service_healthy
-    env_file:
-      - ./.env
     environment:
-      # Database configuration - REQUIRED for initial database connection
-      DB_HOST: mysql
+      # MySQL Configuration
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-seerrbridge_root}
+      DB_HOST: localhost
       DB_PORT: 3306
       DB_NAME: ${DB_NAME:-seerrbridge}
       DB_USER: ${DB_USER:-seerrbridge}
@@ -52,105 +22,36 @@ services:
       PYTHONUNBUFFERED: "1"
       PYTHONDONTWRITEBYTECODE: "1"
       
-      # Encryption Master Key - RECOMMENDED for production
-      SEERRBRIDGE_MASTER_KEY: ${SEERRBRIDGE_MASTER_KEY}
-    ports:
-      - "8777:8777"  # SeerrBridge API
-      - "8778:8778"  # Setup API server
-    volumes:
-      - shared_logs:/app/logs
-      - ./.env:/app/.env
-    networks:
-      - seerrbridge_network
-    command: >
-      sh -c "
-        cat /app/.env > /dev/null && 
-        echo 'Waiting for MySQL to be ready...' &&
-        MAX_WAIT=120 &&
-        WAITED=0 &&
-        until python3 -c \"import os, pymysql, sys; conn = pymysql.connect(host=os.environ.get('DB_HOST', 'mysql'), port=int(os.environ.get('DB_PORT', 3306)), user=os.environ.get('DB_USER', 'seerrbridge'), password=os.environ.get('DB_PASSWORD', 'seerrbridge'), database=os.environ.get('DB_NAME', 'seerrbridge'), connect_timeout=5); conn.close(); sys.exit(0)\" 2>/dev/null; do
-          if [ $$WAITED -ge $$MAX_WAIT ]; then
-            echo 'ERROR: MySQL did not become ready within $$MAX_WAIT seconds'
-            exit 1
-          fi
-          echo \"MySQL not ready yet, waiting 2 seconds... (waited $$WAITED/$$MAX_WAIT seconds)\"
-          sleep 2
-          WAITED=$$((WAITED + 2))
-        done &&
-        echo 'MySQL is ready! Initializing database tables...' &&
-        python3 -c \"from seerr.database import init_database; init_database()\" &&
-        echo 'Setting up default setup flags...' &&
-        python3 -c \"import os, pymysql; conn = pymysql.connect(host=os.environ.get('DB_HOST', 'mysql'), port=int(os.environ.get('DB_PORT', 3306)), user=os.environ.get('DB_USER', 'seerrbridge'), password=os.environ.get('DB_PASSWORD', 'seerrbridge'), database=os.environ.get('DB_NAME', 'seerrbridge')); cursor = conn.cursor(); cursor.execute('INSERT IGNORE INTO system_config (config_key, config_value, config_type, description, is_active) VALUES (\\'setup_required\\', \\'true\\', \\'bool\\', \\'Whether setup is required\\', TRUE)'); cursor.execute('INSERT IGNORE INTO system_config (config_key, config_value, config_type, description, is_active) VALUES (\\'onboarding_completed\\', \\'false\\', \\'bool\\', \\'Whether initial setup has been completed\\', TRUE)'); conn.commit(); cursor.close(); conn.close()\" &&
-        echo 'Database initialized! Starting SeerrBridge setup wait process...' &&
-        python scripts/wait-for-setup.py
-      "
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8777/status", "||", "exit", "1"]
-      timeout: 10s
-      retries: 5
-      interval: 30s
-      start_period: 60s
-
-  # ==============================================================================
-  # Bridgeboard (Nuxt Frontend) Service
-  # ==============================================================================
-  bridgeboard:
-    image: ghcr.io/woahai321/bridgeboard:latest
-    container_name: bridgeboard
-    restart: unless-stopped
-    depends_on:
-      mysql:
-        condition: service_healthy
-    env_file:
-      - ./.env
-    environment:
-      # Database configuration
-      DB_HOST: mysql
-      DB_PORT: 3306
-      DB_NAME: ${DB_NAME:-seerrbridge}
-      DB_USER: ${DB_USER:-seerrbridge}
-      DB_PASSWORD: ${DB_PASSWORD:-seerrbridge}
-      
-      # SeerrBridge API configuration
-      SEERRBRIDGE_URL: http://seerrbridge:8777
-      SEERRBRIDGE_LOG_PATH: /logs/seerrbridge.log
-      
-      # Nuxt configuration
+      # Nuxt Configuration
       NODE_ENV: production
       NUXT_HOST: 0.0.0.0
       NUXT_PORT: 3777
-      PORT: 3777
+      SEERRBRIDGE_URL: http://localhost:8777
+      SETUP_API_URL: http://localhost:8778
+      SEERRBRIDGE_SETUP_URL: http://localhost:8778
+      
+      # Note: All configuration (API keys, tokens, advanced settings, etc.)
+      # is managed via the web interface and stored in .env file.
     ports:
+      - "3307:3306"  # MySQL (exposed on 3307 to avoid conflicts with local MySQL)
       - "3777:3777"  # Nuxt frontend
+      - "8777:8777"  # SeerrBridge API
+      - "8778:8778"  # Setup API server
     volumes:
-      - shared_logs:/app/logs
-      - ./.env:/app/.env
-    command: ["node", ".output/server/index.mjs"]
-    networks:
-      seerrbridge_network:
-        aliases:
-          - darthvadarr-nuxt
+      - mysql_data:/var/lib/mysql  # MySQL data persistence
+      - ./logs:/app/logs  # Log files
+      - ./data:/app/data  # Application data (includes .env file)
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:3777/api/health", "||", "exit", "1"]
+      test: ["CMD", "sh", "-c", "curl -f http://localhost:8777/status && curl -f http://localhost:3777/api/health || exit 1"]
       timeout: 10s
       retries: 5
       interval: 30s
-      start_period: 40s
+      start_period: 120s
 
 # ==============================================================================
 # Volumes
 # ==============================================================================
 volumes:
-  shared_logs:
-    driver: local
   mysql_data:
     driver: local
     name: seerrbridge_mysql_data
-
-# ==============================================================================
-# Networks
-# ==============================================================================
-networks:
-  seerrbridge_network:
-    driver: bridge
-

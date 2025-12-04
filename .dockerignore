@@ -94,7 +94,8 @@ Dockerfile.node
 old_seerr-reference/
 
 # Data directories (will be mounted as volumes)
-data/
+# Note: data/ directory is included in image (contains unified.json, franchises.json, and images)
+# Users can still override with volume mounts if needed
 public/cache/
 
 # Test files

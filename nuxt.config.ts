@@ -144,14 +144,18 @@ export default defineNuxtConfig({
     preset: 'node-server',
     // Exclude large directories from Nitro's file scanning
     // Specifically exclude images directory to avoid scanning 16,670+ image files
+    // BUT ensure server/ directory is NOT ignored so API routes are included
+    // Note: 'logs/**' only matches root logs/ directory, NOT pages/logs/ (pages are handled separately)
     ignore: [
-      'data/**',
       'data/images/**',
       'data/images/movies/**',
       'seerr/**',
       'scripts/**',
-      'mysql-init/**'
-    ]
+      'mysql-init/**',
+      'logs/**'  // Root logs directory only - pages/logs/ routes are unaffected
+    ],
+    // Explicitly scan server directory for API routes
+    scanDirs: ['server']
   },
 
   // Development server configuration
