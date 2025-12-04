@@ -36,6 +36,23 @@ jobs:
       - name: Install dependencies
         run: npm ci --legacy-peer-deps
       
+      - name: Verify essential data files
+        run: |
+          echo "Checking for essential data files..."
+          if [ ! -f "data/unified.json" ]; then
+            echo "⚠️  WARNING: data/unified.json not found in repository"
+            echo "Collections feature will not work unless this file is committed to git"
+            echo "Consider using Git LFS for large files: git lfs track 'data/unified.json'"
+          else
+            echo "✅ data/unified.json found"
+          fi
+          if [ ! -f "data/franchises.json" ]; then
+            echo "⚠️  WARNING: data/franchises.json not found"
+          else
+            echo "✅ data/franchises.json found"
+          fi
+        continue-on-error: true
+      
       - name: Run linting
         run: npm run lint || true
         continue-on-error: true
