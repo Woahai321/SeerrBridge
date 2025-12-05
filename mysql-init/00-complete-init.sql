@@ -603,7 +603,7 @@ VALUES
 -- Insert default service status
 INSERT IGNORE INTO service_status (service_name, status, version, uptime_seconds, uptime_string, start_time, current_time_value, browser_status, automatic_processing, show_subscription, refresh_interval_minutes)
 VALUES 
-    ('seerrbridge', 'starting', '0.7.0', 0, '0s', NOW(), NOW(), 'not_initialized', FALSE, FALSE, 30.0);
+    ('seerrbridge', 'starting', '0.8.0', 0, '0s', NOW(), NOW(), 'not_initialized', FALSE, FALSE, 30.0);
 
 -- ==============================================
 -- COMPLETION MESSAGE

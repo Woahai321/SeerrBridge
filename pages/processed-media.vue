@@ -323,10 +323,31 @@
               </Button>
             </div>
           </div>
-          <div class="flex items-center gap-2">
+          <div class="flex items-center gap-2 flex-wrap">
+            <Button
+              @click.stop="showBulkIgnoreConfirmation = true"
+              :disabled="bulkIgnoring || bulkRetriggering || bulkDeleting"
+              variant="outline"
+              size="sm"
+              class="gap-1.5"
+            >
+              <AppIcon 
+                v-if="bulkIgnoring" 
+                icon="lucide:loader-2" 
+                size="16" 
+                class="animate-spin" 
+              />
+              <AppIcon v-else :icon="getBulkIgnoreIcon()" size="16" />
+              <span class="hidden sm:inline">
+                {{ bulkIgnoring ? 'Processing...' : getBulkIgnoreLabel() }}
+              </span>
+              <span class="sm:hidden">
+                {{ bulkIgnoring ? '...' : getBulkIgnoreLabelShort() }}
+              </span>
+            </Button>
             <Button
               @click.stop="bulkRetriggerMedia"
-              :disabled="bulkRetriggering || !isSelectionMode"
+              :disabled="bulkRetriggering || bulkIgnoring || bulkDeleting"
               size="sm"
               class="gap-1.5 bg-primary hover:bg-primary/90"
             >
@@ -342,6 +363,26 @@
               </span>
               <span class="sm:hidden">
                 {{ bulkRetriggering ? 'Processing...' : 'Re-trigger' }}
+              </span>
+            </Button>
+            <Button
+              @click.stop="showBulkDeleteConfirmation = true"
+              :disabled="bulkDeleting || bulkRetriggering || bulkIgnoring"
+              size="sm"
+              class="gap-1.5 bg-red-600 hover:bg-red-700 text-white"
+            >
+              <AppIcon 
+                v-if="bulkDeleting" 
+                icon="lucide:loader-2" 
+                size="16" 
+                class="animate-spin" 
+              />
+              <AppIcon v-else icon="lucide:trash-2" size="16" />
+              <span class="hidden sm:inline">
+                {{ bulkDeleting ? 'Deleting...' : 'Delete Selected' }}
+              </span>
+              <span class="sm:hidden">
+                {{ bulkDeleting ? '...' : 'Delete' }}
               </span>
             </Button>
           </div>
@@ -407,7 +448,6 @@
           
           <!-- Selection Checkbox -->
           <div 
-            v-if="isSelectionMode || selectedCount > 0"
             class="absolute top-3 left-3 z-30 selection-checkbox"
             @click.stop="toggleMediaSelection(media.id)"
           >
@@ -432,8 +472,8 @@
             </div>
           </div>
           
-          <!-- Enhanced Media Type Badge (hidden when in selection mode) -->
-          <div v-if="!isSelectionMode && selectedCount === 0" class="absolute top-3 left-3 z-20">
+          <!-- Enhanced Media Type Badge (hidden when items are selected) -->
+          <div v-if="selectedCount === 0" class="absolute top-3 left-3 z-20">
             <span 
               class="media-type-badge px-3 py-1.5 text-[10px] sm:text-xs font-bold rounded-full backdrop-blur-xl shadow-xl border-2 transition-all duration-300 group-hover:scale-105"
               :class="media.media_type === 'movie' ? 'media-type-movie' : 'media-type-tv'"
@@ -1331,6 +1371,217 @@
       </div>
     </div>
   </Transition>
+  
+  <!-- Bulk Delete Confirmation Modal -->
+  <Transition
+    enter-active-class="transition-all duration-300"
+    enter-from-class="opacity-0"
+    enter-to-class="opacity-100"
+    leave-active-class="transition-all duration-200"
+    leave-from-class="opacity-100"
+    leave-to-class="opacity-0"
+  >
+    <div v-if="showBulkDeleteConfirmation" class="fixed inset-0 z-[100] overflow-y-auto p-2 sm:p-4">
+      <!-- Overlay -->
+      <div 
+        class="fixed inset-0 bg-black/80 backdrop-blur-sm" 
+        @click="showBulkDeleteConfirmation = false"
+      ></div>
+      
+      <!-- Confirmation Modal -->
+      <div class="relative mx-auto max-w-md my-4 sm:my-8 bg-card rounded-xl sm:rounded-2xl lg:rounded-3xl shadow-2xl overflow-hidden">
+        <!-- Header -->
+        <div class="bg-red-500/10 border-b border-red-500/20 px-4 sm:px-6 py-3 sm:py-4">
+          <div class="flex items-center gap-2 sm:gap-3">
+            <div class="w-8 h-8 sm:w-10 sm:h-10 bg-red-500/20 rounded-lg sm:rounded-xl flex items-center justify-center">
+              <AppIcon icon="lucide:trash-2" size="18" class="sm:w-5 sm:h-5 text-red-500" />
+            </div>
+            <div>
+              <h3 class="text-base sm:text-lg font-bold text-foreground">Delete Selected Media Items</h3>
+              <p class="text-xs sm:text-sm text-muted-foreground">This action cannot be undone</p>
+            </div>
+          </div>
+        </div>
+        
+        <!-- Body -->
+        <div class="px-4 sm:px-6 py-4 sm:py-6">
+          <div class="space-y-4">
+            <p class="text-sm text-muted-foreground">
+              Are you sure you want to permanently delete <strong>{{ selectedCount }}</strong> media item(s) from the database?
+            </p>
+            
+            <!-- Selected Items Preview -->
+            <div class="bg-muted rounded-xl p-3 border border-border max-h-48 overflow-y-auto">
+              <p class="text-xs font-semibold text-foreground mb-2">Selected Items:</p>
+              <div class="space-y-1">
+                <div 
+                  v-for="item in mediaItems.filter(i => selectedMediaIds.has(i.id)).slice(0, 10)" 
+                  :key="item.id"
+                  class="text-xs text-muted-foreground truncate"
+                >
+                  • {{ item.title }} ({{ item.year || 'N/A' }})
+                </div>
+                <div v-if="selectedCount > 10" class="text-xs text-muted-foreground italic">
+                  ... and {{ selectedCount - 10 }} more
+                </div>
+              </div>
+            </div>
+            
+            <div class="bg-red-500/10 border border-red-500/20 rounded-xl p-3">
+              <div class="flex items-start gap-2">
+                <AppIcon icon="lucide:alert-triangle" size="16" class="text-red-500 mt-0.5 flex-shrink-0" />
+                <div class="text-xs text-red-500">
+                  <p class="font-semibold mb-1">Warning:</p>
+                  <ul class="space-y-1 text-xs">
+                    <li>• This will permanently remove all selected items from the database</li>
+                    <li>• All associated data (seasons, episodes, processing history) will be lost</li>
+                    <li>• Associated Overseerr requests will also be deleted (if applicable)</li>
+                    <li>• This action cannot be undone</li>
+                  </ul>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+        
+        <!-- Footer -->
+        <div class="bg-muted px-4 sm:px-6 py-3 sm:py-4 border-t border-border flex flex-col sm:flex-row justify-end gap-2 sm:gap-3">
+          <Button 
+            @click="showBulkDeleteConfirmation = false"
+            variant="outline"
+            :disabled="bulkDeleting"
+            size="sm"
+            class="w-full sm:w-auto"
+          >
+            Cancel
+          </Button>
+          <Button 
+            @click="bulkDeleteMedia"
+            :disabled="bulkDeleting"
+            size="sm"
+            class="w-full sm:w-auto bg-red-600 hover:bg-red-700 text-white border-red-600 hover:border-red-700"
+          >
+            <AppIcon 
+              v-if="bulkDeleting" 
+              icon="lucide:loader-2" 
+              size="14" 
+              class="sm:w-4 sm:h-4 animate-spin mr-2"
+            />
+            <AppIcon 
+              v-else 
+              icon="lucide:trash-2" 
+              size="14" 
+              class="sm:w-4 sm:h-4 mr-2"
+            />
+            {{ bulkDeleting ? 'Deleting...' : 'Delete Permanently' }}
+          </Button>
+        </div>
+      </div>
+    </div>
+  </Transition>
+  
+  <!-- Bulk Ignore Confirmation Modal -->
+  <Transition
+    enter-active-class="transition-all duration-300"
+    enter-from-class="opacity-0"
+    enter-to-class="opacity-100"
+    leave-active-class="transition-all duration-200"
+    leave-from-class="opacity-100"
+    leave-to-class="opacity-0"
+  >
+    <div v-if="showBulkIgnoreConfirmation" class="fixed inset-0 z-[100] overflow-y-auto p-2 sm:p-4">
+      <!-- Overlay -->
+      <div 
+        class="fixed inset-0 bg-black/80 backdrop-blur-sm" 
+        @click="showBulkIgnoreConfirmation = false"
+      ></div>
+      
+      <!-- Confirmation Modal -->
+      <div class="relative mx-auto max-w-md my-4 sm:my-8 bg-card rounded-xl sm:rounded-2xl lg:rounded-3xl shadow-2xl overflow-hidden">
+        <!-- Header -->
+        <div class="bg-amber-500/10 border-b border-amber-500/20 px-4 sm:px-6 py-3 sm:py-4">
+          <div class="flex items-center gap-2 sm:gap-3">
+            <div class="w-8 h-8 sm:w-10 sm:h-10 bg-amber-500/20 rounded-lg sm:rounded-xl flex items-center justify-center">
+              <AppIcon :icon="getBulkIgnoreIcon()" size="18" class="sm:w-5 sm:h-5 text-amber-500" />
+            </div>
+            <div>
+              <h3 class="text-base sm:text-lg font-bold text-foreground">{{ getBulkIgnoreLabel() }}</h3>
+              <p class="text-xs sm:text-sm text-muted-foreground">{{ getBulkIgnoreDescription() }}</p>
+            </div>
+          </div>
+        </div>
+        
+        <!-- Body -->
+        <div class="px-4 sm:px-6 py-4 sm:py-6">
+          <div class="space-y-4">
+            <p class="text-sm text-muted-foreground">
+              {{ getBulkIgnoreConfirmationText() }}
+            </p>
+            
+            <!-- Selected Items Preview -->
+            <div class="bg-muted rounded-xl p-3 border border-border max-h-48 overflow-y-auto">
+              <p class="text-xs font-semibold text-foreground mb-2">Selected Items:</p>
+              <div class="space-y-1">
+                <div 
+                  v-for="item in mediaItems.filter(i => selectedMediaIds.has(i.id)).slice(0, 10)" 
+                  :key="item.id"
+                  class="text-xs text-muted-foreground truncate"
+                >
+                  • {{ item.title }} ({{ item.year || 'N/A' }}) - {{ item.display_status || item.status }}
+                </div>
+                <div v-if="selectedCount > 10" class="text-xs text-muted-foreground italic">
+                  ... and {{ selectedCount - 10 }} more
+                </div>
+              </div>
+            </div>
+            
+            <div class="bg-amber-500/10 border border-amber-500/20 rounded-xl p-3">
+              <div class="flex items-start gap-2">
+                <AppIcon icon="lucide:info" size="16" class="text-amber-500 mt-0.5 flex-shrink-0" />
+                <div class="text-xs text-amber-500">
+                  <p class="font-semibold mb-1">Note:</p>
+                  <p>{{ getBulkIgnoreNote() }}</p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+        
+        <!-- Footer -->
+        <div class="bg-muted px-4 sm:px-6 py-3 sm:py-4 border-t border-border flex flex-col sm:flex-row justify-end gap-2 sm:gap-3">
+          <Button 
+            @click="showBulkIgnoreConfirmation = false"
+            variant="outline"
+            :disabled="bulkIgnoring"
+            size="sm"
+            class="w-full sm:w-auto"
+          >
+            Cancel
+          </Button>
+          <Button 
+            @click="bulkIgnoreMedia"
+            :disabled="bulkIgnoring"
+            size="sm"
+            class="w-full sm:w-auto bg-amber-600 hover:bg-amber-700 text-white border-amber-600 hover:border-amber-700"
+          >
+            <AppIcon 
+              v-if="bulkIgnoring" 
+              icon="lucide:loader-2" 
+              size="14" 
+              class="sm:w-4 sm:h-4 animate-spin mr-2"
+            />
+            <AppIcon 
+              v-else 
+              :icon="getBulkIgnoreIcon()" 
+              size="14" 
+              class="sm:w-4 sm:h-4 mr-2"
+            />
+            {{ bulkIgnoring ? 'Processing...' : getBulkIgnoreLabel() }}
+          </Button>
+        </div>
+      </div>
+    </div>
+  </Transition>
 </template>
 
 <script setup lang="ts">
@@ -1497,13 +1748,17 @@ const showActionMenu = ref(false)
 // Bulk selection state
 const selectedMediaIds = ref<Set<number>>(new Set())
 const bulkRetriggering = ref(false)
+const bulkDeleting = ref(false)
+const bulkIgnoring = ref(false)
+const showBulkDeleteConfirmation = ref(false)
+const showBulkIgnoreConfirmation = ref(false)
 
 // Configuration composable
 const { overseerrBaseUrl, hasOverseerrConfig, fetchConfig } = useConfig()
 
-// Computed: Check if we're in selection mode (filtered by failed)
+// Computed: Check if we're in selection mode (any items selected)
 const isSelectionMode = computed(() => {
-  return filters.value.status === 'failed'
+  return selectedMediaIds.value.size > 0
 })
 
 // Computed: Check if all visible items are selected
@@ -2061,28 +2316,97 @@ const clearSelection = () => {
   selectedMediaIds.value.clear()
 }
 
+// Helper functions for bulk ignore
+const getBulkIgnoreIcon = () => {
+  const selectedItems = mediaItems.value.filter(item => selectedMediaIds.value.has(item.id))
+  const ignoredCount = selectedItems.filter(item => (item.display_status || item.status) === 'ignored').length
+  return ignoredCount === selectedItems.length ? 'lucide:play' : 'lucide:pause'
+}
+
+const getBulkIgnoreLabel = () => {
+  const selectedItems = mediaItems.value.filter(item => selectedMediaIds.value.has(item.id))
+  const ignoredCount = selectedItems.filter(item => (item.display_status || item.status) === 'ignored').length
+  if (ignoredCount === selectedItems.length) {
+    return 'Enable Selected'
+  } else if (ignoredCount > 0) {
+    return 'Toggle Ignore'
+  }
+  return 'Ignore Selected'
+}
+
+const getBulkIgnoreLabelShort = () => {
+  const selectedItems = mediaItems.value.filter(item => selectedMediaIds.value.has(item.id))
+  const ignoredCount = selectedItems.filter(item => (item.display_status || item.status) === 'ignored').length
+  if (ignoredCount === selectedItems.length) {
+    return 'Enable'
+  } else if (ignoredCount > 0) {
+    return 'Toggle'
+  }
+  return 'Ignore'
+}
+
+const getBulkIgnoreDescription = () => {
+  const selectedItems = mediaItems.value.filter(item => selectedMediaIds.value.has(item.id))
+  const ignoredCount = selectedItems.filter(item => (item.display_status || item.status) === 'ignored').length
+  if (ignoredCount === selectedItems.length) {
+    return 'Enable processing for selected items'
+  } else if (ignoredCount > 0) {
+    return 'Toggle ignore status for selected items'
+  }
+  return 'Ignore processing for selected items'
+}
+
+const getBulkIgnoreConfirmationText = () => {
+  const selectedItems = mediaItems.value.filter(item => selectedMediaIds.value.has(item.id))
+  const ignoredCount = selectedItems.filter(item => (item.display_status || item.status) === 'ignored').length
+  const action = ignoredCount === selectedItems.length ? 'enable' : 'ignore'
+  
+  if (ignoredCount === selectedItems.length) {
+    return `Are you sure you want to enable processing for ${selectedCount} media item(s)?\n\nThis will allow them to be processed by SeerrBridge background tasks again.`
+  } else if (ignoredCount > 0) {
+    return `Are you sure you want to ${action} processing for ${selectedCount} media item(s)?\n\n${ignoredCount} item(s) are currently ignored and will be enabled.\n${selectedCount - ignoredCount} item(s) are currently active and will be ignored.`
+  }
+  return `Are you sure you want to ignore processing for ${selectedCount} media item(s)?\n\nThis will prevent them from being processed by SeerrBridge background tasks.`
+}
+
+const getBulkIgnoreNote = () => {
+  const selectedItems = mediaItems.value.filter(item => selectedMediaIds.value.has(item.id))
+  const ignoredCount = selectedItems.filter(item => (item.display_status || item.status) === 'ignored').length
+  
+  if (ignoredCount === selectedItems.length) {
+    return 'Ignored items will be enabled and can be processed by background tasks again.'
+  } else if (ignoredCount > 0) {
+    return 'This will toggle the ignore status for all selected items. Ignored items will be enabled, and active items will be ignored.'
+  }
+  return 'Ignored items will not be processed by background tasks. You can enable them again later if needed.'
+}
+
 // Bulk retrigger function
 const bulkRetriggerMedia = async () => {
   if (selectedMediaIds.value.size === 0) return
   
-  // Validate that all selected items are failed
   const selectedItems = mediaItems.value.filter(item => selectedMediaIds.value.has(item.id))
-  const nonFailedItems = selectedItems.filter(item => {
+  
+  // Filter out ignored items (they can't be retriggered)
+  const ignorableItems = selectedItems.filter(item => {
     const status = item.display_status || item.status
-    return status !== 'failed'
+    return status === 'ignored'
   })
   
-  if (nonFailedItems.length > 0) {
-    alert(`Cannot re-trigger: ${nonFailedItems.length} selected item(s) are not in failed status. Please only select failed items.`)
-    return
+  if (ignorableItems.length > 0) {
+    const confirmed = confirm(
+      `Warning: ${ignorableItems.length} of ${selectedItems.length} selected item(s) are ignored and will be skipped.\n\n` +
+      `Continue with re-triggering the remaining ${selectedItems.length - ignorableItems.length} item(s)?`
+    )
+    if (!confirmed) return
   }
   
   // Show confirmation dialog
   const confirmed = confirm(
-    `Are you sure you want to re-trigger processing for ${selectedMediaIds.value.size} item(s)?\n\n` +
+    `Are you sure you want to re-trigger processing for ${selectedItems.length - ignorableItems.length} item(s)?\n\n` +
     `This will:\n` +
-    `• Remove them from failed/completed status\n` +
-    `• Set them to processing\n` +
+    `• Remove them from their current status\n` +
+    `• Set them to pending/processing\n` +
     `• Queue them for processing by SeerrBridge again\n\n` +
     `Click OK to confirm or Cancel to abort.`
   )
@@ -2092,7 +2416,19 @@ const bulkRetriggerMedia = async () => {
   bulkRetriggering.value = true
   
   try {
-    const mediaIdsArray = Array.from(selectedMediaIds.value)
+    // Filter out ignored items from the IDs to retrigger
+    const mediaIdsArray = Array.from(selectedMediaIds.value).filter(id => {
+      const item = selectedItems.find(i => i.id === id)
+      if (!item) return false
+      const status = item.display_status || item.status
+      return status !== 'ignored'
+    })
+    
+    if (mediaIdsArray.length === 0) {
+      alert('No items to re-trigger (all selected items are ignored)')
+      return
+    }
+    
     const response = await $fetch('/api/retrigger-media-bulk', {
       method: 'POST',
       body: {
@@ -2100,7 +2436,7 @@ const bulkRetriggerMedia = async () => {
       }
     })
     
-    if (response && response.status === 'completed') {
+    if (response && (response.status === 'completed' || response.status === 'partial')) {
       const results = response.results
       
       // Show success/error notification
@@ -2126,6 +2462,114 @@ const bulkRetriggerMedia = async () => {
     alert(`Error re-triggering media items. Please check the console for details.`)
   } finally {
     bulkRetriggering.value = false
+  }
+}
+
+// Bulk delete function
+const bulkDeleteMedia = async () => {
+  if (selectedMediaIds.value.size === 0) return
+  
+  bulkDeleting.value = true
+  
+  try {
+    const mediaIdsArray = Array.from(selectedMediaIds.value)
+    const response = await $fetch('/api/unified-media-bulk', {
+      method: 'DELETE',
+      body: {
+        media_ids: mediaIdsArray
+      }
+    })
+    
+    if (response && (response.status === 'completed' || response.status === 'partial')) {
+      const results = response.results
+      
+      // Show success/error notification
+      let message = `Bulk delete completed:\n\n`
+      message += `✓ ${results.success_count} item(s) deleted successfully\n`
+      
+      if (results.overseerr_deleted.length > 0) {
+        message += `✓ ${results.overseerr_deleted.length} Overseerr request(s) deleted\n`
+      }
+      
+      if (results.overseerr_failed.length > 0) {
+        message += `⚠ ${results.overseerr_failed.length} Overseerr request(s) failed to delete\n`
+      }
+      
+      if (results.failed_count > 0) {
+        message += `✗ ${results.failed_count} item(s) failed to delete\n`
+      }
+      
+      alert(message)
+      
+      // Clear selection
+      clearSelection()
+      
+      // Close confirmation modal
+      showBulkDeleteConfirmation.value = false
+      
+      // Refresh the media list to update the UI
+      await refreshData()
+    }
+  } catch (error) {
+    console.error('Error bulk deleting media:', error)
+    alert(`Error deleting media items. Please check the console for details.`)
+  } finally {
+    bulkDeleting.value = false
+  }
+}
+
+// Bulk ignore function
+const bulkIgnoreMedia = async () => {
+  if (selectedMediaIds.value.size === 0) return
+  
+  const selectedItems = mediaItems.value.filter(item => selectedMediaIds.value.has(item.id))
+  
+  // Determine target status: if all are ignored, enable them; otherwise ignore them
+  const ignoredCount = selectedItems.filter(item => (item.display_status || item.status) === 'ignored').length
+  const targetStatus = ignoredCount === selectedItems.length ? 'pending' : 'ignored'
+  const action = targetStatus === 'ignored' ? 'ignore' : 'enable'
+  
+  bulkIgnoring.value = true
+  
+  try {
+    const mediaIdsArray = Array.from(selectedMediaIds.value)
+    const response = await $fetch('/api/unified-media-bulk', {
+      method: 'PUT',
+      body: {
+        media_ids: mediaIdsArray,
+        status: targetStatus
+      }
+    })
+    
+    if (response && (response.status === 'completed' || response.status === 'partial')) {
+      const results = response.results
+      
+      // Show success/error notification
+      if (results.failed_count > 0) {
+        alert(
+          `Bulk ${action} completed with errors:\n\n` +
+          `✓ ${results.success_count} item(s) ${action}d successfully\n` +
+          `✗ ${results.failed_count} item(s) failed\n\n` +
+          `Please check the console for details.`
+        )
+      } else {
+        alert(`Successfully ${action}d ${results.success_count} item(s)!`)
+      }
+      
+      // Clear selection
+      clearSelection()
+      
+      // Close confirmation modal
+      showBulkIgnoreConfirmation.value = false
+      
+      // Refresh the media list to update the UI
+      await refreshData()
+    }
+  } catch (error) {
+    console.error('Error bulk ignoring media:', error)
+    alert(`Error ${action}ing media items. Please check the console for details.`)
+  } finally {
+    bulkIgnoring.value = false
   }
 }
 

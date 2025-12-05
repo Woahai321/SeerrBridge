@@ -14,7 +14,7 @@ from seerr.db_logger import log_info, log_error
 from seerr.env_file_manager import env_file
 import os
 
-app = FastAPI(title="SeerrBridge API", version="1.0.0")
+app = FastAPI(title="SeerrBridge API", version="0.8.0")
 
 # Add CORS middleware
 app.add_middleware(

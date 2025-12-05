@@ -246,9 +246,49 @@ def test_dmm_credentials(client_id, client_secret, access_token, refresh_token, 
             torrent_match = re.search(r'(\d+)\s+torrents', library_stats_text)
             torrents_count = int(torrent_match.group(1)) if torrent_match else 0
             
-            # Extract TB size
+            # Extract TB size (also check for GB)
             size_match = re.search(r'([\d.]+)\s*TB', library_stats_text)
+            if not size_match:
+                size_match = re.search(r'([\d.]+)\s*GB', library_stats_text)
             total_size_tb = float(size_match.group(1)) if size_match else 0.0
+            
+            # If we see 0 torrents and 0TB/0GB, wait 5 seconds and check again
+            # Sometimes people have larger libraries and it takes longer to load
+            if torrents_count == 0 and total_size_tb == 0.0:
+                progress_msg = "Initial check shows 0 torrents and 0TB/0GB. Waiting 5 seconds for library to load..."
+                log_status(progress_msg, "info")
+                if test_id:
+                    add_progress(test_id, progress_msg, "info")
+                
+                time.sleep(5)
+                
+                try:
+                    # Re-check the library stats element
+                    library_stats_element = WebDriverWait(driver, 5).until(
+                        EC.presence_of_element_located((By.XPATH, "//h1[contains(@class, 'text-xl') and contains(@class, 'font-bold')]"))
+                    )
+                    library_stats_text = library_stats_element.text.strip()
+                    
+                    # Re-extract torrent count and size
+                    torrent_match = re.search(r'(\d+)\s+torrents', library_stats_text)
+                    torrents_count = int(torrent_match.group(1)) if torrent_match else 0
+                    
+                    size_match = re.search(r'([\d.]+)\s*TB', library_stats_text)
+                    if not size_match:
+                        size_match = re.search(r'([\d.]+)\s*GB', library_stats_text)
+                    total_size_tb = float(size_match.group(1)) if size_match else 0.0
+                    
+                    if torrents_count > 0 or total_size_tb > 0.0:
+                        progress_msg = f"After retry, found {torrents_count} torrents, {total_size_tb} TB"
+                        log_status(progress_msg, "success")
+                        if test_id:
+                            add_progress(test_id, progress_msg, "success")
+                except (TimeoutException, Exception) as e:
+                    # If re-check fails, proceed with the original 0 values
+                    progress_msg = f"Retry check failed, proceeding with initial values: {e}"
+                    log_status(progress_msg, "warning")
+                    if test_id:
+                        add_progress(test_id, progress_msg, "warning")
             
             library_stats = {
                 "torrents_count": torrents_count,

@@ -56,9 +56,32 @@ if [ ! -f "/app/data/unified.json" ]; then
         if [ ! -d "/app/data/images" ] || [ -z "$(ls -A /app/data/images 2>/dev/null)" ]; then
             if [ -d "/app/data-default/images" ] && [ -n "$(ls -A /app/data-default/images 2>/dev/null)" ]; then
                 log "Restoring images from image backup..."
-                mkdir -p /app/data/images
-                cp -r /app/data-default/images/* /app/data/images/ 2>/dev/null || true
-                log "Images restored successfully"
+                
+                # Verify source directory has actual image files (>1KB to avoid placeholders)
+                image_count=$(find /app/data-default/images -type f \( -name "*.webp" -o -name "*.jpg" -o -name "*.jpeg" -o -name "*.png" \) -size +1k 2>/dev/null | wc -l)
+                
+                if [ "$image_count" -gt 0 ]; then
+                    log "Found $image_count image files in backup (size > 1KB), proceeding with restore..."
+                    mkdir -p /app/data/images
+                    
+                    # Copy with verification
+                    if cp -r /app/data-default/images/* /app/data/images/ 2>/dev/null; then
+                        # Verify copied files have reasonable sizes
+                        copied_count=$(find /app/data/images -type f \( -name "*.webp" -o -name "*.jpg" -o -name "*.jpeg" -o -name "*.png" \) -size +1k 2>/dev/null | wc -l)
+                        
+                        if [ "$copied_count" -gt 0 ]; then
+                            log "Images restored successfully: $copied_count files verified (size > 1KB)"
+                        else
+                            log_warn "Image restore completed but no valid image files found (all files < 1KB). Source may be corrupted."
+                            # Remove the empty/corrupted files
+                            rm -rf /app/data/images/*
+                        fi
+                    else
+                        log_warn "Failed to copy images from backup. Source may be corrupted or inaccessible."
+                    fi
+                else
+                    log_warn "No valid image files found in backup (all files < 1KB or no image files). Skipping image restore."
+                fi
             fi
         else
             log "Images directory already exists in mounted volume"
@@ -75,10 +98,33 @@ else
     if [ ! -d "/app/data/images" ] || [ -z "$(ls -A /app/data/images 2>/dev/null)" ]; then
         if [ -d "/app/data-default/images" ] && [ -n "$(ls -A /app/data-default/images 2>/dev/null)" ]; then
             log "Restoring images from image backup..."
-            mkdir -p /app/data/images
-            cp -r /app/data-default/images/* /app/data/images/ 2>/dev/null || true
-            chmod -R 755 /app/data/images
-            log "Images restored successfully"
+            
+            # Verify source directory has actual image files (>1KB to avoid placeholders)
+            image_count=$(find /app/data-default/images -type f \( -name "*.webp" -o -name "*.jpg" -o -name "*.jpeg" -o -name "*.png" \) -size +1k 2>/dev/null | wc -l)
+            
+            if [ "$image_count" -gt 0 ]; then
+                log "Found $image_count image files in backup (size > 1KB), proceeding with restore..."
+                mkdir -p /app/data/images
+                
+                # Copy with verification
+                if cp -r /app/data-default/images/* /app/data/images/ 2>/dev/null; then
+                    # Verify copied files have reasonable sizes
+                    copied_count=$(find /app/data/images -type f \( -name "*.webp" -o -name "*.jpg" -o -name "*.jpeg" -o -name "*.png" \) -size +1k 2>/dev/null | wc -l)
+                    
+                    if [ "$copied_count" -gt 0 ]; then
+                        chmod -R 755 /app/data/images
+                        log "Images restored successfully: $copied_count files verified (size > 1KB)"
+                    else
+                        log_warn "Image restore completed but no valid image files found (all files < 1KB). Source may be corrupted."
+                        # Remove the empty/corrupted files
+                        rm -rf /app/data/images/*
+                    fi
+                else
+                    log_warn "Failed to copy images from backup. Source may be corrupted or inaccessible."
+                fi
+            else
+                log_warn "No valid image files found in backup (all files < 1KB or no image files). Skipping image restore."
+            fi
         fi
     fi
 fi

@@ -1,6 +1,6 @@
 <template>
   <!-- Setup Wizard -->
-  <div class="min-h-screen bg-background flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8">
+  <div v-if="!showBackendInitializing" class="min-h-screen bg-background flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8">
     <div class="max-w-5xl w-full space-y-8">
       <div class="text-center">
         <h2 class="mt-6 text-3xl font-extrabold text-foreground">
@@ -1603,9 +1603,10 @@ const completeSetup = async () => {
       // Show success message
       console.log('Setup completed successfully!')
       
-      // Show backend initializing screen instead of immediately navigating
-      isSaving.value = false
+      // Show backend initializing screen immediately after successful save
+      // This will hide the setup wizard form and show the BackendInitializing component
       showBackendInitializing.value = true
+      isSaving.value = false
     } else {
       console.error('Setup failed:', response.error)
       alert('Setup failed: ' + (response.error || 'Unknown error'))
