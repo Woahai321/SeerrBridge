@@ -25,14 +25,9 @@
 
 Just run this single command to get started. Docker will automatically pull the image if needed.
 
-### Linux/Mac:
-```bash
-docker run -d --name seerrbridge --restart unless-stopped -p 3777:3777 -p 8777:8777 -p 8778:8778 -p 3307:3306 -v seerrbridge_mysql_data:/var/lib/mysql -v $(pwd)/logs:/app/logs -v $(pwd)/data:/app/data ghcr.io/woahai321/seerrbridge:latest
-```
-
-### Windows PowerShell:
+### Windows PowerShell, Linux, & Mac:
 ```powershell
-docker run -d --name seerrbridge --restart unless-stopped -p 3777:3777 -p 8777:8777 -p 8778:8778 -p 3307:3306 -v seerrbridge_mysql_data:/var/lib/mysql -v ${PWD}/logs:/app/logs -v ${PWD}/data:/app/data ghcr.io/woahai321/seerrbridge:latest
+docker run -d --name seerrbridge --restart unless-stopped -p 3777:3777 -p 8777:8777 -p 8778:8778 -p 3307:3306 -v seerrbridge_mysql_data:/var/lib/mysql -v ./logs:/app/logs -v ./data:/app/data ghcr.io/woahai321/seerrbridge:latest
 ```
 
 **That's it!** Access the dashboard at **http://localhost:3777**
