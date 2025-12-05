@@ -98,6 +98,16 @@
           </NuxtLink>
           
           <NuxtLink
+            to="/seerr-requests"
+            class="nav-link group relative"
+            :class="[isCollapsed && !isMobile ? 'justify-center' : 'justify-start', { 'nav-link-active': $route.path === '/seerr-requests' }]"
+            @click="closeMobileMenu"
+          >
+            <AppIcon icon="lucide:inbox" size="18" class="nav-icon" />
+            <span :class="{ 'opacity-0 w-0 overflow-hidden': isCollapsed && !isMobile }" class="transition-all duration-300">Seerr Requests</span>
+          </NuxtLink>
+          
+          <NuxtLink
             to="/collections"
             class="nav-link group relative"
             :class="[isCollapsed && !isMobile ? 'justify-center' : 'justify-start', { 'nav-link-active': $route.path.startsWith('/collections') }]"
@@ -341,6 +351,7 @@ const pageTitle = computed(() => {
     '/dashboard': 'Dashboard',
     '/processed-media': 'Processed Media',
     '/search': 'Search Media',
+    '/seerr-requests': 'Seerr Requests',
     '/collections': 'Collections',
     '/list-sync': 'List Sync',
     '/logs': 'Logs',

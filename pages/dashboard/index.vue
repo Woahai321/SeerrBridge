@@ -56,12 +56,12 @@
       </Suspense>
     </div>
     
-    <!-- Currently Processing Section -->
+    <!-- Queue and Recent Media Combined Section -->
     <div>
       <ClientOnly>
         <Suspense>
           <template #default>
-            <CurrentlyProcessing 
+            <QueueAndRecentMedia 
               :current-item="processingData?.currentItem || null"
               :queued-items="processingData?.queuedItems || []"
               :processing-items="processingData?.processingItems || []"
@@ -70,39 +70,25 @@
             />
           </template>
           <template #fallback>
-            <div class="glass-card p-6 lg:p-8 text-center min-h-[180px] lg:min-h-[200px] flex items-center justify-center">
-              <div class="animate-pulse text-sm lg:text-base">Loading processing status...</div>
+            <div class="glass-card p-6 lg:p-8 text-center min-h-[400px] lg:min-h-[500px] flex items-center justify-center">
+              <div class="space-y-3">
+                <div class="w-10 h-10 lg:w-12 lg:h-12 border-4 border-primary border-t-transparent rounded-full animate-spin mx-auto" />
+                <p class="text-xs lg:text-sm text-muted-foreground">Loading queue and recent media...</p>
+              </div>
             </div>
           </template>
           <template #error="{ error }">
-            <div class="glass-card p-6 lg:p-8 text-center min-h-[180px] lg:min-h-[200px] flex items-center justify-center">
-              <div class="text-sm lg:text-base text-destructive">Error loading processing status</div>
+            <div class="glass-card p-6 lg:p-8 text-center min-h-[400px] lg:min-h-[500px] flex items-center justify-center">
+              <div class="text-sm lg:text-base text-destructive">Error loading queue and recent media</div>
             </div>
           </template>
         </Suspense>
         <template #fallback>
-          <div class="glass-card p-6 lg:p-8 text-center min-h-[180px] lg:min-h-[200px] flex items-center justify-center">
+          <div class="glass-card p-6 lg:p-8 text-center min-h-[400px] lg:min-h-[500px] flex items-center justify-center">
             <div class="animate-pulse text-sm lg:text-base">Loading...</div>
           </div>
         </template>
       </ClientOnly>
-    </div>
-    
-    <!-- Recent Media -->
-    <div>
-      <Suspense>
-        <template #default>
-          <RecentMedia />
-        </template>
-        <template #fallback>
-          <div class="glass-card p-6 lg:p-8 text-center min-h-[400px] lg:min-h-[500px] flex items-center justify-center">
-            <div class="space-y-3">
-              <div class="w-10 h-10 lg:w-12 lg:h-12 border-4 border-primary border-t-transparent rounded-full animate-spin mx-auto" />
-              <p class="text-xs lg:text-sm text-muted-foreground">Loading recent media...</p>
-            </div>
-          </div>
-        </template>
-      </Suspense>
     </div>
   </div>
 </template>

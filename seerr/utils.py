@@ -46,7 +46,8 @@ def extract_main_title(title):
     if is_torrent_filename:
         # Strategy 1: Extract before year pattern (most reliable)
         # For dot-separated filenames like "Title.Title.2015.QUALITY", match ".2015" or ".2015."
-        year_match = re.search(r'\.(19\d{2}|20\d{2})(?:\.|$)', title)
+        # Also handle cases where year might be followed by space or other characters
+        year_match = re.search(r'\.(19\d{2}|20\d{2})(?:\.|\s|$)', title)
         if year_match:
             candidate = title[:year_match.start()].strip().rstrip('.').strip()
             if candidate:
@@ -58,6 +59,14 @@ def extract_main_title(title):
             candidate = title[:year_match_space.start()].strip().rstrip('.').strip()
             if candidate and candidate != title:
                 extraction_candidates.append(('year_space', candidate))
+        
+        # Strategy 1b: Also try year pattern without requiring dot before (handles edge cases)
+        # This catches cases like "Title Title 2015" or "Title.Title2015"
+        year_match_alt = re.search(r'(?:^|\.|\s)(19\d{2}|20\d{2})(?:\.|\s|$)', title)
+        if year_match_alt and year_match_alt.start() > 0:
+            candidate = title[:year_match_alt.start()].strip().rstrip('.').strip()
+            if candidate and candidate not in [c[1] for c in extraction_candidates]:
+                extraction_candidates.append(('year_alt', candidate))
         
         # Strategy 3: Extract before common technical keywords
         tech_keywords = [
@@ -98,18 +107,35 @@ def extract_main_title(title):
         # Pick the best extraction candidate
         if extraction_candidates:
             # Prefer year-based extraction, then tech keyword, then segments
-            priority_order = ['year', 'year_space', 'tech_keyword', 'segments']
-            for priority in priority_order:
-                for strategy, candidate in extraction_candidates:
-                    if strategy == priority and candidate:
-                        main_title = candidate
-                        break
-                else:
-                    continue
-                break
+            # Among year-based extractions, prefer the longest one (most complete)
+            priority_order = ['year', 'year_alt', 'year_space', 'tech_keyword', 'segments']
+            main_title = None
+            longest_year_candidate = None
+            longest_year_length = 0
+            
+            # First, find the longest year-based extraction (most complete title)
+            for strategy, candidate in extraction_candidates:
+                if strategy in ['year', 'year_alt', 'year_space']:
+                    if len(candidate) > longest_year_length:
+                        longest_year_length = len(candidate)
+                        longest_year_candidate = candidate
+            
+            # Use the longest year-based extraction if available
+            if longest_year_candidate:
+                main_title = longest_year_candidate
             else:
-                # If no preferred strategy worked, use the first candidate
-                main_title = extraction_candidates[0][1]
+                # Fall back to priority order for non-year extractions
+                for priority in priority_order:
+                    for strategy, candidate in extraction_candidates:
+                        if strategy == priority and candidate:
+                            main_title = candidate
+                            break
+                    else:
+                        continue
+                    break
+                else:
+                    # If no preferred strategy worked, use the first candidate
+                    main_title = extraction_candidates[0][1]
         else:
             # No extraction worked, return original (will be cleaned later)
             main_title = title
@@ -187,6 +213,10 @@ def clean_title(title, target_lang='en'):
     # Only remove if it's clearly a year (not part of a word and at word boundaries)
     main_title = re.sub(r'\b(19\d{2}|20\d{2})\b', '', main_title)
     
+    # Normalize em dashes (—, –) to regular hyphens first, then remove them
+    main_title = main_title.replace('—', '-').replace('–', '-')
+    # Remove underscores
+    main_title = main_title.replace('_', ' ')
     # Remove commas, hyphens, colons, semicolons, and apostrophes
     cleaned_title = re.sub(r"[,:;'-]", '', main_title)
     # Replace multiple spaces with a single dot
@@ -203,6 +233,10 @@ def normalize_title(title, target_lang='en'):
     title = title.replace('…', '...')
     # Replace smart apostrophes with regular apostrophes
     title = title.replace("'", "'")
+    # Normalize em dashes (—, –) to regular hyphens, then replace with spaces
+    title = title.replace('—', '-').replace('–', '-')
+    # Replace underscores with spaces
+    title = title.replace('_', ' ')
     
     # Translate the title to the target language
     translated_title = translate_title(title, target_lang)
@@ -282,6 +316,11 @@ def is_complete_word_match(movie_title, torrent_title):
     Returns:
         True if movie title appears as a complete word/phrase, False otherwise
     """
+    # Normalize special characters (em dashes, underscores) before comparison
+    # This ensures "animal.adventure" matches "_animal.adventure_" or "–animal.adventure"
+    movie_title = movie_title.replace('—', '-').replace('–', '-').replace('_', ' ')
+    torrent_title = torrent_title.replace('—', '-').replace('–', '-').replace('_', ' ')
+    
     # Convert to lowercase for comparison
     movie_title = movie_title.lower().strip()
     torrent_title = torrent_title.lower().strip()

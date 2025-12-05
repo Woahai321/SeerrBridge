@@ -27,7 +27,7 @@
             </p>
           </div>
           <button 
-            @click="removeNotification(notification.id)"
+            @click="handleManualDismiss(notification.id)"
             class="flex-shrink-0 text-muted-foreground hover:text-foreground transition-colors p-1 -mt-1 -mr-1"
             aria-label="Close notification"
           >
@@ -43,25 +43,50 @@
 import { useNotifications } from '~/composables/useNotifications'
 import type { Notification } from '~/composables/useNotifications'
 
-const { notifications, removeNotification, startPolling, initializeNotifications } = useNotifications()
+const { notifications, removeNotification, startPolling, initializeNotifications, markAsRead } = useNotifications()
 
-// Maximum number of toasts to display at once
-const MAX_DISPLAYED_TOASTS = 5
+// Maximum number of toasts to display at once (single notification queue)
+const MAX_DISPLAYED_TOASTS = 1
 
-// Timeout durations in milliseconds based on notification type
+// Timeout durations in milliseconds based on notification type (faster dismiss)
 const TOAST_DURATIONS = {
-  success: 4000,  // 4 seconds
-  info: 5000,     // 5 seconds
-  warning: 6000,  // 6 seconds
-  error: 8000     // 8 seconds (errors stay longer)
+  success: 2000,  // 2 seconds
+  info: 2500,     // 2.5 seconds
+  warning: 3000,  // 3 seconds
+  error: 4000     // 4 seconds (errors stay longer but still faster)
 }
 
 // Track active timeouts for each notification
 const notificationTimeouts = new Map<string | number, NodeJS.Timeout>()
 
-// Computed property to limit displayed notifications
+// Track currently displayed notification ID for queue management
+const currentDisplayedId = ref<string | number | null>(null)
+
+// Computed property to show only the first unread notification (queue system)
 const displayedNotifications = computed(() => {
-  return notifications.value.slice(0, MAX_DISPLAYED_TOASTS)
+  // Filter to only unread notifications
+  const unreadNotifications = notifications.value.filter(n => !n.read)
+  
+  // If we have a currently displayed notification, keep showing it until it's removed
+  if (currentDisplayedId.value !== null) {
+    const current = unreadNotifications.find(n => String(n.id) === String(currentDisplayedId.value))
+    if (current) {
+      return [current]
+    }
+    // Current notification was removed, clear the reference
+    currentDisplayedId.value = null
+  }
+  
+  // Show the first unread notification (queue system)
+  if (unreadNotifications.length > 0) {
+    const nextNotification = unreadNotifications[0]
+    currentDisplayedId.value = nextNotification.id
+    return [nextNotification]
+  }
+  
+  // No unread notifications
+  currentDisplayedId.value = null
+  return []
 })
 
 const getNotificationClass = (type: string) => {
@@ -108,11 +133,48 @@ const setupAutoDismiss = (notification: Notification) => {
 
   // Set up new timeout
   const timeout = setTimeout(() => {
+    // Mark as read when auto-dismissing
+    markAsRead(notification.id)
     removeNotification(notification.id)
     notificationTimeouts.delete(notificationId)
+    
+    // Clear current displayed ID to trigger next notification in queue
+    if (currentDisplayedId.value === notification.id) {
+      currentDisplayedId.value = null
+    }
+    
+    // Trigger next notification in queue after a brief delay for smooth transition
+    nextTick(() => {
+      // The computed property will automatically show the next notification
+    })
   }, duration)
 
   notificationTimeouts.set(notificationId, timeout)
+}
+
+// Handle manual dismissal (user clicks X button)
+const handleManualDismiss = (id: string | number) => {
+  // Clear timeout if exists
+  const notificationId = String(id)
+  const timeout = notificationTimeouts.get(notificationId)
+  if (timeout) {
+    clearTimeout(timeout)
+    notificationTimeouts.delete(notificationId)
+  }
+  
+  // Mark as read and remove
+  markAsRead(id)
+  removeNotification(id)
+  
+  // Clear current displayed ID to trigger next notification in queue
+  if (currentDisplayedId.value === id) {
+    currentDisplayedId.value = null
+  }
+  
+  // Trigger next notification in queue after a brief delay for smooth transition
+  nextTick(() => {
+    // The computed property will automatically show the next notification
+  })
 }
 
 // Set up auto-dismiss for all displayed notifications
@@ -163,9 +225,9 @@ onMounted(async () => {
     setupAllDisplayedNotifications()
   }, 2000) // Check every 2 seconds
   
-  // Start ultra real-time notification polling AFTER initialization
+  // Start notification polling AFTER initialization
   // This ensures pageLoadTime is set before any notifications are fetched
-  const stopPolling = startPolling(1000) // Ultra real-time: Poll every 1 second
+  const stopPolling = startPolling(2000) // Poll every 2 seconds (reduced from 1 second)
 
   onUnmounted(() => {
     // Clear all timeouts and intervals

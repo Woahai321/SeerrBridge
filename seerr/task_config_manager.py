@@ -50,18 +50,25 @@ class TaskConfigManager:
         """Convert string value to appropriate type"""
         if value is None:
             return None
+        
+        # Normalize type aliases: 'integer' -> 'int', 'boolean' -> 'bool'
+        normalized_type = config_type.lower()
+        if normalized_type == 'integer':
+            normalized_type = 'int'
+        elif normalized_type == 'boolean':
+            normalized_type = 'bool'
             
         try:
-            if config_type == 'bool':
+            if normalized_type == 'bool':
                 return value.lower() in ('true', '1', 'yes', 'on')
-            elif config_type == 'int':
+            elif normalized_type == 'int':
                 # Handle float values that should be int
                 if '.' in str(value):
                     return int(float(value))
                 return int(value)
-            elif config_type == 'float':
+            elif normalized_type == 'float':
                 return float(value)
-            elif config_type == 'json':
+            elif normalized_type == 'json':
                 return json.loads(value)
             else:  # string
                 return value

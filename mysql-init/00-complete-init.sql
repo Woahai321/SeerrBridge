@@ -173,6 +173,24 @@ CREATE TABLE IF NOT EXISTS system_config (
     INDEX idx_is_active (is_active)
 );
 
+-- Create overseerr_media_cache table for caching media details
+CREATE TABLE IF NOT EXISTS overseerr_media_cache (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    tmdb_id INT NOT NULL,
+    media_type ENUM('movie', 'tv') NOT NULL,
+    media_details JSON NOT NULL,
+    last_fetched_at DATETIME NOT NULL,
+    last_request_updated_at DATETIME NULL,
+    request_ids JSON NULL,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    UNIQUE KEY unique_tmdb_media (tmdb_id, media_type),
+    INDEX idx_tmdb_id (tmdb_id),
+    INDEX idx_media_type (media_type),
+    INDEX idx_last_fetched_at (last_fetched_at),
+    INDEX idx_last_request_updated_at (last_request_updated_at)
+);
+
 -- Create service_status table for real-time status updates
 CREATE TABLE IF NOT EXISTS service_status (
     id INT AUTO_INCREMENT PRIMARY KEY,

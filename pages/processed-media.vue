@@ -432,27 +432,13 @@
             </div>
           </div>
           
-          <!-- Animated Status Badge with Glow -->
-          <div class="absolute top-3 right-3 z-20">
-            <div 
-              :class="getStatusIconClass(media)" 
-              class="status-badge-enhanced w-8 h-8 sm:w-10 sm:h-10 rounded-2xl backdrop-blur-xl shadow-2xl flex items-center justify-center border-2 transition-all duration-300 group-hover:scale-110 group-hover:shadow-lg"
-            >
-              <img 
-                src="/vadarr-icon-white.svg" 
-                alt="Status" 
-                class="w-6 h-6 sm:w-8 sm:h-8 drop-shadow-lg"
-              />
-            </div>
-          </div>
-          
           <!-- Selection Checkbox -->
           <div 
-            class="absolute top-3 left-3 z-30 selection-checkbox"
+            class="absolute top-2 left-2 z-30 selection-checkbox"
             @click.stop="toggleMediaSelection(media.id)"
           >
             <div 
-              class="w-6 h-6 sm:w-7 sm:h-7 rounded-lg sm:rounded-xl backdrop-blur-xl shadow-2xl border-2 transition-all duration-300 flex items-center justify-center cursor-pointer"
+              class="w-5 h-5 sm:w-6 sm:h-6 rounded-lg backdrop-blur-xl shadow-xl border-2 transition-all duration-300 flex items-center justify-center cursor-pointer"
               :class="selectedMediaIds.has(media.id) 
                 ? 'bg-primary border-primary hover:bg-primary/90' 
                 : 'bg-background/90 border-border hover:border-primary/50 hover:bg-background'"
@@ -460,26 +446,41 @@
               <AppIcon 
                 v-if="selectedMediaIds.has(media.id)"
                 icon="lucide:check" 
-                size="16" 
-                class="text-white drop-shadow-lg" 
+                size="12" 
+                class="sm:w-3.5 sm:h-3.5 text-white drop-shadow-lg" 
               />
               <AppIcon 
                 v-else
                 icon="lucide:square" 
-                size="14" 
-                class="text-muted-foreground" 
+                size="10" 
+                class="sm:w-2.5 sm:h-2.5 text-muted-foreground" 
               />
             </div>
           </div>
           
-          <!-- Enhanced Media Type Badge (hidden when items are selected) -->
-          <div v-if="selectedCount === 0" class="absolute top-3 left-3 z-20">
-            <span 
-              class="media-type-badge px-3 py-1.5 text-[10px] sm:text-xs font-bold rounded-full backdrop-blur-xl shadow-xl border-2 transition-all duration-300 group-hover:scale-105"
-              :class="media.media_type === 'movie' ? 'media-type-movie' : 'media-type-tv'"
+          <!-- Unified Status and Media Type Badge Container -->
+          <div class="absolute top-3 right-3 z-20 flex items-center gap-2">
+            <!-- Animated Status Badge with Glow -->
+            <div 
+              :class="getStatusIconClass(media)" 
+              class="status-badge-enhanced w-8 h-8 sm:w-10 sm:h-10 rounded-2xl backdrop-blur-xl shadow-2xl flex items-center justify-center border-2 transition-all duration-300 group-hover:scale-110 group-hover:shadow-lg flex-shrink-0"
             >
-              {{ media.media_type.toUpperCase() }}
-            </span>
+              <img 
+                src="/vadarr-icon-white.svg" 
+                alt="Status" 
+                class="w-6 h-6 sm:w-8 sm:h-8 drop-shadow-lg"
+              />
+            </div>
+            
+            <!-- Enhanced Media Type Badge -->
+            <div v-if="selectedCount === 0">
+              <span 
+                class="media-type-badge px-2 py-1 sm:px-3 sm:py-1.5 text-[10px] sm:text-xs font-bold rounded-full backdrop-blur-xl shadow-xl border-2 transition-all duration-300 group-hover:scale-105"
+                :class="media.media_type === 'movie' ? 'media-type-movie' : 'media-type-tv'"
+              >
+                {{ media.media_type.toUpperCase() }}
+              </span>
+            </div>
           </div>
           
           <!-- Error Badge with Pulse Animation -->

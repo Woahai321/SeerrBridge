@@ -3673,14 +3673,17 @@ def search_on_debrid(imdb_id, movie_title, media_type, driver, extra_data=None, 
                             logger.info(f"Movie title (words to digits): {movie_title_cleaned_digit}, Box title (words to digits): {title_text_cleaned_digit}")
 
                             # Compare the title in all variations with stricter threshold (90%)
-                            fuzzy_match = (
-                                fuzz.partial_ratio(title_text_cleaned.lower(), movie_title_cleaned.lower()) >= 90 or
-                                fuzz.partial_ratio(title_text_normalized.lower(), movie_title_normalized.lower()) >= 90 or
-                                fuzz.partial_ratio(title_text_cleaned_word.lower(), movie_title_cleaned_word.lower()) >= 90 or
-                                fuzz.partial_ratio(title_text_normalized_word.lower(), movie_title_normalized_word.lower()) >= 90 or
-                                fuzz.partial_ratio(title_text_cleaned_digit.lower(), movie_title_cleaned_digit.lower()) >= 90 or
-                                fuzz.partial_ratio(title_text_normalized_digit.lower(), movie_title_normalized_digit.lower()) >= 90
-                            )
+                            # Calculate all fuzzy match scores to find the highest one
+                            fuzzy_scores = [
+                                fuzz.partial_ratio(title_text_cleaned.lower(), movie_title_cleaned.lower()),
+                                fuzz.partial_ratio(title_text_normalized.lower(), movie_title_normalized.lower()),
+                                fuzz.partial_ratio(title_text_cleaned_word.lower(), movie_title_cleaned_word.lower()),
+                                fuzz.partial_ratio(title_text_normalized_word.lower(), movie_title_normalized_word.lower()),
+                                fuzz.partial_ratio(title_text_cleaned_digit.lower(), movie_title_cleaned_digit.lower()),
+                                fuzz.partial_ratio(title_text_normalized_digit.lower(), movie_title_normalized_digit.lower())
+                            ]
+                            max_fuzzy_score = max(fuzzy_scores) if fuzzy_scores else 0
+                            fuzzy_match = max_fuzzy_score >= 90
                             
                             # Additionally validate that movie title appears as a complete word/phrase
                             complete_word_match = (
@@ -3692,8 +3695,19 @@ def search_on_debrid(imdb_id, movie_title, media_type, driver, extra_data=None, 
                                 is_complete_word_match(movie_title_normalized_digit, title_text_normalized_digit)
                             )
                             
-                            if not (fuzzy_match and complete_word_match):
-                                logger.warning(f"Title mismatch for box {i}: {title_text_cleaned} or {title_text_normalized} (Expected: {movie_title_cleaned} or {movie_title_normalized}). Fuzzy match: {fuzzy_match}, Complete word match: {complete_word_match}. Skipping.")
+                            # If fuzzy match is very high (>=95), be more lenient with complete_word_match
+                            # This handles cases where minor formatting differences (underscores, em dashes) 
+                            # cause complete_word_match to fail even though titles are very similar
+                            if max_fuzzy_score >= 95:
+                                # With very high fuzzy match, allow if either complete_word_match OR fuzzy is >= 95
+                                # This is more lenient for high-confidence matches
+                                title_matches = fuzzy_match and (complete_word_match or max_fuzzy_score >= 95)
+                            else:
+                                # For lower fuzzy scores, require both conditions
+                                title_matches = fuzzy_match and complete_word_match
+                            
+                            if not title_matches:
+                                logger.warning(f"Title mismatch for box {i}: {title_text_cleaned} or {title_text_normalized} (Expected: {movie_title_cleaned} or {movie_title_normalized}). Fuzzy match: {fuzzy_match} (max score: {max_fuzzy_score}), Complete word match: {complete_word_match}. Skipping.")
                                 continue  # Skip this box if none of the variations match
 
                             # Compare the year with the expected year (allow ±1 year) only if it's not a TV show

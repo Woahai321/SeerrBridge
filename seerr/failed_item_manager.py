@@ -18,18 +18,43 @@ class FailedItemManager:
     """Manages retry logic for failed media items"""
     
     def __init__(self):
-        # Load config values with defaults
-        self.max_retry_attempts = task_config.get_config('failed_item_max_retry_attempts', 3)
-        self.retry_delay_hours = task_config.get_config('failed_item_retry_delay_hours', 2)  # Wait 2 hours before first retry
-        self.retry_backoff_multiplier = task_config.get_config('failed_item_retry_backoff_multiplier', 2)  # Double the delay each retry
-        self.max_retry_delay_hours = task_config.get_config('failed_item_max_retry_delay_hours', 24)  # Maximum 24 hours between retries
+        # Load config values with defaults - will be set via _refresh_config for consistency
+        self.max_retry_attempts = 3
+        self.retry_delay_hours = 2
+        self.retry_backoff_multiplier = 2.0
+        self.max_retry_delay_hours = 24
+        # Refresh config to load actual values from database
+        self._refresh_config()
     
     def _refresh_config(self):
         """Refresh config values from task_config (call this periodically or when config changes)"""
-        self.max_retry_attempts = task_config.get_config('failed_item_max_retry_attempts', 3)
-        self.retry_delay_hours = task_config.get_config('failed_item_retry_delay_hours', 2)
-        self.retry_backoff_multiplier = task_config.get_config('failed_item_retry_backoff_multiplier', 2)
-        self.max_retry_delay_hours = task_config.get_config('failed_item_max_retry_delay_hours', 24)
+        # Get config values with defaults
+        max_retry_attempts = task_config.get_config('failed_item_max_retry_attempts', 3)
+        retry_delay_hours = task_config.get_config('failed_item_retry_delay_hours', 2)
+        retry_backoff_multiplier = task_config.get_config('failed_item_retry_backoff_multiplier', 2)
+        max_retry_delay_hours = task_config.get_config('failed_item_max_retry_delay_hours', 24)
+        
+        # Defensive type conversion to ensure numeric types (handles cases where config returns strings)
+        try:
+            self.max_retry_attempts = int(max_retry_attempts) if max_retry_attempts is not None else 3
+        except (ValueError, TypeError):
+            self.max_retry_attempts = 3
+            
+        try:
+            self.retry_delay_hours = int(retry_delay_hours) if retry_delay_hours is not None else 2
+        except (ValueError, TypeError):
+            self.retry_delay_hours = 2
+            
+        try:
+            # Backoff multiplier can be a float (e.g., 1.5, 2.0)
+            self.retry_backoff_multiplier = float(retry_backoff_multiplier) if retry_backoff_multiplier is not None else 2.0
+        except (ValueError, TypeError):
+            self.retry_backoff_multiplier = 2.0
+            
+        try:
+            self.max_retry_delay_hours = int(max_retry_delay_hours) if max_retry_delay_hours is not None else 24
+        except (ValueError, TypeError):
+            self.max_retry_delay_hours = 24
     
     def get_failed_movies(self, limit: int = 50) -> List[UnifiedMedia]:
         """Get failed movies that are eligible for retry"""
