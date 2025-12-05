@@ -31,9 +31,39 @@ log "Starting SeerrBridge Unified Container..."
 log "Database: ${DB_NAME} | User: ${DB_USER} | Host: ${DB_HOST}:${DB_PORT}"
 
 # ==============================================================================
+# Step 0: Restore data files if volume mount is empty
+# ==============================================================================
+log "Step 0/6: Checking data files..."
+
+# Check if unified.json exists in mounted data directory
+if [ ! -f "/app/data/unified.json" ]; then
+    # Volume mount is empty or file doesn't exist
+    if [ -f "/app/data-default/unified.json" ]; then
+        log "Restoring data files from image backup..."
+        # Copy all JSON files from backup to data directory
+        # Only copy if destination doesn't exist (preserve user's files)
+        for json_file in /app/data-default/*.json; do
+            if [ -f "$json_file" ]; then
+                filename=$(basename "$json_file")
+                if [ ! -f "/app/data/$filename" ]; then
+                    cp "$json_file" "/app/data/$filename"
+                    log "Restored: $filename"
+                fi
+            fi
+        done
+        chmod -R 755 /app/data
+        log "Data files restored successfully"
+    else
+        log_warn "No data files found in image backup. Collections feature may not work."
+    fi
+else
+    log "Data files already present in mounted volume"
+fi
+
+# ==============================================================================
 # Step 1: Initialize MariaDB
 # ==============================================================================
-log "Step 1/5: Initializing MariaDB..."
+log "Step 1/6: Initializing MariaDB..."
 
 # Check if database is already initialized by checking if data directory exists
 # If it exists, we assume it's already initialized and skip setup
@@ -160,7 +190,7 @@ fi
 # ==============================================================================
 # Step 2: Start Supervisor (which will manage all services)
 # ==============================================================================
-log "Step 2/5: Starting Supervisor process manager..."
+log "Step 2/6: Starting Supervisor process manager..."
 
 # Create log directory
 mkdir -p /app/logs

@@ -65,6 +65,36 @@ ENV SEERRBRIDGE_URL=${SEERRBRIDGE_URL}
 # Build the application
 RUN npm run build
 
+# Verify critical routes were built (fail build if missing)
+RUN echo "Verifying logs API routes in build output..." && \
+    if [ ! -d ".output/server/chunks/routes/api/logs" ]; then \
+      echo "❌ ERROR: logs/ directory not found in build output!" && \
+      echo "Available API routes:" && \
+      ls -la .output/server/chunks/routes/api/ | head -20 && \
+      exit 1; \
+    fi && \
+    REQUIRED_ROUTES=("entries.get.mjs" "errors.get.mjs" "failures.get.mjs" "success.get.mjs" "critical.get.mjs") && \
+    MISSING=0 && \
+    for route in "${REQUIRED_ROUTES[@]}"; do \
+      if [ ! -f ".output/server/chunks/routes/api/logs/$route" ]; then \
+        echo "❌ Missing route: logs/$route"; \
+        MISSING=1; \
+      else \
+        echo "✅ Found: logs/$route"; \
+      fi; \
+    done && \
+    if [ "$MISSING" -eq 1 ]; then \
+      echo "❌ Build verification failed - missing required routes"; \
+      exit 1; \
+    fi && \
+    if [ ! -f ".output/server/chunks/routes/api/logs-statistics.get.mjs" ]; then \
+      echo "❌ Missing route: logs-statistics.get.mjs"; \
+      exit 1; \
+    else \
+      echo "✅ Found: logs-statistics.get.mjs"; \
+    fi && \
+    echo "✅ All logs API routes verified successfully"
+
 # ==============================================================================
 # Stage 3: Final Unified Image
 # ==============================================================================
@@ -163,9 +193,10 @@ RUN mkdir -p /app/logs /app/data /var/lib/mysql /var/run/mysqld && \
 # These files should be committed to git (use Git LFS if too large)
 # Note: data/images/ is excluded via .dockerignore due to size
 RUN if [ -d "data" ]; then \
-      mkdir -p /app/data && \
+      mkdir -p /app/data /app/data-default && \
       cp -r data/*.json /app/data/ 2>/dev/null || true && \
-      chmod -R 755 /app/data; \
+      cp -r /app/data/*.json /app/data-default/ 2>/dev/null || true && \
+      chmod -R 755 /app/data /app/data-default; \
     else \
       echo "Warning: data/ directory not found in build context. Essential files should be in git."; \
     fi
