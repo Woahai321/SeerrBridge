@@ -51,6 +51,19 @@ if [ ! -f "/app/data/unified.json" ]; then
                 fi
             fi
         done
+        
+        # Restore images directory if it doesn't exist or is empty
+        if [ ! -d "/app/data/images" ] || [ -z "$(ls -A /app/data/images 2>/dev/null)" ]; then
+            if [ -d "/app/data-default/images" ] && [ -n "$(ls -A /app/data-default/images 2>/dev/null)" ]; then
+                log "Restoring images from image backup..."
+                mkdir -p /app/data/images
+                cp -r /app/data-default/images/* /app/data/images/ 2>/dev/null || true
+                log "Images restored successfully"
+            fi
+        else
+            log "Images directory already exists in mounted volume"
+        fi
+        
         chmod -R 755 /app/data
         log "Data files restored successfully"
     else
@@ -58,6 +71,16 @@ if [ ! -f "/app/data/unified.json" ]; then
     fi
 else
     log "Data files already present in mounted volume"
+    # Still check if images need to be restored even if JSON files exist
+    if [ ! -d "/app/data/images" ] || [ -z "$(ls -A /app/data/images 2>/dev/null)" ]; then
+        if [ -d "/app/data-default/images" ] && [ -n "$(ls -A /app/data-default/images 2>/dev/null)" ]; then
+            log "Restoring images from image backup..."
+            mkdir -p /app/data/images
+            cp -r /app/data-default/images/* /app/data/images/ 2>/dev/null || true
+            chmod -R 755 /app/data/images
+            log "Images restored successfully"
+        fi
+    fi
 fi
 
 # ==============================================================================

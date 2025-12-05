@@ -188,13 +188,16 @@ RUN mkdir -p /app/logs /app/data /var/lib/mysql /var/run/mysqld && \
     chown -R mysql:mysql /var/lib/mysql /var/run/mysqld && \
     chmod 755 /var/lib/mysql /var/run/mysqld
 
-# Explicitly copy essential data files if they exist in build context
+# Explicitly copy essential data files and images if they exist in build context
 # These files should be committed to git (use Git LFS if too large)
-# Note: data/images/ is excluded via .dockerignore due to size
 RUN if [ -d "data" ]; then \
-      mkdir -p /app/data /app/data-default && \
+      mkdir -p /app/data /app/data-default /app/data/images /app/data-default/images && \
       cp -r data/*.json /app/data/ 2>/dev/null || true && \
       cp -r /app/data/*.json /app/data-default/ 2>/dev/null || true && \
+      if [ -d "data/images" ]; then \
+        cp -r data/images/* /app/data/images/ 2>/dev/null || true && \
+        cp -r /app/data/images/* /app/data-default/images/ 2>/dev/null || true; \
+      fi && \
       chmod -R 755 /app/data /app/data-default; \
     else \
       echo "Warning: data/ directory not found in build context. Essential files should be in git."; \
