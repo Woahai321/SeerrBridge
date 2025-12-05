@@ -73,9 +73,8 @@ RUN echo "Verifying logs API routes in build output..." && \
       ls -la .output/server/chunks/routes/api/ | head -20 && \
       exit 1; \
     fi && \
-    REQUIRED_ROUTES=("entries.get.mjs" "errors.get.mjs" "failures.get.mjs" "success.get.mjs" "critical.get.mjs") && \
     MISSING=0 && \
-    for route in "${REQUIRED_ROUTES[@]}"; do \
+    for route in entries.get.mjs errors.get.mjs failures.get.mjs success.get.mjs critical.get.mjs; do \
       if [ ! -f ".output/server/chunks/routes/api/logs/$route" ]; then \
         echo "❌ Missing route: logs/$route"; \
         MISSING=1; \
