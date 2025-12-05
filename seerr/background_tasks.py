@@ -37,7 +37,7 @@ def get_queue_sizes():
     return int(movie_size), int(tv_size)
 
 def refresh_queue_sizes():
-    """Refresh queue sizes from database configuration"""
+    """Refresh queue sizes from database configuration and sync with database"""
     global movie_queue, tv_queue, movie_queue_maxsize, tv_queue_maxsize
     
     new_movie_size, new_tv_size = get_queue_sizes()
@@ -72,12 +72,49 @@ def refresh_queue_sizes():
         
         movie_queue_maxsize = new_movie_size
         tv_queue_maxsize = new_tv_size
+        
+        # Update database queue_status.max_size to match actual queue sizes
+        if USE_DATABASE:
+            from seerr.queue_persistence_manager import queue_persistence_manager
+            try:
+                db = get_db()
+                try:
+                    from sqlalchemy import text
+                    # Update movie queue max_size
+                    db.execute(text("""
+                        UPDATE queue_status 
+                        SET max_size = :max_size, updated_at = NOW()
+                        WHERE queue_type = 'movie'
+                    """), {"max_size": new_movie_size})
+                    # Update TV queue max_size
+                    db.execute(text("""
+                        UPDATE queue_status 
+                        SET max_size = :max_size, updated_at = NOW()
+                        WHERE queue_type = 'tv'
+                    """), {"max_size": new_tv_size})
+                    db.commit()
+                    log_info("Queue Management", f"Updated database queue_status.max_size: Movie={new_movie_size}, TV={new_tv_size}", 
+                            module="background_tasks", function="refresh_queue_sizes")
+                except Exception as e:
+                    log_error("Queue Management", f"Error updating database queue_status.max_size: {e}", 
+                             module="background_tasks", function="refresh_queue_sizes")
+                    db.rollback()
+                finally:
+                    db.close()
+            except Exception as e:
+                log_error("Queue Management", f"Error syncing queue sizes with database: {e}", 
+                         module="background_tasks", function="refresh_queue_sizes")
 
 # Initialize queues for different types of requests
 movie_queue_maxsize, tv_queue_maxsize = get_queue_sizes()
 movie_queue = Queue(maxsize=movie_queue_maxsize)  # Queue for movie requests
 tv_queue = Queue(maxsize=tv_queue_maxsize)     # Queue for TV show requests 
 processing_task = None  # To track the current processing task
+
+# Cancellation tracking system (simplified)
+# Only track items currently being processed that need to be cancelled
+cancellation_registry = {}  # Track items currently being processed that should be cancelled
+# Format: {(tmdb_id, media_type): {'media_type': str, 'cancelled_at': datetime}}
 
 # Timestamp tracking for queue activity
 last_queue_activity_time = time.time()  # Track when queues were last non-empty
@@ -185,6 +222,16 @@ async def refresh_all_scheduled_tasks():
     
     # Schedule failed item processing
     schedule_failed_item_processing()
+    
+    # Schedule periodic queue reconciliation (every 2 minutes to drain cleared items)
+    scheduler.add_job(
+        reconcile_queues_periodically,
+        'interval',
+        minutes=2,
+        id='reconcile_queues_periodically',
+        replace_existing=True
+    )
+    log_info("Scheduler", "Scheduled queue reconciliation every 2 minutes", module="background_tasks", function="refresh_all_scheduled_tasks")
     
     log_info("Scheduler", "Refreshed all scheduled tasks from database configuration", module="background_tasks", function="refresh_all_scheduled_tasks")
 
@@ -468,19 +515,89 @@ async def process_movie_queue():
             else:
                 # Regular movie processing
                 imdb_id, movie_title, media_type, extra_data, media_id, tmdb_id, request_id = queue_item
+                task_done_called = False
+                
+                # Check if this item was cancelled/cleared before processing
+                # Database is source of truth - if is_in_queue is False, item was cleared
+                if USE_DATABASE:
+                    from seerr.unified_media_manager import get_media_by_tmdb
+                    from seerr.database_queue_manager import database_queue_manager
+                    media_record = get_media_by_tmdb(tmdb_id, media_type)
+                    if media_record:
+                        # Check if item was cleared (is_in_queue = False AND status = 'failed' with 'cancelled' stage)
+                        # This means the user cleared the queue while item was in in-memory queue
+                        is_cleared = (not media_record.is_in_queue and 
+                                     media_record.status == 'failed' and 
+                                     media_record.processing_stage == 'cancelled')
+                        
+                        if is_cleared:
+                            log_info("Queue Cancellation", f"Skipping cleared item from in-memory queue: {movie_title} (TMDB: {tmdb_id})", 
+                                    module="background_tasks", function="process_movie_queue")
+                            # Item was cleared, don't process it and don't set is_in_queue back to True
+                            task_done_called = True
+                            movie_queue.task_done()
+                            continue
+                        
+                        # Item is valid - ensure is_in_queue is set to True (item is in queue since we just dequeued it)
+                        if not media_record.is_in_queue:
+                            database_queue_manager._update_queue_tracking(media_record, True)
+                        
+                        # Clear any stale cancellation tracking (item is active since we dequeued it)
+                        cancellation_registry.pop((tmdb_id, media_type), None)
+                        
+                        # Check for recently cancelled items (race condition handling)
+                        is_cancelled = False
+                        if media_record.status == 'failed' and media_record.processing_stage == 'cancelled':
+                            # Explicitly cancelled - check if it was cancelled very recently (within last 2 seconds)
+                            # This handles race conditions where item was cancelled right before dequeuing
+                            if media_record.last_checked_at:
+                                time_since_update = (datetime.utcnow() - media_record.last_checked_at).total_seconds()
+                                if time_since_update < 2:  # Cancelled within last 2 seconds
+                                    is_cancelled = True
+                                    log_info("Queue Cancellation", f"Item was cancelled very recently: {movie_title} (TMDB: {tmdb_id})", 
+                                            module="background_tasks", function="process_movie_queue")
+                        
+                        if is_cancelled:
+                            log_info("Queue Cancellation", f"Skipping cancelled item: {movie_title} (TMDB: {tmdb_id})", 
+                                    module="background_tasks", function="process_movie_queue")
+                            # Clear queue tracking
+                            database_queue_manager._update_queue_tracking(media_record, False)
+                            task_done_called = True
+                            movie_queue.task_done()
+                            continue
+                    else:
+                        # Media record doesn't exist yet - clear any stale cancellation tracking
+                        cancellation_registry.pop((tmdb_id, media_type), None)
+                
                 processed_count += 1
                 
                 # Check if media is unreleased - skip processing if so
                 if USE_DATABASE:
                     from seerr.unified_media_manager import get_media_by_tmdb
-                    from datetime import datetime, timezone
+                    from seerr.database_queue_manager import database_queue_manager
+                    # datetime is already imported at top of file
                     media_record = get_media_by_tmdb(tmdb_id, media_type)
                     if media_record and media_record.status == 'unreleased':
                         log_info("Movie Processing", f"Skipping unreleased movie {movie_title} (releases {media_record.released_date.strftime('%Y-%m-%d') if media_record.released_date else 'unknown'})", module="background_tasks", function="process_movie_queue")
+                        # Clear queue tracking before removing from queue
+                        database_queue_manager._update_queue_tracking(media_record, False)
+                        task_done_called = True
                         movie_queue.task_done()
                         continue
                 
                 log_info("Movie Processing", f"Processing movie request #{processed_count} - IMDb ID: {imdb_id}, Title: {movie_title}", module="background_tasks", function="process_movie_queue")
+                
+                # Set processing stage when item starts processing
+                if USE_DATABASE:
+                    from seerr.unified_media_manager import get_media_by_tmdb, update_media_processing_status
+                    media_record = get_media_by_tmdb(tmdb_id, media_type)
+                    if media_record:
+                        update_media_processing_status(
+                            media_record.id,
+                            'processing',
+                            'browser_automation'
+                        )
+                        log_info("Queue Processing", f"Set processing stage to browser_automation for {movie_title}", module="background_tasks", function="process_movie_queue")
                 
                 # Check if browser driver is available
                 from seerr.browser import driver as browser_driver
@@ -491,6 +608,14 @@ async def process_movie_queue():
                     from seerr.browser import driver as browser_driver
                     if browser_driver is None:
                         log_error("Browser Error", "Failed to initialize browser driver. Skipping request.", module="background_tasks", function="process_movie_queue")
+                        # Clear queue tracking before removing from queue
+                        if USE_DATABASE:
+                            from seerr.unified_media_manager import get_media_by_tmdb
+                            from seerr.database_queue_manager import database_queue_manager
+                            media_record = get_media_by_tmdb(tmdb_id, media_type)
+                            if media_record:
+                                database_queue_manager._update_queue_tracking(media_record, False)
+                        task_done_called = True
                         movie_queue.task_done()
                         continue
                 
@@ -499,8 +624,9 @@ async def process_movie_queue():
                     async with browser_semaphore:
                         from seerr.search import search_on_debrid
                         log_info("Movie Processing", f"Calling search_on_debrid with imdb_id={imdb_id}, movie_title={movie_title}, media_type={media_type}, extra_data={extra_data}", module="background_tasks", function="process_movie_queue")
-                        search_result = await asyncio.to_thread(search_on_debrid, imdb_id, movie_title, media_type, browser_driver, extra_data)
+                        search_result = await asyncio.to_thread(search_on_debrid, imdb_id, movie_title, media_type, browser_driver, extra_data, tmdb_id)
                         
+                        # Handle search result - if True, item completed successfully
                         if search_result == True:
                             if mark_completed(media_id, tmdb_id):
                                 log_info("Overseerr Update", f"Marked {movie_title} ({media_id}) as completed in Overseerr", module="background_tasks", function="process_movie_queue")
@@ -508,7 +634,7 @@ async def process_movie_queue():
                                 # Update database status to completed
                                 if USE_DATABASE and request_id:
                                     from seerr.overseerr import update_media_request_status
-                                    update_media_request_status(request_id, 'completed', completed_at=datetime.now().isoformat())
+                                    update_media_request_status(request_id, 'completed', completed_at=datetime.utcnow().isoformat())
                                 
                                 # Update unified_media table to completed status
                                 if USE_DATABASE:
@@ -522,7 +648,7 @@ async def process_movie_queue():
                                             media_record.id,
                                             'completed',
                                             'movie_processing_complete',
-                                            extra_data={'completed_at': datetime.now().isoformat(), 'overseerr_media_id': media_id}
+                                            extra_data={'completed_at': datetime.utcnow().isoformat(), 'overseerr_media_id': media_id}
                                         )
                                         log_info("Media Update", f"Updated unified_media status to completed for {movie_title} (TMDB: {tmdb_id})", module="background_tasks", function="process_movie_queue")
                                     else:
@@ -532,6 +658,25 @@ async def process_movie_queue():
                                 log_success("Media Processing", f"Successfully processed and completed {movie_title} ({media_id})", module="background_tasks", function="process_movie_queue")
                             else:
                                 log_error("Overseerr Error", f"Failed to mark media {media_id} as completed in Overseerr", module="background_tasks", function="process_movie_queue")
+                        elif search_result == "cancelled":
+                            log_info("Queue Cancellation", f"{movie_title} ({media_id}) was cancelled during search", module="background_tasks", function="process_movie_queue")
+                            # Mark as failed and clear queue tracking
+                            if USE_DATABASE:
+                                from seerr.unified_media_manager import get_media_by_tmdb, update_media_processing_status
+                                from seerr.database_queue_manager import database_queue_manager
+                                media_record = get_media_by_tmdb(tmdb_id, media_type)
+                                if media_record:
+                                    update_media_processing_status(
+                                        media_record.id,
+                                        'failed',
+                                        'cancelled',
+                                        error_message="Cancelled by user"
+                                    )
+                                    # Clear queue tracking before removing from queue
+                                    database_queue_manager._update_queue_tracking(media_record, False)
+                            # Remove from registry
+                            cancellation_registry.pop((tmdb_id, media_type), None)
+                            task_done_called = True
                         elif search_result in ["already_processing", "already_completed", "already_available", "skipped"]:
                             log_info("Movie Processing", f"{movie_title} ({media_id}) was skipped - {search_result.replace('_', ' ')}. No action needed.", module="background_tasks", function="process_movie_queue")
                         else:
@@ -558,7 +703,29 @@ async def process_movie_queue():
                 except Exception as ex:
                     log_critical("Movie Processing Error", f"Error processing movie request for IMDb ID {imdb_id}: {ex}", module="background_tasks", function="process_movie_queue")
                 finally:
-                    movie_queue.task_done()
+                    # Clear queue tracking when item is done processing (BEFORE task_done)
+                    # This ensures database is updated before queue item is marked as done
+                    # Only clear if item successfully completed or failed - don't clear if it was cancelled/removed
+                    if USE_DATABASE and not task_done_called:
+                        try:
+                            from seerr.database_queue_manager import database_queue_manager
+                            from seerr.unified_media_manager import get_media_by_tmdb
+                            from seerr.queue_persistence_manager import queue_persistence_manager
+                            media_record = get_media_by_tmdb(tmdb_id, media_type)
+                            if media_record:
+                                # Only clear queue tracking if item is actually done (completed or failed, not cancelled)
+                                # If item was cancelled, queue tracking was already cleared above
+                                if media_record.status in ['completed', 'failed']:
+                                    database_queue_manager._update_queue_tracking(media_record, False)
+                                # Update queue status from database (source of truth)
+                                queue_persistence_manager.update_queue_status_from_database('movie', not movie_queue.empty())
+                        except Exception as db_error:
+                            log_error("Queue Database Update Error", f"Error updating database for {movie_title}: {db_error}", 
+                                     module="background_tasks", function="process_movie_queue")
+                    
+                    # Only call task_done() if we haven't already called it
+                    if not task_done_called:
+                        movie_queue.task_done()
                 
         except Exception as e:
             log_error("Movie Queue Error", f"Error processing movie from queue: {e}", module="background_tasks", function="process_movie_queue")
@@ -581,9 +748,83 @@ async def process_tv_queue():
             if queue_type == "tv_processing":
                 # Regular TV show processing
                 _, imdb_id, movie_title, media_type, extra_data, media_id, tmdb_id, request_id = queue_item
+                task_done_called = False
+                
+                # Check if this item was cancelled/cleared before processing
+                # Database is source of truth - if is_in_queue is False, item was cleared
+                if USE_DATABASE:
+                    from seerr.unified_media_manager import get_media_by_tmdb
+                    from seerr.database_queue_manager import database_queue_manager
+                    media_record = get_media_by_tmdb(tmdb_id, media_type)
+                    if media_record:
+                        # Check if item was cleared (is_in_queue = False AND status = 'failed' with 'cancelled' stage)
+                        # This means the user cleared the queue while item was in in-memory queue
+                        is_cleared = (not media_record.is_in_queue and 
+                                     media_record.status == 'failed' and 
+                                     media_record.processing_stage == 'cancelled')
+                        
+                        if is_cleared:
+                            log_info("Queue Cancellation", f"Skipping cleared item from in-memory queue: {movie_title} (TMDB: {tmdb_id})", 
+                                    module="background_tasks", function="process_tv_queue")
+                            # Item was cleared, don't process it and don't set is_in_queue back to True
+                            task_done_called = True
+                            tv_queue.task_done()
+                            continue
+                        
+                        # Item is valid - ensure is_in_queue is set to True (item is in queue since we just dequeued it)
+                        if not media_record.is_in_queue:
+                            database_queue_manager._update_queue_tracking(media_record, True)
+                        
+                        # Clear any stale cancellation tracking (item is active since we dequeued it)
+                        cancellation_registry.pop((tmdb_id, media_type), None)
+                        
+                        # Check for recently cancelled items (race condition handling)
+                        is_cancelled = False
+                        if media_record.status == 'failed' and media_record.processing_stage == 'cancelled':
+                            # Explicitly cancelled - check if it was cancelled very recently (within last 2 seconds)
+                            # This handles race conditions where item was cancelled right before dequeuing
+                            if media_record.last_checked_at:
+                                time_since_update = (datetime.utcnow() - media_record.last_checked_at).total_seconds()
+                                if time_since_update < 2:  # Cancelled within last 2 seconds
+                                    is_cancelled = True
+                                    log_info("Queue Cancellation", f"Item was cancelled very recently: {movie_title} (TMDB: {tmdb_id})", 
+                                            module="background_tasks", function="process_tv_queue")
+                        
+                        if is_cancelled:
+                            log_info("Queue Cancellation", f"Skipping cancelled item: {movie_title} (TMDB: {tmdb_id})", 
+                                    module="background_tasks", function="process_tv_queue")
+                            # Clear queue tracking
+                            database_queue_manager._update_queue_tracking(media_record, False)
+                            task_done_called = True
+                            tv_queue.task_done()
+                            continue
+                        
+                        if is_cancelled:
+                            log_info("Queue Cancellation", f"Skipping cancelled item: {movie_title} (TMDB: {tmdb_id})", module="background_tasks", function="process_tv_queue")
+                            # Clear queue tracking
+                            database_queue_manager._update_queue_tracking(media_record, False)
+                            task_done_called = True
+                            tv_queue.task_done()
+                            continue
+                    else:
+                        # Media record doesn't exist yet - clear any stale cancellation tracking
+                        cancellation_registry.pop((tmdb_id, media_type), None)
+                
                 processed_count += 1
                 
                 log_info("TV Processing", f"Processing TV request #{processed_count} - IMDb ID: {imdb_id}, Title: {movie_title}", module="background_tasks", function="process_tv_queue")
+                
+                # Set processing stage when item starts processing
+                if USE_DATABASE:
+                    from seerr.unified_media_manager import get_media_by_tmdb, update_media_processing_status
+                    media_record = get_media_by_tmdb(tmdb_id, media_type)
+                    if media_record:
+                        update_media_processing_status(
+                            media_record.id,
+                            'processing',
+                            'browser_automation'
+                        )
+                        log_info("Queue Processing", f"Set processing stage to browser_automation for {movie_title}", module="background_tasks", function="process_tv_queue")
                 
                 from seerr.browser import driver as browser_driver
                 if browser_driver is None:
@@ -593,14 +834,24 @@ async def process_tv_queue():
                     from seerr.browser import driver as browser_driver
                     if browser_driver is None:
                         log_error("Browser Error", "Failed to initialize browser driver. Skipping request.", module="background_tasks", function="process_movie_queue")
+                        # Clear queue tracking before removing from queue
+                        if USE_DATABASE:
+                            from seerr.unified_media_manager import get_media_by_tmdb
+                            from seerr.database_queue_manager import database_queue_manager
+                            media_record = get_media_by_tmdb(tmdb_id, media_type)
+                            if media_record:
+                                database_queue_manager._update_queue_tracking(media_record, False)
+                        task_done_called = True
                         tv_queue.task_done()
                         continue
                 
                 try:
+                    # Acquire browser semaphore for processing
                     async with browser_semaphore:
                         from seerr.search import search_on_debrid
-                        search_result = await asyncio.to_thread(search_on_debrid, imdb_id, movie_title, media_type, browser_driver, extra_data)
+                        search_result = await asyncio.to_thread(search_on_debrid, imdb_id, movie_title, media_type, browser_driver, extra_data, tmdb_id)
                         
+                        # Handle search result - if True, item completed successfully
                         if search_result == True:
                             # Check if any seasons are discrepant before marking as available
                             should_mark_available = True
@@ -630,7 +881,7 @@ async def process_tv_queue():
                                 # Update database status to completed
                                 if USE_DATABASE and request_id:
                                     from seerr.overseerr import update_media_request_status
-                                    update_media_request_status(request_id, 'completed', completed_at=datetime.now().isoformat())
+                                    update_media_request_status(request_id, 'completed', completed_at=datetime.utcnow().isoformat())
                                 
                                 # Update unified_media table to completed status
                                 if USE_DATABASE:
@@ -645,7 +896,7 @@ async def process_tv_queue():
                                             media_record.id,
                                             'completed',
                                             'tv_processing_complete',
-                                            extra_data={'completed_at': datetime.now().isoformat(), 'overseerr_media_id': media_id}
+                                            extra_data={'completed_at': datetime.utcnow().isoformat(), 'overseerr_media_id': media_id}
                                         )
                                         
                                         # For TV shows, update season completion status and set subscription
@@ -657,7 +908,7 @@ async def process_tv_queue():
                                             for season in seasons_data:
                                                 if isinstance(season, dict):
                                                     season['status'] = 'completed'
-                                                    season['updated_at'] = datetime.now().isoformat()
+                                                    season['updated_at'] = datetime.utcnow().isoformat()
                                             
                                             # Update the seasons data
                                             EnhancedSeasonManager.update_tv_show_seasons(tmdb_id, seasons_data, movie_title)
@@ -681,6 +932,25 @@ async def process_tv_queue():
                                 log_success("Media Processing", f"Successfully processed and completed {movie_title} ({media_id})", module="background_tasks", function="process_tv_queue")
                             else:
                                 log_error("Overseerr Error", f"Failed to mark media {media_id} as completed in Overseerr", module="background_tasks", function="process_tv_queue")
+                        elif search_result == "cancelled":
+                            log_info("Queue Cancellation", f"{movie_title} ({media_id}) was cancelled during search", module="background_tasks", function="process_tv_queue")
+                            # Mark as failed and clear queue tracking
+                            if USE_DATABASE:
+                                from seerr.unified_media_manager import get_media_by_tmdb, update_media_processing_status
+                                from seerr.database_queue_manager import database_queue_manager
+                                media_record = get_media_by_tmdb(tmdb_id, media_type)
+                                if media_record:
+                                    update_media_processing_status(
+                                        media_record.id,
+                                        'failed',
+                                        'cancelled',
+                                        error_message="Cancelled by user"
+                                    )
+                                    # Clear queue tracking before removing from queue
+                                    database_queue_manager._update_queue_tracking(media_record, False)
+                            # Remove from registry
+                            cancellation_registry.pop((tmdb_id, media_type), None)
+                            task_done_called = True
                         elif search_result in ["already_processing", "already_completed", "already_available", "skipped"]:
                             log_info("TV Processing", f"{movie_title} ({media_id}) was skipped - {search_result.replace('_', ' ')}. No action needed.", module="background_tasks", function="process_tv_queue")
                         else:
@@ -707,7 +977,28 @@ async def process_tv_queue():
                 except Exception as ex:
                     log_critical("TV Processing Error", f"Error processing TV request for IMDb ID {imdb_id}: {ex}", module="background_tasks", function="process_tv_queue")
                 finally:
-                    tv_queue.task_done()
+                    # Remove from cancellation registry
+                    cancellation_registry.pop((tmdb_id, media_type), None)
+                    
+                    # Clear queue tracking when item is done processing (BEFORE task_done)
+                    # This ensures database is updated before queue item is marked as done
+                    if USE_DATABASE:
+                        try:
+                            from seerr.database_queue_manager import database_queue_manager
+                            from seerr.unified_media_manager import get_media_by_tmdb
+                            from seerr.queue_persistence_manager import queue_persistence_manager
+                            media_record = get_media_by_tmdb(tmdb_id, media_type)
+                            if media_record:
+                                database_queue_manager._update_queue_tracking(media_record, False)
+                                # Update queue status from database (source of truth)
+                                queue_persistence_manager.update_queue_status_from_database('tv', not tv_queue.empty())
+                        except Exception as db_error:
+                            log_error("Queue Database Update Error", f"Error updating database for {movie_title}: {db_error}", 
+                                     module="background_tasks", function="process_tv_queue")
+                    
+                    # Only call task_done() if we haven't already called it
+                    if not task_done_called:
+                        tv_queue.task_done()
                     
             elif queue_type == "subscription_check":
                 # Check show subscriptions
@@ -729,12 +1020,31 @@ async def add_movie_to_queue(imdb_id, movie_title, media_type, extra_data, media
         log_warning("Queue Warning", f"Movie queue is full (maxsize={movie_size}). Cannot add request for IMDb ID: {imdb_id}", module="background_tasks", function="add_movie_to_queue")
         return False
     
+    # Clear any stale cancellation tracking FIRST (before checking database)
+    # This ensures new items aren't blocked by stale cancellation flags
+    cancellation_registry.pop((tmdb_id, media_type), None)
+    
+    # Update database FIRST to ensure 1:1 synchronization
+    if USE_DATABASE:
+        from seerr.unified_media_manager import get_media_by_tmdb
+        from seerr.database_queue_manager import database_queue_manager
+        # datetime is already imported at top of file
+        
+        media_record = get_media_by_tmdb(tmdb_id, media_type)
+        if media_record:
+            # Set is_in_queue flag in database before adding to in-memory queue
+            database_queue_manager._update_queue_tracking(media_record, True)
+            log_info("Queue Management", f"Set is_in_queue=True in database for {movie_title} (TMDB: {tmdb_id})", module="background_tasks", function="add_movie_to_queue")
+        else:
+            log_warning("Queue Warning", f"Media record not found for {movie_title} (TMDB: {tmdb_id}), adding to queue anyway", module="background_tasks", function="add_movie_to_queue")
+    
+    # Add to in-memory queue
     await movie_queue.put((imdb_id, movie_title, media_type, extra_data, media_id, tmdb_id, request_id))
     update_queue_activity_timestamp()  # Update timestamp when item is added
     
-    # Update queue persistence
+    # Update queue persistence (will calculate from database)
     from seerr.queue_persistence_manager import queue_persistence_manager
-    queue_persistence_manager.update_queue_status('movie', movie_queue.qsize(), True)
+    queue_persistence_manager.update_queue_status_from_database('movie')
     
     log_info("Queue Management", f"Added movie to queue for IMDb ID: {imdb_id}, Title: {movie_title}", module="background_tasks", function="add_movie_to_queue")
     return True
@@ -747,91 +1057,334 @@ async def sync_queues_from_database():
         log_info("Queue Sync", "Syncing queues from database on startup", 
                 module="background_tasks", function="sync_queues_from_database")
         
-        # Get queued items from database
-        movie_items = queue_persistence_manager.get_queued_items_from_database('movie')
-        tv_items = queue_persistence_manager.get_queued_items_from_database('tv')
+        # Use reconciliation to ensure queues match database exactly
+        movie_result = queue_persistence_manager.reconcile_queue_from_database('movie', movie_queue)
+        tv_result = queue_persistence_manager.reconcile_queue_from_database('tv', tv_queue)
         
-        # Add movie items to queue
-        movie_added = 0
-        for item in movie_items:
-            try:
-                extra_data = item.get('extra_data', {})
-                if isinstance(extra_data, str):
-                    import json
-                    try:
-                        extra_data = json.loads(extra_data)
-                    except (json.JSONDecodeError, TypeError):
-                        extra_data = {}
-                
-                # Use put_nowait() with exception handling to avoid blocking indefinitely
-                # If queue is full, log a warning but continue with other items
-                try:
-                    movie_queue.put_nowait((
-                        item['imdb_id'],
-                        item['title'],
-                        item['media_type'],
-                        extra_data,
-                        item['overseerr_media_id'],
-                        item['tmdb_id'],
-                        item['overseerr_request_id']
-                    ))
-                    movie_added += 1
-                except asyncio.QueueFull:
-                    log_warning("Queue Sync", f"Movie queue is full, skipping {item.get('title', 'Unknown')}. Item will remain in database.", 
-                               module="background_tasks", function="sync_queues_from_database")
-                except Exception as e:
-                    log_warning("Queue Sync", f"Error adding movie {item.get('title', 'Unknown')} to queue: {e}", 
-                               module="background_tasks", function="sync_queues_from_database")
-            except Exception as e:
-                log_warning("Queue Sync", f"Error processing movie {item.get('title', 'Unknown')}: {e}", 
-                           module="background_tasks", function="sync_queues_from_database")
+        # Update queue status from database (source of truth)
+        queue_persistence_manager.update_queue_status_from_database('movie', False)
+        queue_persistence_manager.update_queue_status_from_database('tv', False)
         
-        # Add TV items to queue
-        tv_added = 0
-        for item in tv_items:
-            try:
-                extra_data = item.get('extra_data', {})
-                if isinstance(extra_data, str):
-                    import json
-                    try:
-                        extra_data = json.loads(extra_data)
-                    except (json.JSONDecodeError, TypeError):
-                        extra_data = {}
-                
-                # Use put_nowait() with exception handling to avoid blocking indefinitely
-                # If queue is full, log a warning but continue with other items
-                try:
-                    tv_queue.put_nowait((
-                        "tv_processing",
-                        item['imdb_id'],
-                        item['title'],
-                        item['media_type'],
-                        extra_data,
-                        item['overseerr_media_id'],
-                        item['tmdb_id'],
-                        item['overseerr_request_id']
-                    ))
-                    tv_added += 1
-                except asyncio.QueueFull:
-                    log_warning("Queue Sync", f"TV queue is full, skipping {item.get('title', 'Unknown')}. Item will remain in database.", 
-                               module="background_tasks", function="sync_queues_from_database")
-                except Exception as e:
-                    log_warning("Queue Sync", f"Error adding TV {item.get('title', 'Unknown')} to queue: {e}", 
-                               module="background_tasks", function="sync_queues_from_database")
-            except Exception as e:
-                log_warning("Queue Sync", f"Error processing TV {item.get('title', 'Unknown')}: {e}", 
-                           module="background_tasks", function="sync_queues_from_database")
-        
-        # Update queue status
-        queue_persistence_manager.update_queue_status('movie', movie_queue.qsize(), False)
-        queue_persistence_manager.update_queue_status('tv', tv_queue.qsize(), False)
-        
-        log_success("Queue Sync", f"Synced {movie_added} movies and {tv_added} TV shows from database", 
+        log_success("Queue Sync", 
+                   f"Synced queues from database: Movie (added {movie_result.get('added_to_memory', 0)}, removed {movie_result.get('removed_from_memory', 0)}), "
+                   f"TV (added {tv_result.get('added_to_memory', 0)}, removed {tv_result.get('removed_from_memory', 0)})", 
                    module="background_tasks", function="sync_queues_from_database")
         
     except Exception as e:
         log_error("Queue Sync", f"Error syncing queues from database: {e}", 
                  module="background_tasks", function="sync_queues_from_database")
+
+
+async def reconcile_queues_periodically():
+    """Periodically reconcile in-memory queues with database state"""
+    try:
+        from seerr.queue_persistence_manager import queue_persistence_manager
+        
+        # Validate queues first
+        movie_validation = queue_persistence_manager.validate_queue_sync('movie', movie_queue)
+        tv_validation = queue_persistence_manager.validate_queue_sync('tv', tv_queue)
+        
+        # Reconcile if there are discrepancies
+        if not movie_validation.get('valid', True):
+            log_info("Queue Reconciliation", f"Movie queue has discrepancies, reconciling...", 
+                    module="background_tasks", function="reconcile_queues_periodically")
+            queue_persistence_manager.reconcile_queue_from_database('movie', movie_queue)
+        
+        if not tv_validation.get('valid', True):
+            log_info("Queue Reconciliation", f"TV queue has discrepancies, reconciling...", 
+                    module="background_tasks", function="reconcile_queues_periodically")
+            queue_persistence_manager.reconcile_queue_from_database('tv', tv_queue)
+        
+        # Drain cleared items from in-memory queues (items that were cleared via UI)
+        drain_cleared_items_from_queues()
+        
+    except Exception as e:
+        log_error("Queue Reconciliation", f"Error in periodic queue reconciliation: {e}", 
+                 module="background_tasks", function="reconcile_queues_periodically")
+
+def drain_cleared_items_from_queues():
+    """
+    Drain items from in-memory queues that were cleared in the database.
+    This handles the case where UI clears queue but in-memory queues still have items.
+    """
+    if not USE_DATABASE:
+        return
+    
+    try:
+        from seerr.database import get_db
+        from seerr.unified_models import UnifiedMedia
+        
+        db = get_db()
+        try:
+            # Get all cleared items (is_in_queue=False, status='failed', processing_stage='cancelled')
+            cleared_items = db.query(UnifiedMedia).filter(
+                UnifiedMedia.is_in_queue == False,
+                UnifiedMedia.status == 'failed',
+                UnifiedMedia.processing_stage == 'cancelled'
+            ).all()
+            
+            if not cleared_items:
+                return
+            
+            # Build sets of cleared tmdb_ids by type
+            cleared_movie_ids = {item.tmdb_id for item in cleared_items if item.media_type == 'movie' and item.tmdb_id}
+            cleared_tv_ids = {item.tmdb_id for item in cleared_items if item.media_type == 'tv' and item.tmdb_id}
+            
+            global movie_queue, tv_queue
+            drained_movie = 0
+            drained_tv = 0
+            
+            # Drain movie queue
+            if cleared_movie_ids:
+                temp_items = []
+                try:
+                    while not movie_queue.empty():
+                        item = movie_queue.get_nowait()
+                        if isinstance(item, tuple) and len(item) >= 6:
+                            if not isinstance(item[0], str):  # Regular item
+                                item_tmdb_id = item[5] if len(item) > 5 else None
+                                if item_tmdb_id in cleared_movie_ids:
+                                    drained_movie += 1
+                                    continue  # Skip this item
+                        temp_items.append(item)
+                except Exception:
+                    pass
+                
+                # Put items back
+                for item in temp_items:
+                    try:
+                        movie_queue.put_nowait(item)
+                    except Exception:
+                        pass
+                
+                if drained_movie > 0:
+                    log_info("Queue Drain", f"Drained {drained_movie} cleared items from in-memory movie queue", 
+                            module="background_tasks", function="drain_cleared_items_from_queues")
+            
+            # Drain TV queue
+            if cleared_tv_ids:
+                temp_items = []
+                try:
+                    while not tv_queue.empty():
+                        item = tv_queue.get_nowait()
+                        if isinstance(item, tuple) and len(item) >= 8:
+                            if item[0] == "tv_processing":  # Regular TV item
+                                item_tmdb_id = item[7] if len(item) > 7 else None
+                                if item_tmdb_id in cleared_tv_ids:
+                                    drained_tv += 1
+                                    continue  # Skip this item
+                        temp_items.append(item)
+                except Exception:
+                    pass
+                
+                # Put items back
+                for item in temp_items:
+                    try:
+                        tv_queue.put_nowait(item)
+                    except Exception:
+                        pass
+                
+                if drained_tv > 0:
+                    log_info("Queue Drain", f"Drained {drained_tv} cleared items from in-memory TV queue", 
+                            module="background_tasks", function="drain_cleared_items_from_queues")
+        
+        finally:
+            db.close()
+    except Exception as e:
+        log_warning("Queue Drain", f"Error draining cleared items from queues: {e}", 
+                   module="background_tasks", function="drain_cleared_items_from_queues")
+
+def skip_queue_item(tmdb_id: int, media_type: str) -> bool:
+    """
+    Skip a queue item by removing it from queue and updating database.
+    Simplified approach: just remove from queue, no complex tracking.
+    
+    Args:
+        tmdb_id (int): TMDB ID of the media
+        media_type (str): Type of media ('movie' or 'tv')
+        
+    Returns:
+        bool: True if item was removed from queue
+    """
+    try:
+        if USE_DATABASE:
+            from seerr.unified_media_manager import get_media_by_tmdb
+            from seerr.database_queue_manager import database_queue_manager
+            from seerr.unified_media_manager import update_media_processing_status
+            
+            media_record = get_media_by_tmdb(tmdb_id, media_type)
+            if media_record and media_record.is_in_queue:
+                # Mark as cancelled in database
+                update_media_processing_status(
+                    media_record.id,
+                    'failed',
+                    'cancelled',
+                    error_message="Cancelled by user"
+                )
+                # Clear queue tracking
+                database_queue_manager._update_queue_tracking(media_record, False)
+                
+                log_info("Queue Cancellation", f"Removed item from queue: TMDB {tmdb_id} ({media_type})", 
+                        module="background_tasks", function="skip_queue_item")
+                return True
+            else:
+                log_warning("Queue Cancellation", f"Item not found in queue: TMDB {tmdb_id} ({media_type})", 
+                           module="background_tasks", function="skip_queue_item")
+                return False
+        return False
+    except Exception as e:
+        log_error("Queue Cancellation", f"Error removing item from queue: {e}", 
+                 module="background_tasks", function="skip_queue_item")
+        return False
+
+def clear_queue(media_type: str = None) -> int:
+    """
+    Clear all items from queue by removing them and updating database.
+    Also drains in-memory queues to prevent "secret" queue items.
+    
+    Args:
+        media_type (str, optional): Type of media to clear ('movie', 'tv', or None for both)
+        
+    Returns:
+        int: Number of items removed from queue
+    """
+    try:
+        count = 0
+        drained_movie_count = 0
+        drained_tv_count = 0
+        
+        if USE_DATABASE:
+            from seerr.database import get_db
+            from seerr.unified_models import UnifiedMedia
+            from seerr.unified_media_manager import update_media_processing_status
+            from seerr.database_queue_manager import database_queue_manager
+            
+            db = get_db()
+            try:
+                # Get all queued items
+                query = db.query(UnifiedMedia).filter(
+                    UnifiedMedia.is_in_queue == True,
+                    UnifiedMedia.status != 'completed',
+                    UnifiedMedia.status != 'ignored'
+                )
+                
+                if media_type:
+                    query = query.filter(UnifiedMedia.media_type == media_type)
+                
+                queued_items = query.all()
+                
+                # Collect tmdb_ids to drain from in-memory queues
+                movie_tmdb_ids = set()
+                tv_tmdb_ids = set()
+                
+                for item in queued_items:
+                    # Mark as failed in database
+                    update_media_processing_status(
+                        item.id,
+                        'failed',
+                        'cancelled',
+                        error_message="Cancelled by user (queue cleared)"
+                    )
+                    
+                    # Clear queue tracking
+                    database_queue_manager._update_queue_tracking(item, False)
+                    
+                    # Track tmdb_ids for draining in-memory queues
+                    if item.media_type == 'movie' and item.tmdb_id:
+                        movie_tmdb_ids.add(item.tmdb_id)
+                    elif item.media_type == 'tv' and item.tmdb_id:
+                        tv_tmdb_ids.add(item.tmdb_id)
+                    
+                    count += 1
+                
+                log_info("Queue Cancellation", f"Cleared {count} items from database (type: {media_type or 'all'})", 
+                        module="background_tasks", function="clear_queue")
+            finally:
+                db.close()
+        
+        # Drain in-memory queues - remove items that match cleared tmdb_ids
+        global movie_queue, tv_queue
+        
+        if not media_type or media_type == 'movie':
+            # Drain movie queue
+            temp_items = []
+            try:
+                while not movie_queue.empty():
+                    item = movie_queue.get_nowait()
+                    # Check if this is a regular item (not a special task)
+                    if isinstance(item, tuple) and len(item) >= 6:
+                        if not isinstance(item[0], str):  # Regular item, not special task
+                            item_tmdb_id = item[5] if len(item) > 5 else None
+                            # Keep item only if it's not in the cleared list
+                            if item_tmdb_id not in movie_tmdb_ids:
+                                temp_items.append(item)
+                            else:
+                                drained_movie_count += 1
+                        else:
+                            # Special task, keep it
+                            temp_items.append(item)
+                    else:
+                        # Unknown format, keep it
+                        temp_items.append(item)
+            except Exception as e:
+                log_warning("Queue Cancellation", f"Error draining movie queue: {e}", 
+                           module="background_tasks", function="clear_queue")
+            
+            # Put items back
+            for item in temp_items:
+                try:
+                    movie_queue.put_nowait(item)
+                except Exception:
+                    pass  # Queue might be full, but we tried
+            
+            if drained_movie_count > 0:
+                log_info("Queue Cancellation", f"Drained {drained_movie_count} items from in-memory movie queue", 
+                        module="background_tasks", function="clear_queue")
+        
+        if not media_type or media_type == 'tv':
+            # Drain TV queue
+            temp_items = []
+            try:
+                while not tv_queue.empty():
+                    item = tv_queue.get_nowait()
+                    # Check if this is a regular item
+                    if isinstance(item, tuple) and len(item) >= 8:
+                        if item[0] == "tv_processing":  # Regular TV item
+                            item_tmdb_id = item[7] if len(item) > 7 else None
+                            # Keep item only if it's not in the cleared list
+                            if item_tmdb_id not in tv_tmdb_ids:
+                                temp_items.append(item)
+                            else:
+                                drained_tv_count += 1
+                        else:
+                            # Special task or other format, keep it
+                            temp_items.append(item)
+                    else:
+                        # Unknown format, keep it
+                        temp_items.append(item)
+            except Exception as e:
+                log_warning("Queue Cancellation", f"Error draining TV queue: {e}", 
+                           module="background_tasks", function="clear_queue")
+            
+            # Put items back
+            for item in temp_items:
+                try:
+                    tv_queue.put_nowait(item)
+                except Exception:
+                    pass  # Queue might be full, but we tried
+            
+            if drained_tv_count > 0:
+                log_info("Queue Cancellation", f"Drained {drained_tv_count} items from in-memory TV queue", 
+                        module="background_tasks", function="clear_queue")
+        
+        log_info("Queue Cancellation", f"Cleared {count} items total (type: {media_type or 'all'}, drained: {drained_movie_count} movies, {drained_tv_count} TV)", 
+                module="background_tasks", function="clear_queue")
+        
+        return count
+    except Exception as e:
+        log_error("Queue Cancellation", f"Error clearing queue: {e}", 
+                 module="background_tasks", function="clear_queue")
+        return 0
 
 async def add_tv_to_queue(imdb_id, movie_title, media_type, extra_data, media_id, tmdb_id, request_id=None):
     """Add a TV show request to the TV queue."""
@@ -840,12 +1393,31 @@ async def add_tv_to_queue(imdb_id, movie_title, media_type, extra_data, media_id
         log_warning("Queue Warning", f"TV queue is full (maxsize={tv_size}). Cannot add request for IMDb ID: {imdb_id}", module="background_tasks", function="add_tv_to_queue")
         return False
     
+    # Clear any stale cancellation tracking FIRST (before checking database)
+    # This ensures new items aren't blocked by stale cancellation flags
+    cancellation_registry.pop((tmdb_id, media_type), None)
+    
+    # Update database FIRST to ensure 1:1 synchronization
+    if USE_DATABASE:
+        from seerr.unified_media_manager import get_media_by_tmdb
+        from seerr.database_queue_manager import database_queue_manager
+        # datetime is already imported at top of file
+        
+        media_record = get_media_by_tmdb(tmdb_id, media_type)
+        if media_record:
+            # Set is_in_queue flag in database before adding to in-memory queue
+            database_queue_manager._update_queue_tracking(media_record, True)
+            log_info("Queue Management", f"Set is_in_queue=True in database for {movie_title} (TMDB: {tmdb_id})", module="background_tasks", function="add_tv_to_queue")
+        else:
+            log_warning("Queue Warning", f"Media record not found for {movie_title} (TMDB: {tmdb_id}), adding to queue anyway", module="background_tasks", function="add_tv_to_queue")
+    
+    # Add to in-memory queue
     await tv_queue.put(("tv_processing", imdb_id, movie_title, media_type, extra_data, media_id, tmdb_id, request_id))
     update_queue_activity_timestamp()  # Update timestamp when item is added
     
-    # Update queue persistence
+    # Update queue persistence (will calculate from database)
     from seerr.queue_persistence_manager import queue_persistence_manager
-    queue_persistence_manager.update_queue_status('tv', tv_queue.qsize(), True)
+    queue_persistence_manager.update_queue_status_from_database('tv')
     
     log_info("Queue Management", f"Added TV show to queue for IMDb ID: {imdb_id}, Title: {movie_title}", module="background_tasks", function="add_tv_to_queue")
     return True
@@ -2235,9 +2807,16 @@ async def check_show_subscriptions():
 
     # Process each show subscription from database
     for subscription in subscriptions:
+        # Check if item is still in queue before processing subscription
+        # If user cleared it from queue, skip processing
+        if subscription.is_in_queue == False:
+            logger.info(f"Show {subscription.title} (TMDB: {subscription.tmdb_id}) is not in queue. Skipping subscription check.")
+            continue
+        
         show_title = subscription.title
         trakt_show_id = subscription.trakt_id
         imdb_id = subscription.imdb_id
+        tmdb_id = subscription.tmdb_id
         # Get season information from seasons_data instead of old fields
         if not subscription.seasons_data:
             logger.warning(f"No seasons_data found for {show_title}. Skipping.")
@@ -2426,6 +3005,13 @@ async def check_show_subscriptions():
         # Navigate to the show page
         from seerr.browser import driver as browser_driver
         
+        # Check queue status before title search or navigation
+        if tmdb_id:
+            from seerr.search import _check_queue_status
+            if _check_queue_status(tmdb_id, 'tv'):
+                logger.info(f"Show {show_title} (TMDB: {tmdb_id}) is not in queue. Skipping subscription check for this show.")
+                continue
+        
         # Check if IMDB ID is missing or invalid - if so, search by title (RARE FALLBACK)
         if not imdb_id or imdb_id.lower() == 'none' or (isinstance(imdb_id, str) and imdb_id.strip() == ''):
             logger.warning(f"IMDB ID is missing or invalid ({imdb_id}) for {show_title}. Performing title search fallback (rare case).")
@@ -2440,14 +3026,21 @@ async def check_show_subscriptions():
                 year = int(year_match.group(1))
                 title_for_search = show_title.split('(')[0].strip()
             
-            # Search DMM by title to find IMDB ID
-            found_imdb_id = search_dmm_by_title_and_extract_id(browser_driver, title_for_search, 'tv', year)
+            # Search DMM by title to find IMDB ID (pass tmdb_id for queue checks)
+            found_imdb_id = search_dmm_by_title_and_extract_id(browser_driver, title_for_search, 'tv', year, tmdb_id)
             
             if found_imdb_id:
                 logger.info(f"Found IMDB ID via title search: {found_imdb_id}. Using it instead of missing ID.")
                 imdb_id = found_imdb_id
             else:
                 logger.error(f"Could not find IMDB ID via title search for '{title_for_search}'. Skipping this show.")
+                continue
+        
+        # Check queue status again before navigation
+        if tmdb_id:
+            from seerr.search import _check_queue_status
+            if _check_queue_status(tmdb_id, 'tv'):
+                logger.info(f"Show {show_title} (TMDB: {tmdb_id}) is not in queue. Stopping before navigation.")
                 continue
         
         url = f"https://debridmediamanager.com/show/{imdb_id}/{season_number}"
@@ -2810,7 +3403,7 @@ async def check_show_subscriptions():
 
     logger.info("Completed show subscription check.")
 
-async def search_individual_episodes(imdb_id, movie_title, season_number, season_details, driver):
+async def search_individual_episodes(imdb_id, movie_title, season_number, season_details, driver, tmdb_id=None):
     """
     Search for and process individual episodes for a TV show season with a discrepancy.
     Updates database with failed episodes for later reprocessing.
@@ -2821,10 +3414,17 @@ async def search_individual_episodes(imdb_id, movie_title, season_number, season
         season_number (int): Season number with discrepancy
         season_details (dict): Season details from Trakt, including 'aired_episodes'
         driver (WebDriver): Selenium WebDriver instance
+        tmdb_id (int, optional): TMDB ID for queue status checks
     
     Returns:
         bool: True if all episodes were successfully processed or already cached, False otherwise
     """
+    # Check queue status before starting episode processing
+    if tmdb_id:
+        from seerr.search import _check_queue_status
+        if _check_queue_status(tmdb_id, 'tv'):
+            logger.info(f"Item {movie_title} (TMDB: {tmdb_id}) is not in queue. Stopping episode search.")
+            return False
     from selenium.webdriver.support.ui import WebDriverWait
     from selenium.webdriver.support import expected_conditions as EC
     from selenium.webdriver.common.by import By
@@ -2946,8 +3546,15 @@ async def search_individual_episodes(imdb_id, movie_title, season_number, season
         if driver is None:
             driver = browser_driver
         
-        # Search DMM by title to find IMDB ID
-        found_imdb_id = search_dmm_by_title_and_extract_id(driver, title_for_search, 'tv', year)
+        # Check queue status before title search
+        if tmdb_id:
+            from seerr.search import _check_queue_status
+            if _check_queue_status(tmdb_id, 'tv'):
+                logger.info(f"Item {movie_title} (TMDB: {tmdb_id}) is not in queue. Stopping before title search.")
+                return False
+        
+        # Search DMM by title to find IMDB ID (pass tmdb_id for queue checks)
+        found_imdb_id = search_dmm_by_title_and_extract_id(driver, title_for_search, 'tv', year, tmdb_id)
         
         if found_imdb_id:
             logger.info(f"Found IMDB ID via title search: {found_imdb_id}. Using it instead of missing ID.")
@@ -3410,7 +4017,7 @@ async def search_individual_episodes(imdb_id, movie_title, season_number, season
     logger.info(f"Completed processing {aired_episodes} episodes for {movie_title} Season {season_number}")
     return all_confirmed 
 
-def search_individual_episodes_sync(imdb_id, movie_title, season_number, season_details, driver):
+def search_individual_episodes_sync(imdb_id, movie_title, season_number, season_details, driver, tmdb_id=None):
     """
     Synchronous version of search_individual_episodes - this is a wrapper around the async function
     to be called from synchronous code.
@@ -3421,6 +4028,7 @@ def search_individual_episodes_sync(imdb_id, movie_title, season_number, season_
         season_number (int): Season number with discrepancy
         season_details (dict): Season details from Trakt, including 'aired_episodes'
         driver (WebDriver): Selenium WebDriver instance
+        tmdb_id (int, optional): TMDB ID for queue status checks
     
     Returns:
         bool: True if all episodes were successfully processed or already cached, False otherwise
@@ -3433,7 +4041,7 @@ def search_individual_episodes_sync(imdb_id, movie_title, season_number, season_
     
     try:
         return loop.run_until_complete(
-            search_individual_episodes(imdb_id, movie_title, season_number, season_details, driver)
+            search_individual_episodes(imdb_id, movie_title, season_number, season_details, driver, tmdb_id)
         )
     finally:
         loop.close() 

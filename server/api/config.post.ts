@@ -64,10 +64,15 @@ export default defineEventHandler(async (event) => {
       if (!config_key) continue
       
       // Convert value based on type
-      let envValue: string | number | boolean | null = null
+      let envValue: string | number | boolean | null | undefined = undefined
       
-      if (config_value === null || config_value === undefined || config_value === '') {
-        envValue = null
+      // Handle empty strings - they should be written as empty string, not null
+      if (config_value === null || config_value === undefined) {
+        // Skip null/undefined values (don't update)
+        continue
+      } else if (config_value === '') {
+        // Empty string should be written as empty string
+        envValue = ''
       } else if (config_type === 'bool') {
         envValue = config_value === true || config_value === 'true'
       } else if (config_type === 'int') {
@@ -122,37 +127,21 @@ export default defineEventHandler(async (event) => {
         }
       }
       
-      // For RD_ACCESS_TOKEN, always use JSON format with value and expiry
+      // For RD_ACCESS_TOKEN, save exactly as provided (no automatic conversion)
+      // User can provide either JSON format {"value": "...", "expiry": ...} or plain token string
       if (config_key === 'rd_access_token' && typeof envValue === 'string' && !isMaskedValue(envValue)) {
-        // If it's already in JSON format, keep it
+        // If it's already in JSON format, keep it as-is
         if (isJsonTokenFormat(envValue)) {
-          // Already in correct format, use as-is
+          // Already in JSON format, use exactly as provided
+          // No changes needed
         } else {
-          // Plain string - convert to JSON format
-          const existingValue = getConfigFromEnv(config_key)
-          let expiry = Date.now() + (24 * 60 * 60 * 1000) // Default: 24 hours from now
-          
-          // Try to preserve expiry from existing JSON if it exists
-          if (existingValue && isJsonTokenFormat(existingValue)) {
-            try {
-              const existingJson = JSON.parse(existingValue)
-              if (existingJson.expiry) {
-                expiry = existingJson.expiry
-              }
-            } catch {
-              // If parsing fails, use default expiry
-            }
-          }
-          
-          // Create JSON structure
-          envValue = JSON.stringify({
-            value: envValue,
-            expiry: expiry
-          })
+          // Plain string - save exactly as provided, no conversion
+          // User provided a plain token, so save it as a plain token
+          // No changes needed - save as-is
         }
       }
       
-      // Write to .env file (original, unmasked value)
+      // Write to .env file (exactly as provided, no conversion)
       setConfigInEnv(config_key, envValue)
     }
     

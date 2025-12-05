@@ -32,7 +32,13 @@ const CONFIG_TO_ENV_MAP: Record<string, string> = {
   'failed_item_max_retry_attempts': 'FAILED_ITEM_MAX_RETRY_ATTEMPTS',
   'failed_item_retry_delay_hours': 'FAILED_ITEM_RETRY_DELAY_HOURS',
   'failed_item_retry_backoff_multiplier': 'FAILED_ITEM_RETRY_BACKOFF_MULTIPLIER',
-  'failed_item_max_retry_delay_hours': 'FAILED_ITEM_MAX_RETRY_DELAY_HOURS'
+  'failed_item_max_retry_delay_hours': 'FAILED_ITEM_MAX_RETRY_DELAY_HOURS',
+  'background_tasks_enabled': 'BACKGROUND_TASKS_ENABLED',
+  'scheduler_enabled': 'SCHEDULER_ENABLED',
+  'token_refresh_interval_minutes': 'TOKEN_REFRESH_INTERVAL_MINUTES',
+  'movie_processing_check_interval_minutes': 'MOVIE_PROCESSING_CHECK_INTERVAL_MINUTES',
+  'movie_queue_maxsize': 'MOVIE_QUEUE_MAXSIZE',
+  'tv_queue_maxsize': 'TV_QUEUE_MAXSIZE'
 }
 
 /**
@@ -88,7 +94,8 @@ export function getAllConfigsFromEnv(): Array<{ config_key: string; config_value
   for (const [configKey, envKey] of Object.entries(CONFIG_TO_ENV_MAP)) {
     const value = allEnv[envKey]
     
-    if (value === undefined || value === '') {
+    // Include empty strings (they're valid values), but skip undefined (missing)
+    if (value === undefined) {
       continue
     }
     
@@ -96,17 +103,23 @@ export function getAllConfigsFromEnv(): Array<{ config_key: string; config_value
     let configType = 'string'
     let configValue: any = value
     
-    // Try to infer type
-    if (value === 'true' || value === 'false') {
-      configType = 'bool'
-      configValue = value === 'true'
-    } else if (!isNaN(Number(value)) && value !== '') {
-      if (value.includes('.')) {
-        configType = 'float'
-        configValue = parseFloat(value)
-      } else {
-        configType = 'int'
-        configValue = parseInt(value, 10)
+    // Handle empty strings - they should be returned as empty strings
+    if (value === '') {
+      configType = 'string'
+      configValue = ''
+    } else {
+      // Try to infer type for non-empty values
+      if (value === 'true' || value === 'false') {
+        configType = 'bool'
+        configValue = value === 'true'
+      } else if (!isNaN(Number(value)) && value !== '') {
+        if (value.includes('.')) {
+          configType = 'float'
+          configValue = parseFloat(value)
+        } else {
+          configType = 'int'
+          configValue = parseInt(value, 10)
+        }
       }
     }
     

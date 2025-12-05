@@ -285,12 +285,76 @@
       </div>
     </Transition>
 
+    <!-- Selection Toolbar -->
+    <Transition
+      enter-active-class="transition-all duration-300 ease-out"
+      enter-from-class="opacity-0 -translate-y-2"
+      enter-to-class="opacity-100 translate-y-0"
+      leave-active-class="transition-all duration-200 ease-in"
+      leave-from-class="opacity-100 translate-y-0"
+      leave-to-class="opacity-0 -translate-y-2"
+    >
+      <div v-if="selectedCount > 0" class="bg-card border border-border rounded-xl sm:rounded-2xl p-3 sm:p-4 shadow-lg">
+        <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 sm:gap-4">
+          <div class="flex items-center gap-3 sm:gap-4">
+            <div class="flex items-center gap-2">
+              <span class="text-sm sm:text-base font-semibold text-foreground">
+                {{ selectedCount }} {{ selectedCount === 1 ? 'item' : 'items' }} selected
+              </span>
+            </div>
+            <div class="flex items-center gap-2">
+              <Button
+                @click.stop="toggleSelectAll"
+                variant="outline"
+                size="sm"
+                class="gap-1.5"
+              >
+                <AppIcon :icon="allSelected ? 'lucide:square-check' : 'lucide:square'" size="16" />
+                <span class="hidden sm:inline">{{ allSelected ? 'Deselect All' : 'Select All' }}</span>
+              </Button>
+              <Button
+                @click.stop="clearSelection"
+                variant="outline"
+                size="sm"
+                class="gap-1.5"
+              >
+                <AppIcon icon="lucide:x" size="16" />
+                <span class="hidden sm:inline">Clear</span>
+              </Button>
+            </div>
+          </div>
+          <div class="flex items-center gap-2">
+            <Button
+              @click.stop="bulkRetriggerMedia"
+              :disabled="bulkRetriggering || !isSelectionMode"
+              size="sm"
+              class="gap-1.5 bg-primary hover:bg-primary/90"
+            >
+              <AppIcon 
+                v-if="bulkRetriggering" 
+                icon="lucide:loader-2" 
+                size="16" 
+                class="animate-spin" 
+              />
+              <AppIcon v-else icon="lucide:refresh-cw" size="16" />
+              <span class="hidden sm:inline">
+                {{ bulkRetriggering ? 'Re-triggering...' : 'Re-trigger Selected' }}
+              </span>
+              <span class="sm:hidden">
+                {{ bulkRetriggering ? 'Processing...' : 'Re-trigger' }}
+              </span>
+            </Button>
+          </div>
+        </div>
+      </div>
+    </Transition>
+
     <!-- Media Grid -->
     <div v-if="!loading && mediaItems.length > 0" class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-2 sm:gap-3">
       <div
         v-for="(media, index) in mediaItems"
         :key="media.id"
-        @click="viewDetails(media)"
+        @click="handleCardClick(media, $event)"
         :style="{ animationDelay: `${index * 50}ms` }"
         class="media-card group relative glass-card-enhanced overflow-hidden cursor-pointer transition-all duration-500 ease-out hover:scale-[1.02] hover:shadow-2xl hover:shadow-primary/20 animate-fade-in-up rounded-2xl h-full flex flex-col"
       >
@@ -341,8 +405,35 @@
             </div>
           </div>
           
-          <!-- Enhanced Media Type Badge -->
-          <div class="absolute top-3 left-3 z-20">
+          <!-- Selection Checkbox -->
+          <div 
+            v-if="isSelectionMode || selectedCount > 0"
+            class="absolute top-3 left-3 z-30 selection-checkbox"
+            @click.stop="toggleMediaSelection(media.id)"
+          >
+            <div 
+              class="w-6 h-6 sm:w-7 sm:h-7 rounded-lg sm:rounded-xl backdrop-blur-xl shadow-2xl border-2 transition-all duration-300 flex items-center justify-center cursor-pointer"
+              :class="selectedMediaIds.has(media.id) 
+                ? 'bg-primary border-primary hover:bg-primary/90' 
+                : 'bg-background/90 border-border hover:border-primary/50 hover:bg-background'"
+            >
+              <AppIcon 
+                v-if="selectedMediaIds.has(media.id)"
+                icon="lucide:check" 
+                size="16" 
+                class="text-white drop-shadow-lg" 
+              />
+              <AppIcon 
+                v-else
+                icon="lucide:square" 
+                size="14" 
+                class="text-muted-foreground" 
+              />
+            </div>
+          </div>
+          
+          <!-- Enhanced Media Type Badge (hidden when in selection mode) -->
+          <div v-if="!isSelectionMode && selectedCount === 0" class="absolute top-3 left-3 z-20">
             <span 
               class="media-type-badge px-3 py-1.5 text-[10px] sm:text-xs font-bold rounded-full backdrop-blur-xl shadow-xl border-2 transition-all duration-300 group-hover:scale-105"
               :class="media.media_type === 'movie' ? 'media-type-movie' : 'media-type-tv'"
@@ -1403,8 +1494,33 @@ const showDeleteConfirmation = ref(false)
 const deleting = ref(false)
 const showActionMenu = ref(false)
 
+// Bulk selection state
+const selectedMediaIds = ref<Set<number>>(new Set())
+const bulkRetriggering = ref(false)
+
 // Configuration composable
 const { overseerrBaseUrl, hasOverseerrConfig, fetchConfig } = useConfig()
+
+// Computed: Check if we're in selection mode (filtered by failed)
+const isSelectionMode = computed(() => {
+  return filters.value.status === 'failed'
+})
+
+// Computed: Check if all visible items are selected
+const allSelected = computed(() => {
+  if (mediaItems.value.length === 0) return false
+  return mediaItems.value.every(item => selectedMediaIds.value.has(item.id))
+})
+
+// Computed: Check if some items are selected
+const someSelected = computed(() => {
+  return selectedMediaIds.value.size > 0 && !allSelected.value
+})
+
+// Computed: Selected count
+const selectedCount = computed(() => {
+  return selectedMediaIds.value.size
+})
 
 const statusOptions = [
   { label: 'All Statuses', value: '' },
@@ -1674,6 +1790,7 @@ const clearFilters = () => {
     sortOrder: 'DESC'
   }
   searchQuery.value = ''
+  clearSelection()
   currentPage.value = 1
   mediaItems.value = []
   hasMore.value = true
@@ -1715,6 +1832,9 @@ const applyStatFilter = (status: string, mediaType: string) => {
     searchQuery.value = ''
   }
   
+  // Clear selection when filters change
+  clearSelection()
+  
   currentPage.value = 1
   mediaItems.value = []
   hasMore.value = true
@@ -1734,6 +1854,23 @@ const closeModal = () => {
     path: route.path,
     query
   })
+}
+
+const handleCardClick = (media: ProcessedMedia, event: MouseEvent) => {
+  // Don't open details if clicking on checkbox
+  const target = event.target as HTMLElement
+  if (target.closest('.selection-checkbox')) {
+    return
+  }
+  
+  // In selection mode, clicking the card toggles selection
+  if (isSelectionMode.value || selectedCount.value > 0) {
+    toggleMediaSelection(media.id)
+    return
+  }
+  
+  // Otherwise, open details
+  viewDetails(media)
 }
 
 const viewDetails = (media: ProcessedMedia) => {
@@ -1894,6 +2031,101 @@ const retriggerMediaFromCard = async (media: ProcessedMedia) => {
   } catch (error) {
     // Error retriggering media - could add toast notification here
     console.error('Error retriggering media:', error)
+  }
+}
+
+// Selection functions
+const toggleMediaSelection = (mediaId: number) => {
+  if (selectedMediaIds.value.has(mediaId)) {
+    selectedMediaIds.value.delete(mediaId)
+  } else {
+    selectedMediaIds.value.add(mediaId)
+  }
+}
+
+const toggleSelectAll = () => {
+  if (allSelected.value) {
+    // Deselect all visible items
+    mediaItems.value.forEach(item => {
+      selectedMediaIds.value.delete(item.id)
+    })
+  } else {
+    // Select all visible items
+    mediaItems.value.forEach(item => {
+      selectedMediaIds.value.add(item.id)
+    })
+  }
+}
+
+const clearSelection = () => {
+  selectedMediaIds.value.clear()
+}
+
+// Bulk retrigger function
+const bulkRetriggerMedia = async () => {
+  if (selectedMediaIds.value.size === 0) return
+  
+  // Validate that all selected items are failed
+  const selectedItems = mediaItems.value.filter(item => selectedMediaIds.value.has(item.id))
+  const nonFailedItems = selectedItems.filter(item => {
+    const status = item.display_status || item.status
+    return status !== 'failed'
+  })
+  
+  if (nonFailedItems.length > 0) {
+    alert(`Cannot re-trigger: ${nonFailedItems.length} selected item(s) are not in failed status. Please only select failed items.`)
+    return
+  }
+  
+  // Show confirmation dialog
+  const confirmed = confirm(
+    `Are you sure you want to re-trigger processing for ${selectedMediaIds.value.size} item(s)?\n\n` +
+    `This will:\n` +
+    `• Remove them from failed/completed status\n` +
+    `• Set them to processing\n` +
+    `• Queue them for processing by SeerrBridge again\n\n` +
+    `Click OK to confirm or Cancel to abort.`
+  )
+  
+  if (!confirmed) return
+  
+  bulkRetriggering.value = true
+  
+  try {
+    const mediaIdsArray = Array.from(selectedMediaIds.value)
+    const response = await $fetch('/api/retrigger-media-bulk', {
+      method: 'POST',
+      body: {
+        media_ids: mediaIdsArray
+      }
+    })
+    
+    if (response && response.status === 'completed') {
+      const results = response.results
+      
+      // Show success/error notification
+      if (results.failed_count > 0) {
+        alert(
+          `Bulk re-trigger completed with errors:\n\n` +
+          `✓ ${results.success_count} item(s) re-triggered successfully\n` +
+          `✗ ${results.failed_count} item(s) failed\n\n` +
+          `Please check the console for details.`
+        )
+      } else {
+        alert(`Successfully re-triggered ${results.success_count} item(s)!`)
+      }
+      
+      // Clear selection
+      clearSelection()
+      
+      // Refresh the media list to update the UI
+      await refreshData()
+    }
+  } catch (error) {
+    console.error('Error bulk retriggering media:', error)
+    alert(`Error re-triggering media items. Please check the console for details.`)
+  } finally {
+    bulkRetriggering.value = false
   }
 }
 
@@ -2073,10 +2305,24 @@ onMounted(async () => {
   // Load configuration first
   await fetchConfig()
   
+  // Read query parameters and apply filters
+  const route = useRoute()
+  const query = route.query
+  
+  // Apply status filter from query parameter
+  if (query.status && typeof query.status === 'string') {
+    filters.value.status = query.status
+  }
+  
+  // Apply mediaType filter from query parameter
+  if (query.mediaType && typeof query.mediaType === 'string') {
+    filters.value.mediaType = query.mediaType
+  }
+  
+  // Load media with applied filters
   await loadMedia()
   
   // Check for mediaId query parameter to auto-open modal
-  const route = useRoute()
   const mediaId = route.query.mediaId
   
   if (mediaId && typeof mediaId === 'string') {

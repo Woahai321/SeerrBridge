@@ -554,19 +554,6 @@
               </div>
             </div>
             
-            <div class="flex items-center justify-between p-3 sm:p-4 bg-muted/50 rounded-lg">
-              <div class="min-w-0 flex-1 pr-3">
-                <label class="text-xs sm:text-sm font-medium text-foreground block">Enable Queue Processing</label>
-                <p class="text-[10px] sm:text-xs text-muted-foreground">Process media requests from queues</p>
-              </div>
-              <div class="flex items-center space-x-2 flex-shrink-0">
-                <input
-                  v-model="taskConfig.queue_processing_enabled"
-                  type="checkbox"
-                  class="w-4 h-4 text-primary bg-background border-border rounded focus:ring-primary"
-                />
-              </div>
-            </div>
           </div>
           
           <!-- Task Settings -->
@@ -640,27 +627,6 @@
                 />
               </div>
               
-              <div class="flex items-center justify-between gap-2">
-                <label class="text-xs sm:text-sm font-medium text-foreground min-w-0 flex-1">Library Refresh</label>
-                <input 
-                  v-model.number="taskConfig.library_refresh_interval_minutes" 
-                  type="number" 
-                  min="1" 
-                  max="240"
-                  class="w-16 sm:w-20 h-7 sm:h-8 px-2 text-xs sm:text-sm rounded border border-input bg-background focus:ring-2 focus:ring-primary focus:border-primary"
-                />
-              </div>
-              
-              <div class="flex items-center justify-between gap-2">
-                <label class="text-xs sm:text-sm font-medium text-foreground min-w-0 flex-1">Subscription Check</label>
-                <input 
-                  v-model.number="taskConfig.subscription_check_interval_minutes" 
-                  type="number" 
-                  min="1" 
-                  max="240"
-                  class="w-16 sm:w-20 h-7 sm:h-8 px-2 text-xs sm:text-sm rounded border border-input bg-background focus:ring-2 focus:ring-primary focus:border-primary"
-                />
-              </div>
             </div>
           </div>
           
@@ -888,14 +854,11 @@ const config = ref({
 const taskConfig = ref({
   background_tasks_enabled: true,
   scheduler_enabled: true,
-  queue_processing_enabled: true,
   enable_automatic_background_task: false,
   enable_show_subscription_task: false,
   refresh_interval_minutes: 60,
   token_refresh_interval_minutes: 10,
   movie_processing_check_interval_minutes: 15,
-  library_refresh_interval_minutes: 30,
-  subscription_check_interval_minutes: 60,
   movie_queue_maxsize: 250,
   tv_queue_maxsize: 250
 })
@@ -1127,7 +1090,8 @@ const loadSettings = async () => {
         console.debug(`🔧 Processing config: ${config.config_key} = ${logValue} (type: ${config.config_type}, encrypted: ${config.is_encrypted})`)
         
         // Store the actual value (or masked value for sensitive data)
-        if (config.config_value && !config.is_encrypted) {
+        // Include empty strings (they're valid values from .env)
+        if (config.config_value !== undefined && config.config_value !== null && !config.is_encrypted) {
           configMap[config.config_key] = config.config_value
         } else if (config.is_encrypted) {
           // For sensitive values, don't store masked values - they would be sent back to backend
@@ -1309,6 +1273,37 @@ const saveSection = async (section) => {
         originalFailedItemsConfig.value = JSON.parse(JSON.stringify(failedItemsConfig.value))
       }
       
+      // Check if backend reload was triggered and succeeded
+      const reloadTriggered = response.reloadTriggered === true
+      const hasTaskConfigChanges = response.hasTaskConfigChanges === true
+      const hasGlobalConfigChanges = response.hasGlobalConfigChanges === true
+      
+      if (reloadTriggered) {
+        // Backend reload was successful
+        addNotification({
+          type: 'success',
+          title: 'Settings Saved & Applied',
+          message: `${section.charAt(0).toUpperCase() + section.slice(1)} settings have been saved to .env and backend has reloaded configuration${hasTaskConfigChanges && hasGlobalConfigChanges ? ' (tasks & global configs)' : hasTaskConfigChanges ? ' (task configs)' : hasGlobalConfigChanges ? ' (global configs)' : ''}`
+        })
+        console.log(`✅ Settings saved and backend reloaded successfully for ${section} section`)
+      } else if (hasTaskConfigChanges || hasGlobalConfigChanges) {
+        // Configs were saved but reload failed
+        addNotification({
+          type: 'warning',
+          title: 'Settings Saved, Reload Failed',
+          message: `${section.charAt(0).toUpperCase() + section.slice(1)} settings have been saved to .env, but backend reload failed. Changes will be applied on next backend restart.`
+        })
+        console.warn(`⚠️ Settings saved but backend reload failed for ${section} section`)
+      } else {
+        // No backend reload needed (or configs don't require reload)
+        addNotification({
+          type: 'success',
+          title: 'Settings Saved',
+          message: `${section.charAt(0).toUpperCase() + section.slice(1)} settings have been saved successfully`
+        })
+      }
+      
+      // Legacy code below - keeping for backwards compatibility but may not be needed
       // Check if we need to restart the service for system config changes
       // Only restart for changes that actually require a restart (not live-updatable settings)
       const restartRequiredKeys = ['headless_mode', 'refresh_interval_minutes']
@@ -1322,18 +1317,18 @@ const saveSection = async (section) => {
         taskConfig.value[key] !== originalTaskConfig.value[key]
       )
       
-      const needsRestart = section === 'system' && hasRestartRequiredChanges || (section === 'tasks' && ['refresh_interval_minutes', 'token_refresh_interval_minutes', 'movie_processing_check_interval_minutes', 'library_refresh_interval_minutes', 'subscription_check_interval_minutes'].some(key => 
+      const needsRestart = section === 'system' && hasRestartRequiredChanges || (section === 'tasks' && ['refresh_interval_minutes', 'token_refresh_interval_minutes', 'movie_processing_check_interval_minutes'].some(key => 
         taskConfig.value[key] !== originalTaskConfig.value[key]
       ))
       
       // Check if task configuration was updated and needs refresh
-      const taskConfigKeys = ['background_tasks_enabled', 'scheduler_enabled', 'queue_processing_enabled', 'enable_automatic_background_task', 'enable_show_subscription_task', 'movie_queue_maxsize', 'tv_queue_maxsize']
+      const taskConfigKeys = ['background_tasks_enabled', 'scheduler_enabled', 'enable_automatic_background_task', 'enable_show_subscription_task', 'movie_queue_maxsize', 'tv_queue_maxsize']
       const needsTaskRefresh = section === 'tasks' && taskConfigKeys.some(key => 
         taskConfig.value[key] !== originalTaskConfig.value[key]
       )
       
-      // Handle live updates first if there are any
-      if (hasLiveUpdateChanges) {
+      // Handle live updates first if there are any (only if reload wasn't already triggered)
+      if (hasLiveUpdateChanges && !reloadTriggered) {
         try {
           await $fetch('/api/bridge-reload', {
             method: 'POST'
@@ -1599,14 +1594,11 @@ const resetToDefaults = () => {
     taskConfig.value = {
       background_tasks_enabled: true,
       scheduler_enabled: true,
-      queue_processing_enabled: true,
       enable_automatic_background_task: false,
       enable_show_subscription_task: false,
       refresh_interval_minutes: 60,
       token_refresh_interval_minutes: 10,
       movie_processing_check_interval_minutes: 15,
-      library_refresh_interval_minutes: 30,
-      subscription_check_interval_minutes: 60,
       movie_queue_maxsize: 250,
       tv_queue_maxsize: 250
     }
@@ -1645,13 +1637,10 @@ const getConfigDescription = (key) => {
     max_episode_size: 'Maximum episode size in GB',
     background_tasks_enabled: 'Enable background tasks',
     scheduler_enabled: 'Enable scheduler',
-    queue_processing_enabled: 'Enable queue processing',
     enable_automatic_background_task: 'Enable automatic background task',
     enable_show_subscription_task: 'Enable show subscription task',
     token_refresh_interval_minutes: 'Token refresh interval in minutes',
     movie_processing_check_interval_minutes: 'Movie processing check interval in minutes',
-    library_refresh_interval_minutes: 'Library refresh interval in minutes',
-    subscription_check_interval_minutes: 'Subscription check interval in minutes',
     movie_queue_maxsize: 'Movie queue maximum size',
     tv_queue_maxsize: 'TV queue maximum size',
     enable_failed_item_retry: 'Enable failed item retry',

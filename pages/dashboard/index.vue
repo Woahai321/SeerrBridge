@@ -63,8 +63,10 @@
           <template #default>
             <CurrentlyProcessing 
               :current-item="processingData?.currentItem || null"
+              :queued-items="processingData?.queuedItems || []"
               :processing-items="processingData?.processingItems || []"
               :processing-count="processingData?.stats?.total_processing || 0"
+              :queue-stats="processingData?.queueStats || null"
             />
           </template>
           <template #fallback>
@@ -114,11 +116,20 @@ const isRefreshing = ref(false)
 const processingStatusResult = useProcessingStatus()
 const processingData = processingStatusResult?.processingData || ref({
   currentItem: null,
+  queuedItems: [],
   processingItems: [],
   stats: {
     total_processing: 0,
     movies_processing: 0,
     tv_processing: 0
+  },
+  queueStats: {
+    movie_queue_size: 0,
+    movie_queue_max: 250,
+    tv_queue_size: 0,
+    tv_queue_max: 250,
+    total_queued: 0,
+    is_processing: false
   }
 })
 const refreshProcessing = processingStatusResult?.refresh || (() => {})

@@ -240,10 +240,6 @@ async def lifespan(app: FastAPI):
         from seerr.migration_runner import run_automatic_migrations
         run_automatic_migrations()
         
-        # Sync all existing Overseerr requests to database
-        from seerr.background_tasks import sync_all_requests_to_database
-        await sync_all_requests_to_database()
-        
     except Exception as e:
         logger.error(f"Failed to initialize database: {e}")
         # Continue without database if it fails
@@ -253,6 +249,7 @@ async def lifespan(app: FastAPI):
     check_and_refresh_access_token()
     
     # Initialize browser (optional - may fail in Docker)
+    # This must happen before server starts to ensure credentials and settings are ready
     browser_result = await initialize_browser()
     if browser_result is None:
         logger.warning("Browser initialization failed - browser automation features will be disabled")
@@ -369,6 +366,22 @@ async def lifespan(app: FastAPI):
     # Start the status updater task
     asyncio.create_task(status_updater())
     logger.info("Started background status updater (every 1 second)")
+    
+    # Sync all existing Overseerr requests to database as a background task
+    # This runs after the server has started to allow requests to be processed immediately
+    async def delayed_overseerr_sync():
+        """Sync Overseerr requests to database after server has started"""
+        # Small delay to ensure server is fully ready
+        await asyncio.sleep(1)
+        try:
+            from seerr.background_tasks import sync_all_requests_to_database
+            logger.info("Starting Overseerr requests sync in background...")
+            await sync_all_requests_to_database()
+            logger.info("Overseerr requests sync completed")
+        except Exception as e:
+            logger.error(f"Error during Overseerr requests sync: {e}")
+    
+    asyncio.create_task(delayed_overseerr_sync())
     
     yield
     
@@ -521,7 +534,16 @@ async def jellyseer_webhook(request: Request, background_tasks: BackgroundTasks)
         requested_seasons = []
         if media_type == 'tv' and payload.extra:
             for item in payload.extra:
-                if item['name'] == 'Requested Seasons':
+                # Check for new format: {'requested_seasons': [1, 2, 3]}
+                if 'requested_seasons' in item:
+                    season_numbers = item['requested_seasons']
+                    if isinstance(season_numbers, list):
+                        # Convert integer array to "Season X" format strings
+                        requested_seasons = [f"Season {season}" for season in season_numbers]
+                        logger.info(f"Webhook: Requested seasons for TV show: {requested_seasons}")
+                        break
+                # Fall back to old format: {'name': 'Requested Seasons', 'value': '...'}
+                elif item.get('name') == 'Requested Seasons':
                     requested_seasons = item['value'].split(', ')
                     logger.info(f"Webhook: Requested seasons for TV show: {requested_seasons}")
                     break
@@ -1126,6 +1148,199 @@ async def retrigger_media(media_id: int):
         raise
     except Exception as e:
         logger.error(f"Error retriggering media processing: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/retrigger-media-bulk")
+async def retrigger_media_bulk(request: Request):
+    """
+    Re-trigger processing for multiple media items
+    Accepts a JSON body with array of media_ids: {"media_ids": [1, 2, 3]}
+    """
+    try:
+        body = await request.json()
+        media_ids = body.get("media_ids", [])
+        
+        if not media_ids or not isinstance(media_ids, list):
+            raise HTTPException(status_code=400, detail="media_ids array is required")
+        
+        if len(media_ids) == 0:
+            raise HTTPException(status_code=400, detail="At least one media ID is required")
+        
+        logger.info(f"Bulk re-triggering media processing for {len(media_ids)} items")
+        
+        results = {
+            "success": [],
+            "failed": [],
+            "total": len(media_ids),
+            "success_count": 0,
+            "failed_count": 0
+        }
+        
+        # Process each media ID
+        for media_id in media_ids:
+            try:
+                # Reuse the existing retrigger_media logic
+                # We'll call it directly to avoid HTTP overhead
+                from seerr.unified_media_manager import get_media_by_id, update_media_details
+                from seerr.config import USE_DATABASE
+                
+                if not USE_DATABASE:
+                    raise Exception("Database not enabled")
+                
+                media_record = get_media_by_id(media_id)
+                if not media_record:
+                    raise Exception(f"Media item {media_id} not found")
+                
+                # Check if media is ignored - don't retrigger ignored items
+                if media_record.status == 'ignored':
+                    raise Exception(f"Cannot retrigger ignored media item {media_id}")
+                
+                # Check if critical data is missing before calling Trakt
+                needs_trakt_data = not media_record.tmdb_id or not media_record.imdb_id or not media_record.title
+                
+                if needs_trakt_data:
+                    logger.info(f"Critical data missing for media ID {media_id}, fetching from Trakt")
+                    media_details = get_media_details_from_trakt(media_record.tmdb_id, media_record.media_type)
+                    if not media_details:
+                        raise Exception(f"Failed to fetch {media_record.media_type} details from Trakt")
+                    
+                    media_title = f"{media_details['title']} ({media_details['year']})"
+                    imdb_id = media_details['imdb_id']
+                else:
+                    media_title = f"{media_record.title} ({media_record.year})" if media_record.year else media_record.title
+                    imdb_id = media_record.imdb_id
+                    media_details = None
+                
+                # Check if browser is initialized
+                if seerr.browser.driver is None:
+                    logger.warning("Browser not initialized. Attempting to reinitialize...")
+                    await initialize_browser()
+                
+                # Reset status to processing
+                existing_extra = media_record.extra_data
+                if isinstance(existing_extra, dict):
+                    merged_extra = {**existing_extra}
+                elif isinstance(existing_extra, list):
+                    merged_extra = {'payload': existing_extra}
+                else:
+                    merged_extra = {}
+                
+                merged_extra['retriggered_at'] = datetime.now().isoformat()
+                
+                update_kwargs = {
+                    'status': 'processing',
+                    'processing_stage': 'retriggered',
+                    'processing_started_at': datetime.utcnow(),
+                    'last_checked_at': datetime.utcnow(),
+                    'extra_data': merged_extra
+                }
+                
+                if media_details:
+                    update_kwargs.update({
+                        'overview': media_details.get('overview'),
+                        'genres': media_details.get('genres'),
+                        'runtime': media_details.get('runtime'),
+                        'rating': media_details.get('rating'),
+                        'vote_count': media_details.get('vote_count'),
+                        'popularity': media_details.get('popularity')
+                    })
+                
+                # For TV shows, reset all seasons and episodes
+                if media_record.media_type == 'tv' and media_record.seasons_data:
+                    from seerr.unified_media_manager import generate_seasons_processing_string
+                    
+                    seasons_data = media_record.seasons_data if isinstance(media_record.seasons_data, list) else json.loads(media_record.seasons_data) if media_record.seasons_data else []
+                    
+                    reset_seasons_data = []
+                    for season in seasons_data:
+                        season_num = season.get('season_number')
+                        aired_episodes = season.get('aired_episodes', 0)
+                        unprocessed_episodes = [f"E{str(i).zfill(2)}" for i in range(1, aired_episodes + 1)] if aired_episodes > 0 else []
+                        
+                        reset_season = {
+                            'season_number': season_num,
+                            'episode_count': season.get('episode_count', 0),
+                            'aired_episodes': aired_episodes,
+                            'confirmed_episodes': [],
+                            'failed_episodes': [],
+                            'unprocessed_episodes': unprocessed_episodes,
+                            'is_discrepant': False,
+                            'discrepancy_reason': None,
+                            'discrepancy_details': None,
+                            'last_checked': datetime.utcnow().isoformat(),
+                            'updated_at': datetime.utcnow().isoformat(),
+                            'status': 'processing'
+                        }
+                        reset_seasons_data.append(reset_season)
+                    
+                    seasons_processing = generate_seasons_processing_string(reset_seasons_data)
+                    
+                    update_kwargs.update({
+                        'seasons_data': reset_seasons_data,
+                        'seasons_processing': seasons_processing,
+                        'seasons_completed': [],
+                        'seasons_failed': [],
+                        'seasons_discrepant': []
+                    })
+                
+                update_media_details(media_record.id, **update_kwargs)
+                
+                # Cache images if needed
+                if media_details:
+                    try:
+                        from seerr.unified_media_manager import fetch_and_cache_images_if_needed
+                        fetch_and_cache_images_if_needed(
+                            tmdb_id=media_record.tmdb_id,
+                            title=media_details['title'],
+                            media_type=media_record.media_type,
+                            trakt_id=media_details.get('trakt_id'),
+                            existing_media=media_record
+                        )
+                    except Exception as e:
+                        logger.error(f"Error processing images for {media_title}: {e}")
+                
+                # Add to queue
+                if media_record.media_type == 'movie':
+                    success = await add_movie_to_queue(
+                        imdb_id, media_title, media_record.media_type, media_record.extra_data or {},
+                        media_record.overseerr_media_id or 0, media_record.tmdb_id, media_record.overseerr_request_id
+                    )
+                else:
+                    success = await add_tv_to_queue(
+                        imdb_id, media_title, media_record.media_type, media_record.extra_data or {},
+                        media_record.overseerr_media_id or 0, media_record.tmdb_id, media_record.overseerr_request_id
+                    )
+                
+                if not success:
+                    raise Exception("Failed to add request to queue - queue is full")
+                
+                results["success"].append({
+                    "id": media_record.id,
+                    "title": media_details['title'] if media_details else media_record.title
+                })
+                results["success_count"] += 1
+                
+            except Exception as e:
+                error_msg = str(e)
+                logger.error(f"Error retriggering media ID {media_id}: {error_msg}")
+                results["failed"].append({
+                    "id": media_id,
+                    "error": error_msg
+                })
+                results["failed_count"] += 1
+        
+        logger.info(f"Bulk retrigger completed: {results['success_count']} succeeded, {results['failed_count']} failed")
+        
+        return {
+            "status": "completed",
+            "results": results,
+            "message": f"Processed {results['total']} items: {results['success_count']} succeeded, {results['failed_count']} failed"
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error in bulk retrigger: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.post("/refresh-library-stats")

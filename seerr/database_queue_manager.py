@@ -330,6 +330,24 @@ class DatabaseQueueManager:
             db.rollback()
         finally:
             db.close()
+    
+    def clear_queue_tracking_on_completion(self, media_id: int):
+        """Clear queue tracking when item completes processing"""
+        db = get_db()
+        try:
+            media = db.query(UnifiedMedia).filter(UnifiedMedia.id == media_id).first()
+            if media:
+                media.is_in_queue = False
+                media.queue_added_at = None
+                db.commit()
+                log_info("Database Queue Manager", f"Cleared queue tracking for {media.title} (ID: {media_id})", 
+                        module="database_queue_manager", function="clear_queue_tracking_on_completion")
+        except Exception as e:
+            log_error("Database Queue Manager", f"Error clearing queue tracking: {e}", 
+                     module="database_queue_manager", function="clear_queue_tracking_on_completion")
+            db.rollback()
+        finally:
+            db.close()
 
 
 # Global instance

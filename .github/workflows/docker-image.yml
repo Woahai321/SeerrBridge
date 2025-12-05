@@ -53,6 +53,50 @@ jobs:
           fi
         continue-on-error: true
       
+      - name: Test build and verify routes
+        run: |
+          echo "Running test build to verify routes..."
+          npm run build
+          
+          echo "Checking build output for logs routes..."
+          if [ -d ".output/server/chunks/routes/api/logs" ]; then
+            echo "✅ logs/ directory found in build"
+            ls -la .output/server/chunks/routes/api/logs/
+          else
+            echo "❌ CRITICAL: logs/ directory NOT in build output!"
+            echo "Available API routes:"
+            ls -la .output/server/chunks/routes/api/ | head -30
+            exit 1
+          fi
+          
+          # Verify all required route files
+          REQUIRED=("entries.get.mjs" "errors.get.mjs" "failures.get.mjs" "success.get.mjs" "critical.get.mjs")
+          MISSING=0
+          for route in "${REQUIRED[@]}"; do
+            if [ ! -f ".output/server/chunks/routes/api/logs/$route" ]; then
+              echo "❌ Missing route: logs/$route"
+              MISSING=1
+            else
+              echo "✅ Found route: logs/$route"
+            fi
+          done
+          
+          if [ "$MISSING" -eq 1 ]; then
+            echo "❌ Build verification failed - missing required routes"
+            exit 1
+          fi
+          
+          # Verify logs-statistics route
+          if [ ! -f ".output/server/chunks/routes/api/logs-statistics.get.mjs" ]; then
+            echo "❌ Missing route: logs-statistics.get.mjs"
+            exit 1
+          else
+            echo "✅ Found route: logs-statistics.get.mjs"
+          fi
+          
+          echo "✅ All routes verified successfully"
+        continue-on-error: false
+      
       - name: Run linting
         run: npm run lint || true
         continue-on-error: true
@@ -86,6 +130,28 @@ jobs:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
+      
+      - name: Verify server API routes before build
+        run: |
+          echo "Checking server API structure..."
+          if [ ! -d "server/api/logs" ]; then
+            echo "❌ ERROR: server/api/logs directory not found!"
+            exit 1
+          fi
+          echo "✅ server/api/logs directory exists"
+          ls -la server/api/logs/
+          
+          if [ -f "server/api/logs.get.ts" ]; then
+            echo "❌ ERROR: server/api/logs.get.ts exists! This conflicts with logs/ directory."
+            echo "It should be renamed to logs-statistics.get.ts"
+            exit 1
+          fi
+          
+          if [ ! -f "server/api/logs-statistics.get.ts" ]; then
+            echo "❌ ERROR: server/api/logs-statistics.get.ts not found!"
+            exit 1
+          fi
+          echo "✅ All route files verified"
       
       - name: Build and push unified seerrbridge
         uses: docker/build-push-action@v6

@@ -28,13 +28,14 @@ from seerr.utils import (
     replace_numbers_with_words,
     replace_words_with_numbers,
     parse_requested_seasons,
+    is_complete_word_match,
     normalize_season,
     match_complete_seasons,
     match_single_season
 )
 from seerr.background_tasks import search_individual_episodes
 
-def search_dmm_by_title_and_extract_id(driver, title, media_type, year=None):
+def search_dmm_by_title_and_extract_id(driver, title, media_type, year=None, tmdb_id=None):
     """
     Search DMM by title and extract IMDB ID from search results.
     This is a fallback when IMDB ID is not available.
@@ -44,10 +45,15 @@ def search_dmm_by_title_and_extract_id(driver, title, media_type, year=None):
         title: Title of the media (without year)
         media_type: 'movie' or 'tv'
         year: Optional year to help with matching
-        
+        tmdb_id: Optional TMDB ID for queue status checks
+    
     Returns:
         str: IMDB ID if found, None otherwise
     """
+    # Check queue status before expensive search operation
+    if tmdb_id and _check_queue_status(tmdb_id, media_type):
+        logger.info(f"Item (TMDB: {tmdb_id}) is not in queue. Stopping before title search.")
+        return None
     from selenium.webdriver.common.by import By
     from selenium.webdriver.support.ui import WebDriverWait
     from selenium.webdriver.support import expected_conditions as EC
@@ -58,6 +64,11 @@ def search_dmm_by_title_and_extract_id(driver, title, media_type, year=None):
     import time
     
     try:
+        # Check queue status again before navigating to search page
+        if tmdb_id and _check_queue_status(tmdb_id, media_type):
+            logger.info(f"Item (TMDB: {tmdb_id}) is not in queue. Stopping before navigating to search page.")
+            return None
+        
         logger.info(f"Searching DMM for '{title}' ({media_type}) to find IMDB ID (fallback when IMDB ID is missing)")
         
         # Try using direct URL with query parameter first (more reliable)
@@ -93,6 +104,11 @@ def search_dmm_by_title_and_extract_id(driver, title, media_type, year=None):
                 raise TimeoutException("Results not found via URL")
                 
         except (TimeoutException, WebDriverException) as e:
+            # Check queue status before fallback search
+            if tmdb_id and _check_queue_status(tmdb_id, media_type):
+                logger.info(f"Item (TMDB: {tmdb_id}) is not in queue. Stopping before fallback search.")
+                return None
+            
             logger.info(f"Direct URL approach failed, trying search input method: {e}")
             # Fallback: Navigate to search page and use input
             driver.get("https://debridmediamanager.com/search")
@@ -1274,7 +1290,7 @@ def try_with_extras_pack(driver, movie_title, season_num, normalized_seasons):
         return False
 
 
-def process_individual_episodes_fallback(driver, movie_title, season_num, normalized_seasons):
+def process_individual_episodes_fallback(driver, movie_title, season_num, normalized_seasons, tmdb_id=None):
     """
     Fall back to individual episode processing when complete packs are not found.
     This is the original logic that processes individual episodes.
@@ -1284,6 +1300,7 @@ def process_individual_episodes_fallback(driver, movie_title, season_num, normal
         movie_title: Title of the show
         season_num: Season number
         normalized_seasons: List of normalized season names
+        tmdb_id: TMDB ID for cancellation checks (optional, will be looked up if not provided)
     
     Returns:
         bool: True if episodes are confirmed, False otherwise
@@ -1310,12 +1327,14 @@ def process_individual_episodes_fallback(driver, movie_title, season_num, normal
                     UnifiedMedia.media_type == 'tv'
                 ).first()
                 
-                if media_record and media_record.seasons_data:
-                    for season_data in media_record.seasons_data:
-                        if season_data.get('season_number') == season_num:
-                            aired_episodes_list = season_data.get('unprocessed_episodes', [])
-                            logger.info(f"Found {len(aired_episodes_list)} aired episodes to process for Season {season_num}: {aired_episodes_list}")
-                            break
+                if media_record:
+                    tmdb_id = media_record.tmdb_id
+                    if media_record.seasons_data:
+                        for season_data in media_record.seasons_data:
+                            if season_data.get('season_number') == season_num:
+                                aired_episodes_list = season_data.get('unprocessed_episodes', [])
+                                logger.info(f"Found {len(aired_episodes_list)} aired episodes to process for Season {season_num}: {aired_episodes_list}")
+                                break
             finally:
                 db.close()
         except Exception as e:
@@ -1324,6 +1343,10 @@ def process_individual_episodes_fallback(driver, movie_title, season_num, normal
     # If we have specific aired episodes, check for each one
     if aired_episodes_list:
         for episode in aired_episodes_list:
+            # Check if item is still in queue before processing each episode
+            if tmdb_id and _check_queue_status(tmdb_id, 'tv'):
+                logger.info(f"Item {tmdb_id} is not in queue. Stopping episode processing.")
+                return False
             # Extract episode number (e.g., "E01" -> 1)
             try:
                 episode_num = int(episode.replace('E', ''))
@@ -1455,6 +1478,11 @@ def process_individual_episodes_fallback(driver, movie_title, season_num, normal
                 
                 episode_confirmed = False
                 for i, result_box in enumerate(result_boxes, start=1):
+                    # Check if item is still in queue during processing
+                    if tmdb_id and _check_queue_status(tmdb_id, 'tv'):
+                        logger.info(f"Item {tmdb_id} is not in queue. Stopping episode processing.")
+                        return False
+                    
                     try:
                         title_element = result_box.find_element(By.XPATH, ".//h2")
                         title_text = title_element.text.strip()
@@ -2060,7 +2088,7 @@ def is_season_in_progress(movie_title, season_num):
         return False
 
 
-def process_season_page(driver, movie_title, season_num, normalized_seasons):
+def process_season_page(driver, movie_title, season_num, normalized_seasons, tmdb_id=None):
     """
     Process a specific season page for torrents and confirmations.
     
@@ -2069,6 +2097,7 @@ def process_season_page(driver, movie_title, season_num, normalized_seasons):
         movie_title: Title of the show
         season_num: Season number to process
         normalized_seasons: List of normalized season names
+        tmdb_id: TMDB ID for cancellation checks
     
     Returns:
         bool: True if season is confirmed, False otherwise
@@ -2080,16 +2109,21 @@ def process_season_page(driver, movie_title, season_num, normalized_seasons):
     
     logger.info(f"Processing season {season_num} page for {movie_title}")
     
+    # Check if item is still in queue
+    if tmdb_id and _check_queue_status(tmdb_id, 'tv'):
+        logger.info(f"Item {tmdb_id} is not in queue. Stopping season processing.")
+        return False
+    
     # Check if this season is in-progress (partially aired) - if so, skip Complete and With extras strategies
     if is_season_in_progress(movie_title, season_num):
         logger.info(f"Season {season_num} is in-progress - skipping Complete and With extras strategies, using individual episode processing only")
-        return process_individual_episodes_fallback(driver, movie_title, season_num, normalized_seasons)
+        return process_individual_episodes_fallback(driver, movie_title, season_num, normalized_seasons, tmdb_id)
     
     # Check if this season is discrepant - if so, skip Complete and With extras strategies
     if is_season_discrepant(movie_title, season_num):
         logger.info(f"Season {season_num} is discrepant - skipping Complete and With extras strategies, using individual episode processing only")
         # Skip directly to individual episode processing for discrepant seasons
-        return process_individual_episodes_fallback(driver, movie_title, season_num, normalized_seasons)
+        return process_individual_episodes_fallback(driver, movie_title, season_num, normalized_seasons, tmdb_id)
     
     try:
         # Check for "No results found" message
@@ -2230,6 +2264,39 @@ def process_season_page(driver, movie_title, season_num, normalized_seasons):
         return False
 
 
+def _check_queue_status(tmdb_id, media_type):
+    """
+    Check if the current item is still in the queue.
+    Database is the source of truth - if is_in_queue is False, stop processing.
+    
+    Args:
+        tmdb_id (int): TMDB ID of the media
+        media_type (str): Type of media ('movie' or 'tv')
+        
+    Returns:
+        bool: True if item should stop processing (not in queue), False if should continue (in queue)
+    """
+    if not tmdb_id:
+        return False
+    
+    try:
+        if USE_DATABASE:
+            from seerr.unified_media_manager import get_media_by_tmdb
+            media_record = get_media_by_tmdb(tmdb_id, media_type)
+            if media_record:
+                # Simple check: if not in queue, stop processing
+                if not media_record.is_in_queue:
+                    logger.info(f"Item {tmdb_id} ({media_type}) is not in queue. Stopping processing.")
+                    return True
+                # Item is in queue, continue processing
+                return False
+        # If database not available or record not found, continue processing
+        return False
+    except Exception as e:
+        logger.error(f"Error checking queue status: {e}")
+        # On error, continue processing (safer than stopping)
+        return False
+
 def search_on_debrid(imdb_id, movie_title, media_type, driver, extra_data=None, tmdb_id=None):
     """
     Search for media on Debrid Media Manager
@@ -2252,6 +2319,11 @@ def search_on_debrid(imdb_id, movie_title, media_type, driver, extra_data=None, 
     from selenium.webdriver.common.keys import Keys
     from seerr.browser import check_red_buttons
     import re  # Import re at function level since it's used locally later
+    
+    # Check if item is still in queue at the start
+    if tmdb_id and _check_queue_status(tmdb_id, media_type):
+        logger.info(f"Item {movie_title} (TMDB: {tmdb_id}) is not in queue. Stopping search.")
+        return "cancelled"
     try:
         logger.info(f"Starting Selenium automation for IMDb ID: {imdb_id}, Media Type: {media_type}")
         
@@ -2624,10 +2696,20 @@ def search_on_debrid(imdb_id, movie_title, media_type, driver, extra_data=None, 
     logger.info(f"Media type: {'TV Show' if is_tv_show else 'Movie'} (from media_type parameter)")
 
     try:
+        # Check if item is still in queue before starting any expensive operations
+        if tmdb_id and _check_queue_status(tmdb_id, media_type):
+            logger.info(f"Item {movie_title} (TMDB: {tmdb_id}) is not in queue. Stopping before starting browser automation.")
+            return "cancelled"
+        
         # Starting browser automation
         # Check if IMDB ID is missing or invalid - if so, search by title (RARE FALLBACK)
         if not imdb_id or imdb_id.lower() == 'none' or (isinstance(imdb_id, str) and imdb_id.strip() == ''):
             logger.warning(f"IMDB ID is missing or invalid ({imdb_id}). Performing title search fallback (rare case).")
+            
+            # Check queue status again before expensive title search
+            if tmdb_id and _check_queue_status(tmdb_id, media_type):
+                logger.info(f"Item {movie_title} (TMDB: {tmdb_id}) is not in queue. Stopping before title search.")
+                return "cancelled"
             
             # Extract year from title if present (format: "Title (Year)")
             year = None
@@ -2638,7 +2720,7 @@ def search_on_debrid(imdb_id, movie_title, media_type, driver, extra_data=None, 
                 title_for_search = movie_title.split('(')[0].strip()
             
             # Search DMM by title to find IMDB ID
-            found_imdb_id = search_dmm_by_title_and_extract_id(driver, title_for_search, media_type, year)
+            found_imdb_id = search_dmm_by_title_and_extract_id(driver, title_for_search, media_type, year, tmdb_id)
             
             if found_imdb_id:
                 logger.info(f"Found IMDB ID via title search: {found_imdb_id}. Using it instead of missing ID.")
@@ -2651,11 +2733,21 @@ def search_on_debrid(imdb_id, movie_title, media_type, driver, extra_data=None, 
                                                   error_message=f'IMDB ID not found via title search for {title_for_search}')
                 return False
         
+        # Check queue status again before navigation to DMM page
+        if tmdb_id and _check_queue_status(tmdb_id, media_type):
+            logger.info(f"Item {movie_title} (TMDB: {tmdb_id}) is not in queue. Stopping before navigation to DMM page.")
+            return "cancelled"
+        
         # Navigate directly using IMDb ID
         if media_type == 'movie':
             url = f"https://debridmediamanager.com/movie/{imdb_id}"
             driver.get(url)
             logger.info(f"Navigated to movie page: {url}")
+            
+            # Check for cancellation after navigation
+            if tmdb_id and _check_queue_status(tmdb_id, media_type):
+                logger.info(f"Search cancelled for {movie_title} (TMDB: {tmdb_id}) after navigation")
+                return "cancelled"
         elif media_type == 'tv':
             # For TV shows with specific requested seasons, navigate to each season page
             if normalized_seasons and len(normalized_seasons) > 0:
@@ -2676,7 +2768,22 @@ def search_on_debrid(imdb_id, movie_title, media_type, driver, extra_data=None, 
                     confirmed_seasons = set()
                     
                     for season_num in season_numbers:
+                        # Check for cancellation before processing each season
+                        if tmdb_id and _check_queue_status(tmdb_id, media_type):
+                            logger.info(f"Search cancelled for {movie_title} (TMDB: {tmdb_id}) during season processing")
+                            return "cancelled"
+                        
                         logger.info(f"Starting processing for Season {season_num}")
+                        
+                        # Update processing stage to reflect current season being processed
+                        if USE_DATABASE and 'processed_media_id' in locals() and processed_media_id:
+                            from seerr.unified_media_manager import update_media_processing_status
+                            update_media_processing_status(
+                                processed_media_id, 
+                                'processing', 
+                                f'browser_automation_season_{season_num}'
+                            )
+                            logger.info(f"Updated processing stage to browser_automation_season_{season_num} for {movie_title}")
                         
                         # Check if this season has aired episodes before processing
                         aired_episodes = get_season_aired_episodes(movie_title, season_num)
@@ -2725,9 +2832,19 @@ def search_on_debrid(imdb_id, movie_title, media_type, driver, extra_data=None, 
                             finally:
                                 db.close()
                         
+                        # Check queue status before navigation to season page
+                        if tmdb_id and _check_queue_status(tmdb_id, media_type):
+                            logger.info(f"Item {movie_title} (TMDB: {tmdb_id}) is not in queue. Stopping before season navigation.")
+                            return "cancelled"
+                        
                         season_url = f"https://debridmediamanager.com/show/{imdb_id}/{season_num}"
                         driver.get(season_url)
                         logger.info(f"Navigated to season {season_num} page: {season_url}")
+                        
+                        # Check if item is still in queue after navigation
+                        if tmdb_id and _check_queue_status(tmdb_id, media_type):
+                            logger.info(f"Item {movie_title} (TMDB: {tmdb_id}) is not in queue. Stopping after navigation.")
+                            return "cancelled"
                         
                         # Wait for page to load
                         try:
@@ -2737,10 +2854,20 @@ def search_on_debrid(imdb_id, movie_title, media_type, driver, extra_data=None, 
                         except TimeoutException:
                             logger.warning(f"Timeout waiting for season {season_num} page to load. Proceeding anyway.")
                         
+                        # Check if item is still in queue before processing season
+                        if tmdb_id and _check_queue_status(tmdb_id, media_type):
+                            logger.info(f"Item {tmdb_id} is not in queue. Stopping season processing.")
+                            return "cancelled"
+                        
                         # Process this season
                         logger.info(f"Calling process_season_page for Season {season_num}")
-                        season_result = process_season_page(driver, movie_title, season_num, normalized_seasons)
+                        season_result = process_season_page(driver, movie_title, season_num, normalized_seasons, tmdb_id)
                         logger.info(f"process_season_page returned {season_result} for Season {season_num}")
+                        
+                        # Check again after processing season
+                        if tmdb_id and _check_queue_status(tmdb_id, media_type):
+                            logger.info(f"Item {tmdb_id} is not in queue. Stopping after season processing.")
+                            return "cancelled"
                         
                         if season_result is True:
                             confirmed_seasons.add(f"Season {season_num}")
@@ -2782,11 +2909,21 @@ def search_on_debrid(imdb_id, movie_title, media_type, driver, extra_data=None, 
                             logger.warning(f"No seasons confirmed. All seasons may be unaired or unavailable.")
                             return False
                 else:
+                    # Check queue status before fallback navigation
+                    if tmdb_id and _check_queue_status(tmdb_id, media_type):
+                        logger.info(f"Item {movie_title} (TMDB: {tmdb_id}) is not in queue. Stopping before fallback navigation.")
+                        return "cancelled"
+                    
                     # Fallback to general show page if no valid season numbers
                     url = f"https://debridmediamanager.com/show/{imdb_id}"
                     driver.get(url)
                     logger.info(f"Navigated to show page (fallback): {url}")
             else:
+                # Check queue status before general show page navigation
+                if tmdb_id and _check_queue_status(tmdb_id, media_type):
+                    logger.info(f"Item {movie_title} (TMDB: {tmdb_id}) is not in queue. Stopping before general show page navigation.")
+                    return "cancelled"
+                
                 # No specific seasons requested, use general show page
                 url = f"https://debridmediamanager.com/show/{imdb_id}"
                 driver.get(url)
@@ -3006,14 +3143,14 @@ def search_on_debrid(imdb_id, movie_title, media_type, driver, extra_data=None, 
                                 # Create and run a synchronous version of search_individual_episodes
                                 from seerr.background_tasks import search_individual_episodes_sync
                                 confirmation_flag = search_individual_episodes_sync(
-                                    imdb_id, movie_title, season_number, season_details, driver
+                                    imdb_id, movie_title, season_number, season_details, driver, tmdb_id
                                 )
                             except StaleElementReferenceException as e:
                                 logger.warning(f"Stale element reference in search_individual_episodes for {season_name}: {e}. Retrying...")
                                 time.sleep(2)
                                 try:
                                     confirmation_flag = search_individual_episodes_sync(
-                                        imdb_id, movie_title, season_number, season_details, driver
+                                        imdb_id, movie_title, season_number, season_details, driver, tmdb_id
                                     )
                                 except Exception as retry_e:
                                     logger.error(f"Failed to retry search_individual_episodes: {retry_e}")
@@ -3033,7 +3170,7 @@ def search_on_debrid(imdb_id, movie_title, media_type, driver, extra_data=None, 
                                 
                                 confirmation_flag = run_async_in_sync(
                                     search_individual_episodes(
-                                        imdb_id, movie_title, season_number, season_details, driver
+                                        imdb_id, movie_title, season_number, season_details, driver, tmdb_id
                                     )
                                 )
                             
@@ -3423,7 +3560,7 @@ def search_on_debrid(imdb_id, movie_title, media_type, driver, extra_data=None, 
                                 try:
                                     from seerr.background_tasks import search_individual_episodes_sync
                                     episode_confirmation_flag = search_individual_episodes_sync(
-                                        imdb_id, movie_title, season_number, season_details, driver
+                                        imdb_id, movie_title, season_number, season_details, driver, tmdb_id
                                     )
                                     if episode_confirmation_flag:
                                         logger.success(f"Successfully processed individual episodes for {movie_title} Season {season_number}")
@@ -3446,7 +3583,7 @@ def search_on_debrid(imdb_id, movie_title, media_type, driver, extra_data=None, 
                                     
                                     episode_confirmation_flag = run_async_in_sync(
                                         search_individual_episodes(
-                                            imdb_id, movie_title, season_number, season_details, driver
+                                            imdb_id, movie_title, season_number, season_details, driver, tmdb_id
                                         )
                                     )
                                     if episode_confirmation_flag:
@@ -3490,6 +3627,11 @@ def search_on_debrid(imdb_id, movie_title, media_type, driver, extra_data=None, 
                             # result_boxes remains an empty list
 
                     for i, result_box in enumerate(result_boxes, start=1):
+                        # Check for cancellation before processing each box
+                        if tmdb_id and _check_queue_status(tmdb_id, media_type):
+                            logger.info(f"Search cancelled for {movie_title} (TMDB: {tmdb_id}) during box processing")
+                            return "cancelled"
+                        
                         try:
                             # Extract the title from the result box
                             title_element = result_box.find_element(By.XPATH, ".//h2")
@@ -3530,22 +3672,40 @@ def search_on_debrid(imdb_id, movie_title, media_type, driver, extra_data=None, 
                             logger.info(f"Movie title (digits to words): {movie_title_cleaned_word}, Box title (digits to words): {title_text_cleaned_word}")
                             logger.info(f"Movie title (words to digits): {movie_title_cleaned_digit}, Box title (words to digits): {title_text_cleaned_digit}")
 
-                            # Compare the title in all variations
-                            if not (
-                                fuzz.partial_ratio(title_text_cleaned.lower(), movie_title_cleaned.lower()) >= 75 or
-                                fuzz.partial_ratio(title_text_normalized.lower(), movie_title_normalized.lower()) >= 75 or
-                                fuzz.partial_ratio(title_text_cleaned_word.lower(), movie_title_cleaned_word.lower()) >= 75 or
-                                fuzz.partial_ratio(title_text_normalized_word.lower(), movie_title_normalized_word.lower()) >= 75 or
-                                fuzz.partial_ratio(title_text_cleaned_digit.lower(), movie_title_cleaned_digit.lower()) >= 75 or
-                                fuzz.partial_ratio(title_text_normalized_digit.lower(), movie_title_normalized_digit.lower()) >= 75
-                            ):
-                                logger.warning(f"Title mismatch for box {i}: {title_text_cleaned} or {title_text_normalized} (Expected: {movie_title_cleaned} or {movie_title_normalized}). Skipping.")
+                            # Compare the title in all variations with stricter threshold (90%)
+                            fuzzy_match = (
+                                fuzz.partial_ratio(title_text_cleaned.lower(), movie_title_cleaned.lower()) >= 90 or
+                                fuzz.partial_ratio(title_text_normalized.lower(), movie_title_normalized.lower()) >= 90 or
+                                fuzz.partial_ratio(title_text_cleaned_word.lower(), movie_title_cleaned_word.lower()) >= 90 or
+                                fuzz.partial_ratio(title_text_normalized_word.lower(), movie_title_normalized_word.lower()) >= 90 or
+                                fuzz.partial_ratio(title_text_cleaned_digit.lower(), movie_title_cleaned_digit.lower()) >= 90 or
+                                fuzz.partial_ratio(title_text_normalized_digit.lower(), movie_title_normalized_digit.lower()) >= 90
+                            )
+                            
+                            # Additionally validate that movie title appears as a complete word/phrase
+                            complete_word_match = (
+                                is_complete_word_match(movie_title_cleaned, title_text_cleaned) or
+                                is_complete_word_match(movie_title_normalized, title_text_normalized) or
+                                is_complete_word_match(movie_title_cleaned_word, title_text_cleaned_word) or
+                                is_complete_word_match(movie_title_normalized_word, title_text_normalized_word) or
+                                is_complete_word_match(movie_title_cleaned_digit, title_text_cleaned_digit) or
+                                is_complete_word_match(movie_title_normalized_digit, title_text_normalized_digit)
+                            )
+                            
+                            if not (fuzzy_match and complete_word_match):
+                                logger.warning(f"Title mismatch for box {i}: {title_text_cleaned} or {title_text_normalized} (Expected: {movie_title_cleaned} or {movie_title_normalized}). Fuzzy match: {fuzzy_match}, Complete word match: {complete_word_match}. Skipping.")
                                 continue  # Skip this box if none of the variations match
 
                             # Compare the year with the expected year (allow ±1 year) only if it's not a TV show
                             if not is_tv_show:
                                 expected_year = extract_year(movie_title)
                                 box_year = extract_year(title_text)
+                                
+                                # Log year extraction results for debugging
+                                if expected_year is None:
+                                    logger.debug(f"Year extraction from movie title '{movie_title}' returned None. This may indicate the year format is not recognized.")
+                                if box_year is None:
+                                    logger.debug(f"Year extraction from box title '{title_text}' returned None.")
 
                                 # Only perform year comparison if both years are present
                                 if expected_year is not None and box_year is not None:
@@ -3555,12 +3715,17 @@ def search_on_debrid(imdb_id, movie_title, media_type, driver, extra_data=None, 
                                     else:
                                         logger.info(f"Year match for box {i}: {box_year} matches expected {expected_year}")
                                 elif expected_year is None and box_year is not None:
-                                    logger.info(f"No year in movie title, accepting box {i} with year {box_year}")
+                                    logger.info(f"No year in movie title '{movie_title}', accepting box {i} with year {box_year}")
                                 elif expected_year is not None and box_year is None:
-                                    logger.warning(f"Expected year {expected_year} but no year found in box {i}. Skipping.")
+                                    logger.warning(f"Expected year {expected_year} but no year found in box {i} title '{title_text}'. Skipping.")
                                     continue
                                 else:
                                     logger.info(f"No year information available for box {i}, proceeding with title match only")
+
+                            # Check for cancellation before processing buttons
+                            if tmdb_id and _check_queue_status(tmdb_id, media_type):
+                                logger.info(f"Search cancelled for {movie_title} (TMDB: {tmdb_id}) before clicking buttons in box {i}")
+                                return "cancelled"
 
                             # After navigating to the movie details page and verifying the title/year
                             try:
@@ -3573,6 +3738,10 @@ def search_on_debrid(imdb_id, movie_title, media_type, driver, extra_data=None, 
                                     max_retries = 3
                                     
                                     for retry in range(max_retries):
+                                        # Check for cancellation during retry loop
+                                        if tmdb_id and _check_queue_status(tmdb_id, media_type):
+                                            logger.info(f"Search cancelled for {movie_title} (TMDB: {tmdb_id}) during RD status check")
+                                            return "cancelled"
                                         try:
                                             # Wait longer for the RD button status to change (15 seconds)
                                             rd_button = WebDriverWait(driver, 15).until(

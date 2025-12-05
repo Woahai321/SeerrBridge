@@ -17,22 +17,40 @@ export const useProcessingStatus = () => {
         }
         return {
           currentItem: null,
+          queuedItems: [],
           processingItems: [],
           stats: {
             total_processing: 0,
             movies_processing: 0,
             tv_processing: 0
+          },
+          queueStats: {
+            movie_queue_size: 0,
+            movie_queue_max: 250,
+            tv_queue_size: 0,
+            tv_queue_max: 250,
+            total_queued: 0,
+            is_processing: false
           }
         }
       } catch (err) {
         console.error('Error fetching processing status:', err)
         return {
           currentItem: null,
+          queuedItems: [],
           processingItems: [],
           stats: {
             total_processing: 0,
             movies_processing: 0,
             tv_processing: 0
+          },
+          queueStats: {
+            movie_queue_size: 0,
+            movie_queue_max: 250,
+            tv_queue_size: 0,
+            tv_queue_max: 250,
+            total_queued: 0,
+            is_processing: false
           }
         }
       }
@@ -41,11 +59,20 @@ export const useProcessingStatus = () => {
       server: false,
       default: () => ({
         currentItem: null,
+        queuedItems: [],
         processingItems: [],
         stats: {
           total_processing: 0,
           movies_processing: 0,
           tv_processing: 0
+        },
+        queueStats: {
+          movie_queue_size: 0,
+          movie_queue_max: 250,
+          tv_queue_size: 0,
+          tv_queue_max: 250,
+          total_queued: 0,
+          is_processing: false
         }
       })
     }

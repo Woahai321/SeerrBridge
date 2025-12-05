@@ -46,7 +46,7 @@ venv.bak/
 
 # Logs
 *.log*
-/logs/
+/logs/  # Only root logs/ directory, not server/api/logs/
 *.log
 !pages/logs/
 

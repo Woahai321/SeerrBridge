@@ -22,6 +22,87 @@ export default defineEventHandler(async (event) => {
       safeEnvVars.torrent_filter_regex = process.env.TORRENT_FILTER_REGEX
     }
     
+    // Check for optional system configs
+    if (process.env.MAX_MOVIE_SIZE) {
+      const val = parseFloat(process.env.MAX_MOVIE_SIZE)
+      if (!isNaN(val)) {
+        safeEnvVars.max_movie_size = val
+      }
+    }
+    if (process.env.MAX_EPISODE_SIZE) {
+      const val = parseFloat(process.env.MAX_EPISODE_SIZE)
+      if (!isNaN(val)) {
+        safeEnvVars.max_episode_size = val
+      }
+    }
+    
+    // Check for task configs
+    if (process.env.BACKGROUND_TASKS_ENABLED) {
+      safeEnvVars.background_tasks_enabled = process.env.BACKGROUND_TASKS_ENABLED.toLowerCase() === 'true'
+    }
+    if (process.env.SCHEDULER_ENABLED) {
+      safeEnvVars.scheduler_enabled = process.env.SCHEDULER_ENABLED.toLowerCase() === 'true'
+    }
+    if (process.env.TOKEN_REFRESH_INTERVAL_MINUTES) {
+      const val = parseInt(process.env.TOKEN_REFRESH_INTERVAL_MINUTES, 10)
+      if (!isNaN(val)) {
+        safeEnvVars.token_refresh_interval_minutes = val
+      }
+    }
+    if (process.env.MOVIE_PROCESSING_CHECK_INTERVAL_MINUTES) {
+      const val = parseInt(process.env.MOVIE_PROCESSING_CHECK_INTERVAL_MINUTES, 10)
+      if (!isNaN(val)) {
+        safeEnvVars.movie_processing_check_interval_minutes = val
+      }
+    }
+    if (process.env.MOVIE_QUEUE_MAXSIZE) {
+      const val = parseInt(process.env.MOVIE_QUEUE_MAXSIZE, 10)
+      if (!isNaN(val)) {
+        safeEnvVars.movie_queue_maxsize = val
+      }
+    }
+    if (process.env.TV_QUEUE_MAXSIZE) {
+      const val = parseInt(process.env.TV_QUEUE_MAXSIZE, 10)
+      if (!isNaN(val)) {
+        safeEnvVars.tv_queue_maxsize = val
+      }
+    }
+    
+    // Check for failed item configs
+    if (process.env.ENABLE_FAILED_ITEM_RETRY) {
+      safeEnvVars.enable_failed_item_retry = process.env.ENABLE_FAILED_ITEM_RETRY.toLowerCase() === 'true'
+    }
+    if (process.env.FAILED_ITEM_RETRY_INTERVAL_MINUTES) {
+      const val = parseInt(process.env.FAILED_ITEM_RETRY_INTERVAL_MINUTES, 10)
+      if (!isNaN(val)) {
+        safeEnvVars.failed_item_retry_interval_minutes = val
+      }
+    }
+    if (process.env.FAILED_ITEM_MAX_RETRY_ATTEMPTS) {
+      const val = parseInt(process.env.FAILED_ITEM_MAX_RETRY_ATTEMPTS, 10)
+      if (!isNaN(val)) {
+        safeEnvVars.failed_item_max_retry_attempts = val
+      }
+    }
+    if (process.env.FAILED_ITEM_RETRY_DELAY_HOURS) {
+      const val = parseInt(process.env.FAILED_ITEM_RETRY_DELAY_HOURS, 10)
+      if (!isNaN(val)) {
+        safeEnvVars.failed_item_retry_delay_hours = val
+      }
+    }
+    if (process.env.FAILED_ITEM_RETRY_BACKOFF_MULTIPLIER) {
+      const val = parseFloat(process.env.FAILED_ITEM_RETRY_BACKOFF_MULTIPLIER)
+      if (!isNaN(val)) {
+        safeEnvVars.failed_item_retry_backoff_multiplier = val
+      }
+    }
+    if (process.env.FAILED_ITEM_MAX_RETRY_DELAY_HOURS) {
+      const val = parseInt(process.env.FAILED_ITEM_MAX_RETRY_DELAY_HOURS, 10)
+      if (!isNaN(val)) {
+        safeEnvVars.failed_item_max_retry_delay_hours = val
+      }
+    }
+    
     // Check if sensitive values exist (without returning them)
     const hasSensitiveValues = {
       rd_access_token: !!process.env.RD_ACCESS_TOKEN,

@@ -243,7 +243,7 @@ def extract_year(text, expected_year=None, ignore_resolution=False):
     
     - Uses the explicitly provided expected_year (from TMDb or Trakt) if available.
     - Ensures the year is not mistakenly extracted from the movie's name (like '1984' in 'Wonder Woman 1984').
-    - Handles both space-separated and dot-separated formats (after clean_title processing).
+    - Handles parentheses format: (2009), space-separated, and dot-separated formats.
     """
     if expected_year:
         return expected_year  # Prioritize the known year from a reliable source
@@ -253,15 +253,100 @@ def extract_year(text, expected_year=None, ignore_resolution=False):
         text = re.sub(r'\b\d{3,4}p\b', '', text)
 
     # Extract years explicitly (avoid numbers inside movie titles)
-    # Handle both space-separated and dot-separated formats
-    # Pattern matches years that are either at word boundaries or surrounded by dots/spaces
-    years = re.findall(r'(?:^|[.\s])(19\d{2}|20\d{2})(?:[.\s]|$)', text)
+    # Handle parentheses format: (2009) or (1984)
+    years = re.findall(r'\((\d{4})\)', text)
+    
+    # If no parentheses format found, try space/dot-separated formats
+    if not years:
+        # Pattern matches years that are either at word boundaries or surrounded by dots/spaces
+        years = re.findall(r'(?:^|[.\s])(19\d{2}|20\d{2})(?:[.\s]|$)', text)
     
     if years:
-        # If multiple years are found, prefer the latest one
-        return int(max(years))
+        # Filter to only valid years (1900-2099) and prefer the latest one
+        valid_years = [int(y) for y in years if 1900 <= int(y) <= 2099]
+        if valid_years:
+            return int(max(valid_years))
 
     return None  # Return None if no valid year is found
+
+def is_complete_word_match(movie_title, torrent_title):
+    """
+    Validates that the movie title appears as a complete word/phrase in the torrent title.
+    Prevents substring matches like "bounty" matching "perriers bounty".
+    For single-word titles, requires the word to be at the start or be the primary match.
+    
+    Args:
+        movie_title: The cleaned/normalized movie title (e.g., "bounty")
+        torrent_title: The cleaned/normalized torrent title (e.g., "perriers.bounty" or "bounty.2009")
+    
+    Returns:
+        True if movie title appears as a complete word/phrase, False otherwise
+    """
+    # Convert to lowercase for comparison
+    movie_title = movie_title.lower().strip()
+    torrent_title = torrent_title.lower().strip()
+    
+    # If titles are identical, it's a match
+    if movie_title == torrent_title:
+        return True
+    
+    # Split both titles into words (using dots, spaces, etc. as separators)
+    movie_words = re.split(r'[.\s]+', movie_title)
+    torrent_words = re.split(r'[.\s]+', torrent_title)
+    
+    # Remove empty strings
+    movie_words = [w for w in movie_words if w]
+    torrent_words = [w for w in torrent_words if w]
+    
+    # Check if all movie words appear consecutively in torrent words
+    if len(movie_words) == 0:
+        return False
+    
+    # For single-word titles, be more strict: require it to be at the start or be the primary match
+    # This prevents "bounty" matching "perriers bounty"
+    if len(movie_words) == 1:
+        word = movie_words[0]
+        torrent_phrase = ' '.join(torrent_words)
+        
+        # Check if the word is at the start of the torrent title (most reliable)
+        if torrent_words and torrent_words[0] == word:
+            return True
+        
+        # If not at start, check if it appears as a complete word with word boundaries
+        pattern = r'\b' + re.escape(word) + r'\b'
+        if re.search(pattern, torrent_phrase):
+            # Additional check: use ratio to ensure the word is a significant part of the title
+            # This prevents "bounty" from matching "perriers bounty" where "bounty" is just a word
+            from fuzzywuzzy import fuzz
+            # Use ratio (not partial_ratio) to compare full strings
+            # For "bounty" vs "perriers bounty", ratio will be low (~40%)
+            # For "bounty" vs "bounty 2009", ratio will be higher (~60-70%)
+            # We want to allow matches where the word is a significant portion
+            ratio = fuzz.ratio(word, torrent_phrase)
+            # Require at least 60% ratio for single-word titles not at the start
+            # This allows "bounty" to match "bounty 2009" but not "perriers bounty"
+            if ratio >= 60:
+                return True
+        
+        return False
+    
+    # For multi-word titles, try to find the movie title as a consecutive sequence
+    for i in range(len(torrent_words) - len(movie_words) + 1):
+        if torrent_words[i:i+len(movie_words)] == movie_words:
+            # Prefer matches at the start, but allow matches anywhere for multi-word titles
+            return True
+    
+    # Also check if movie title appears as a complete phrase in the torrent title
+    # (handles cases where movie title might be "the bounty" and torrent has "the.bounty.2009")
+    movie_phrase = ' '.join(movie_words)
+    torrent_phrase = ' '.join(torrent_words)
+    
+    # Check if movie phrase appears as a complete phrase (word boundaries)
+    pattern = r'\b' + re.escape(movie_phrase) + r'\b'
+    if re.search(pattern, torrent_phrase):
+        return True
+    
+    return False
 
 def parse_requested_seasons(extra_data):
     """

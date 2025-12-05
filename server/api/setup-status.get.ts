@@ -53,20 +53,28 @@ export default defineEventHandler(async (event) => {
     // Setup is needed if:
     // 1. SETUP_REQUIRED is explicitly true AND onboarding is not completed
     // 2. Any required configs are missing (and we can't skip setup)
-    // If all configs are present, setup is complete regardless of flags
+    // 3. onboarding_completed is not explicitly set to true AND configs are missing
+    // BUT: If all configs are present, we should allow access even if onboarding_completed is not explicitly true
+    // (This prevents users from being kicked back to setup when they update configs)
     const needsSetup = (setupRequired && onboardingCompleted !== true) || 
-                      (missingConfigs.length > 0 && !canSkipSetup)
+                      (missingConfigs.length > 0 && !canSkipSetup) ||
+                      (onboardingCompleted !== true && missingConfigs.length > 0 && !canSkipSetup)
+    
+    // If all configs are present but onboarding_completed is not true, we can still allow access
+    // (This handles the case where configs were updated but onboarding flag wasn't set)
+    const shouldAllowAccess = canSkipSetup && envVarsAvailable.length === requiredConfigs.length
     
     return {
       success: true,
       data: {
-        needsSetup,
+        needsSetup: shouldAllowAccess ? false : needsSetup, // Override needsSetup if all configs are present
         missingConfigs,
         setupRequired,
         onboardingCompleted,
         envVarsAvailable,
         envVarsMissing,
-        canSkipSetup
+        canSkipSetup,
+        shouldAllowAccess
       }
     }
   } catch (error) {

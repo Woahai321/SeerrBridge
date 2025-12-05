@@ -495,6 +495,184 @@
                   />
                 </div>
               </div>
+              
+              <!-- Size Limits -->
+              <div class="space-y-4 pt-4 border-t border-border">
+                <h4 class="text-base font-medium text-foreground">Size Limits</h4>
+                <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                  <div>
+                    <label class="block text-sm font-medium text-foreground mb-2">Max Movie Size (GB)</label>
+                    <select
+                      v-model.number="config.max_movie_size"
+                      class="mt-1 block w-full border border-input rounded-md shadow-sm bg-background text-foreground focus:ring-2 focus:ring-ring focus:border-ring"
+                    >
+                      <option :value="0">Unlimited</option>
+                      <option :value="1">1 GB</option>
+                      <option :value="3">3 GB</option>
+                      <option :value="5">5 GB</option>
+                      <option :value="15">15 GB</option>
+                      <option :value="30">30 GB</option>
+                      <option :value="60">60 GB</option>
+                    </select>
+                    <p class="mt-1 text-xs text-muted-foreground">0 = No size limit</p>
+                  </div>
+                  <div>
+                    <label class="block text-sm font-medium text-foreground mb-2">Max Episode Size (GB)</label>
+                    <select
+                      v-model.number="config.max_episode_size"
+                      class="mt-1 block w-full border border-input rounded-md shadow-sm bg-background text-foreground focus:ring-2 focus:ring-ring focus:border-ring"
+                    >
+                      <option :value="0">Unlimited</option>
+                      <option :value="0.1">100 MB</option>
+                      <option :value="0.3">300 MB</option>
+                      <option :value="0.5">500 MB</option>
+                      <option :value="1">1 GB</option>
+                      <option :value="3">3 GB</option>
+                      <option :value="5">5 GB</option>
+                    </select>
+                    <p class="mt-1 text-xs text-muted-foreground">0 = No size limit</p>
+                  </div>
+                </div>
+              </div>
+              
+              <!-- Task Configuration -->
+              <div class="space-y-4 pt-4 border-t border-border">
+                <h4 class="text-base font-medium text-foreground">Background Tasks</h4>
+                <div class="space-y-3">
+                  <div class="flex items-center">
+                    <input
+                      v-model="config.background_tasks_enabled"
+                      type="checkbox"
+                      class="h-4 w-4 text-primary focus:ring-ring border-input rounded"
+                    />
+                    <label class="ml-2 block text-sm text-foreground">
+                      Enable Background Tasks
+                    </label>
+                  </div>
+                  <div class="flex items-center">
+                    <input
+                      v-model="config.scheduler_enabled"
+                      type="checkbox"
+                      class="h-4 w-4 text-primary focus:ring-ring border-input rounded"
+                    />
+                    <label class="ml-2 block text-sm text-foreground">
+                      Enable Scheduler
+                    </label>
+                  </div>
+                  <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                    <div>
+                      <label class="block text-sm font-medium text-foreground">Token Refresh Interval (minutes)</label>
+                      <input
+                        v-model.number="config.token_refresh_interval_minutes"
+                        type="number"
+                        min="1"
+                        max="60"
+                        class="mt-1 block w-full border border-input rounded-md shadow-sm bg-background text-foreground placeholder:text-muted-foreground focus:ring-2 focus:ring-ring focus:border-ring"
+                      />
+                    </div>
+                    <div>
+                      <label class="block text-sm font-medium text-foreground">Movie Processing Check Interval (minutes)</label>
+                      <input
+                        v-model.number="config.movie_processing_check_interval_minutes"
+                        type="number"
+                        min="1"
+                        max="120"
+                        class="mt-1 block w-full border border-input rounded-md shadow-sm bg-background text-foreground placeholder:text-muted-foreground focus:ring-2 focus:ring-ring focus:border-ring"
+                      />
+                    </div>
+                    <div>
+                      <label class="block text-sm font-medium text-foreground">Movie Queue Max Size</label>
+                      <input
+                        v-model.number="config.movie_queue_maxsize"
+                        type="number"
+                        min="10"
+                        max="1000"
+                        class="mt-1 block w-full border border-input rounded-md shadow-sm bg-background text-foreground placeholder:text-muted-foreground focus:ring-2 focus:ring-ring focus:border-ring"
+                      />
+                    </div>
+                    <div>
+                      <label class="block text-sm font-medium text-foreground">TV Queue Max Size</label>
+                      <input
+                        v-model.number="config.tv_queue_maxsize"
+                        type="number"
+                        min="10"
+                        max="1000"
+                        class="mt-1 block w-full border border-input rounded-md shadow-sm bg-background text-foreground placeholder:text-muted-foreground focus:ring-2 focus:ring-ring focus:border-ring"
+                      />
+                    </div>
+                  </div>
+                </div>
+              </div>
+              
+              <!-- Failed Items Configuration -->
+              <div class="space-y-4 pt-4 border-t border-border">
+                <h4 class="text-base font-medium text-foreground">Failed Items Retry</h4>
+                <div class="space-y-3">
+                  <div class="flex items-center">
+                    <input
+                      v-model="config.enable_failed_item_retry"
+                      type="checkbox"
+                      class="h-4 w-4 text-primary focus:ring-ring border-input rounded"
+                    />
+                    <label class="ml-2 block text-sm text-foreground">
+                      Enable Failed Item Retry
+                    </label>
+                  </div>
+                  <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                    <div>
+                      <label class="block text-sm font-medium text-foreground">Retry Interval (minutes)</label>
+                      <input
+                        v-model.number="config.failed_item_retry_interval_minutes"
+                        type="number"
+                        min="1"
+                        max="1440"
+                        class="mt-1 block w-full border border-input rounded-md shadow-sm bg-background text-foreground placeholder:text-muted-foreground focus:ring-2 focus:ring-ring focus:border-ring"
+                      />
+                    </div>
+                    <div>
+                      <label class="block text-sm font-medium text-foreground">Max Retry Attempts</label>
+                      <input
+                        v-model.number="config.failed_item_max_retry_attempts"
+                        type="number"
+                        min="1"
+                        max="10"
+                        class="mt-1 block w-full border border-input rounded-md shadow-sm bg-background text-foreground placeholder:text-muted-foreground focus:ring-2 focus:ring-ring focus:border-ring"
+                      />
+                    </div>
+                    <div>
+                      <label class="block text-sm font-medium text-foreground">Initial Retry Delay (hours)</label>
+                      <input
+                        v-model.number="config.failed_item_retry_delay_hours"
+                        type="number"
+                        min="1"
+                        max="168"
+                        class="mt-1 block w-full border border-input rounded-md shadow-sm bg-background text-foreground placeholder:text-muted-foreground focus:ring-2 focus:ring-ring focus:border-ring"
+                      />
+                    </div>
+                    <div>
+                      <label class="block text-sm font-medium text-foreground">Backoff Multiplier</label>
+                      <input
+                        v-model.number="config.failed_item_retry_backoff_multiplier"
+                        type="number"
+                        min="1"
+                        max="10"
+                        step="0.1"
+                        class="mt-1 block w-full border border-input rounded-md shadow-sm bg-background text-foreground placeholder:text-muted-foreground focus:ring-2 focus:ring-ring focus:border-ring"
+                      />
+                    </div>
+                    <div>
+                      <label class="block text-sm font-medium text-foreground">Max Retry Delay (hours)</label>
+                      <input
+                        v-model.number="config.failed_item_max_retry_delay_hours"
+                        type="number"
+                        min="1"
+                        max="168"
+                        class="mt-1 block w-full border border-input rounded-md shadow-sm bg-background text-foreground placeholder:text-muted-foreground focus:ring-2 focus:ring-ring focus:border-ring"
+                      />
+                    </div>
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
 
@@ -569,6 +747,12 @@
       </div>
     </div>
   </div>
+
+  <!-- Backend Initializing Screen - Show after setup save completes -->
+  <BackendInitializing 
+    v-if="showBackendInitializing" 
+    @ready="handleBackendReady" 
+  />
 </template>
 
 <script setup>
@@ -580,7 +764,7 @@ const isSkippingSetup = ref(false)
 const setupSkipped = ref(false)
 const envVarsAvailable = ref(false)
 const testing = ref([false, false, false, false])
-// Removed showBackendLoading - no longer blocking setup with loading screen
+const showBackendInitializing = ref(false)
 
 const steps = ref([
   { id: 'dmm', name: 'DMM Config', testStatus: null },
@@ -626,7 +810,25 @@ const config = ref({
   // System
   headless_mode: true,
   refresh_interval_minutes: 60,
-  torrent_filter_regex: '^(?!.*【.*?】)(?!.*[\\u0400-\\u04FF])(?!.*\\[esp\\]).*'
+  torrent_filter_regex: '^(?!.*【.*?】)(?!.*[\\u0400-\\u04FF])(?!.*\\[esp\\]).*',
+  max_movie_size: 0,
+  max_episode_size: 0,
+  
+  // Task Configuration
+  background_tasks_enabled: true,
+  scheduler_enabled: true,
+  token_refresh_interval_minutes: 10,
+  movie_processing_check_interval_minutes: 15,
+  movie_queue_maxsize: 250,
+  tv_queue_maxsize: 250,
+  
+  // Failed Items Configuration
+  enable_failed_item_retry: true,
+  failed_item_retry_interval_minutes: 30,
+  failed_item_max_retry_attempts: 3,
+  failed_item_retry_delay_hours: 2,
+  failed_item_retry_backoff_multiplier: 2,
+  failed_item_max_retry_delay_hours: 24
 })
 
 // Load saved setup state on mount
@@ -711,14 +913,63 @@ const loadConfigFromEnv = async () => {
     
     if (envData.success && envData.safeValues) {
       // Auto-populate non-sensitive values
-      if (envData.safeValues.headless_mode !== undefined) {
-        config.value.headless_mode = envData.safeValues.headless_mode
+      const safeValues = envData.safeValues
+      
+      // System settings
+      if (safeValues.headless_mode !== undefined) {
+        config.value.headless_mode = safeValues.headless_mode
       }
-      if (envData.safeValues.refresh_interval_minutes !== undefined) {
-        config.value.refresh_interval_minutes = envData.safeValues.refresh_interval_minutes
+      if (safeValues.refresh_interval_minutes !== undefined) {
+        config.value.refresh_interval_minutes = safeValues.refresh_interval_minutes
       }
-      if (envData.safeValues.torrent_filter_regex) {
-        config.value.torrent_filter_regex = envData.safeValues.torrent_filter_regex
+      if (safeValues.torrent_filter_regex) {
+        config.value.torrent_filter_regex = safeValues.torrent_filter_regex
+      }
+      if (safeValues.max_movie_size !== undefined) {
+        config.value.max_movie_size = safeValues.max_movie_size
+      }
+      if (safeValues.max_episode_size !== undefined) {
+        config.value.max_episode_size = safeValues.max_episode_size
+      }
+      
+      // Task configuration
+      if (safeValues.background_tasks_enabled !== undefined) {
+        config.value.background_tasks_enabled = safeValues.background_tasks_enabled
+      }
+      if (safeValues.scheduler_enabled !== undefined) {
+        config.value.scheduler_enabled = safeValues.scheduler_enabled
+      }
+      if (safeValues.token_refresh_interval_minutes !== undefined) {
+        config.value.token_refresh_interval_minutes = safeValues.token_refresh_interval_minutes
+      }
+      if (safeValues.movie_processing_check_interval_minutes !== undefined) {
+        config.value.movie_processing_check_interval_minutes = safeValues.movie_processing_check_interval_minutes
+      }
+      if (safeValues.movie_queue_maxsize !== undefined) {
+        config.value.movie_queue_maxsize = safeValues.movie_queue_maxsize
+      }
+      if (safeValues.tv_queue_maxsize !== undefined) {
+        config.value.tv_queue_maxsize = safeValues.tv_queue_maxsize
+      }
+      
+      // Failed items configuration
+      if (safeValues.enable_failed_item_retry !== undefined) {
+        config.value.enable_failed_item_retry = safeValues.enable_failed_item_retry
+      }
+      if (safeValues.failed_item_retry_interval_minutes !== undefined) {
+        config.value.failed_item_retry_interval_minutes = safeValues.failed_item_retry_interval_minutes
+      }
+      if (safeValues.failed_item_max_retry_attempts !== undefined) {
+        config.value.failed_item_max_retry_attempts = safeValues.failed_item_max_retry_attempts
+      }
+      if (safeValues.failed_item_retry_delay_hours !== undefined) {
+        config.value.failed_item_retry_delay_hours = safeValues.failed_item_retry_delay_hours
+      }
+      if (safeValues.failed_item_retry_backoff_multiplier !== undefined) {
+        config.value.failed_item_retry_backoff_multiplier = safeValues.failed_item_retry_backoff_multiplier
+      }
+      if (safeValues.failed_item_max_retry_delay_hours !== undefined) {
+        config.value.failed_item_max_retry_delay_hours = safeValues.failed_item_max_retry_delay_hours
       }
     }
   } catch (error) {
@@ -1352,8 +1603,9 @@ const completeSetup = async () => {
       // Show success message
       console.log('Setup completed successfully!')
       
-      // Redirect directly to dashboard without showing loading screen
-      navigateTo('/dashboard')
+      // Show backend initializing screen instead of immediately navigating
+      isSaving.value = false
+      showBackendInitializing.value = true
     } else {
       console.error('Setup failed:', response.error)
       alert('Setup failed: ' + (response.error || 'Unknown error'))
@@ -1412,5 +1664,8 @@ const loadExistingConfig = async () => {
   }
 }
 
-// Removed handleBackendReady - setup now redirects directly to dashboard
+const handleBackendReady = () => {
+  // Backend is ready, navigate to dashboard
+  navigateTo('/dashboard')
+}
 </script>

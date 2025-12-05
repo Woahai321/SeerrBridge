@@ -798,8 +798,14 @@ def update_media_processing_status(media_id: int, status: str, processing_stage:
         
         if status == 'completed':
             media.processing_completed_at = datetime.utcnow()
+            # Note: is_in_queue flag is managed by queue processing logic, not here
+            # Queue processing will clear the flag when item is removed from queue
         elif status == 'processing':
             media.processing_started_at = datetime.utcnow()
+        elif status == 'failed':
+            # Note: is_in_queue flag is managed by queue processing logic, not here
+            # Queue processing will clear the flag when item is removed from queue
+            pass
         
         db.commit()
         

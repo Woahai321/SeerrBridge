@@ -9,7 +9,7 @@ from typing import Optional
 import asyncio
 import json
 from seerr.task_config_manager import task_config
-from seerr.background_tasks import refresh_all_scheduled_tasks, refresh_queue_sizes
+from seerr.background_tasks import refresh_all_scheduled_tasks, refresh_queue_sizes, get_queue_status
 from seerr.db_logger import log_info, log_error
 from seerr.env_file_manager import env_file
 import os
@@ -427,6 +427,54 @@ async def restart_service():
         log_error("API Error", f"Error restarting service: {e}", module="api_endpoints", function="restart_service")
         raise HTTPException(status_code=500, detail=str(e))
 
+@app.post("/reload-env")
+async def reload_env():
+    """Reload environment variables from .env file"""
+    try:
+        log_info("API", "🔄 Reload request received - Reloading environment variables from .env file", module="api_endpoints", function="reload_env")
+        
+        # Reload global config variables from .env
+        from seerr.config import load_config
+        log_info("API", "📂 Step 1/4: Reloading global config variables from .env file...", module="api_endpoints", function="reload_env")
+        reload_success = load_config(override=True)
+        
+        if not reload_success:
+            log_error("API Error", "❌ Failed to reload configuration from .env file", module="api_endpoints", function="reload_env")
+            raise HTTPException(status_code=500, detail="Failed to reload configuration from .env file")
+        
+        log_info("API", "✅ Step 1/4: Global config variables reloaded", module="api_endpoints", function="reload_env")
+        
+        # Invalidate task_config cache so it reads fresh from database (which should have .env values)
+        log_info("API", "🔄 Step 2/4: Invalidating task_config cache...", module="api_endpoints", function="reload_env")
+        task_config.invalidate_cache()
+        log_info("API", "✅ Step 2/4: Task config cache invalidated", module="api_endpoints", function="reload_env")
+        
+        # Refresh queue sizes in case they changed
+        log_info("API", "🔄 Step 3/4: Refreshing queue sizes...", module="api_endpoints", function="reload_env")
+        refresh_queue_sizes()
+        log_info("API", "✅ Step 3/4: Queue sizes refreshed", module="api_endpoints", function="reload_env")
+        
+        # Refresh all scheduled tasks to pick up any interval changes
+        log_info("API", "🔄 Step 4/4: Refreshing all scheduled tasks...", module="api_endpoints", function="reload_env")
+        await refresh_all_scheduled_tasks()
+        log_info("API", "✅ Step 4/4: Scheduled tasks refreshed", module="api_endpoints", function="reload_env")
+        
+        log_info("API", "✅ Environment variables reloaded successfully - All steps completed", module="api_endpoints", function="reload_env")
+        
+        return {
+            "success": True,
+            "message": "Environment variables reloaded successfully",
+            "steps_completed": [
+                "Global config variables reloaded",
+                "Task config cache invalidated",
+                "Queue sizes refreshed",
+                "Scheduled tasks refreshed"
+            ]
+        }
+    except Exception as e:
+        log_error("API Error", f"❌ Error reloading environment variables: {e}", module="api_endpoints", function="reload_env")
+        raise HTTPException(status_code=500, detail=str(e))
+
 @app.get("/health")
 async def health_check():
     """Health check endpoint"""
@@ -434,6 +482,19 @@ async def health_check():
         "status": "healthy",
         "service": "SeerrBridge API"
     }
+
+@app.get("/queue-status")
+async def queue_status():
+    """Get current queue status from in-memory queues"""
+    try:
+        queue_info = get_queue_status()
+        return {
+            "success": True,
+            "data": queue_info
+        }
+    except Exception as e:
+        log_error("API Error", f"Error getting queue status: {e}", module="api_endpoints", function="queue_status")
+        raise HTTPException(status_code=500, detail=str(e))
 
 class TraktListFetchRequest(BaseModel):
     listId: str

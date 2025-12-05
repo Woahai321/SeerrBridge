@@ -18,13 +18,23 @@ class FailedItemManager:
     """Manages retry logic for failed media items"""
     
     def __init__(self):
-        self.max_retry_attempts = 3
-        self.retry_delay_hours = 2  # Wait 2 hours before first retry
-        self.retry_backoff_multiplier = 2  # Double the delay each retry
-        self.max_retry_delay_hours = 24  # Maximum 24 hours between retries
+        # Load config values with defaults
+        self.max_retry_attempts = task_config.get_config('failed_item_max_retry_attempts', 3)
+        self.retry_delay_hours = task_config.get_config('failed_item_retry_delay_hours', 2)  # Wait 2 hours before first retry
+        self.retry_backoff_multiplier = task_config.get_config('failed_item_retry_backoff_multiplier', 2)  # Double the delay each retry
+        self.max_retry_delay_hours = task_config.get_config('failed_item_max_retry_delay_hours', 24)  # Maximum 24 hours between retries
+    
+    def _refresh_config(self):
+        """Refresh config values from task_config (call this periodically or when config changes)"""
+        self.max_retry_attempts = task_config.get_config('failed_item_max_retry_attempts', 3)
+        self.retry_delay_hours = task_config.get_config('failed_item_retry_delay_hours', 2)
+        self.retry_backoff_multiplier = task_config.get_config('failed_item_retry_backoff_multiplier', 2)
+        self.max_retry_delay_hours = task_config.get_config('failed_item_max_retry_delay_hours', 24)
     
     def get_failed_movies(self, limit: int = 50) -> List[UnifiedMedia]:
         """Get failed movies that are eligible for retry"""
+        # Refresh config to get latest values
+        self._refresh_config()
         db = get_db()
         try:
             # Get movies that have failed and haven't exceeded retry limits
@@ -51,6 +61,8 @@ class FailedItemManager:
     
     def get_failed_tv_shows(self, limit: int = 50) -> List[UnifiedMedia]:
         """Get failed TV shows that are eligible for retry"""
+        # Refresh config to get latest values
+        self._refresh_config()
         db = get_db()
         try:
             # Get TV shows that have failed and haven't exceeded retry limits

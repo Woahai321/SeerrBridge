@@ -48,18 +48,23 @@ export class EnvFileManager {
         const key = trimmed.substring(0, equalIndex).trim()
         let value = trimmed.substring(equalIndex + 1).trim()
 
-        // Remove quotes if present and unescape
-        if ((value.startsWith('"') && value.endsWith('"')) || 
-            (value.startsWith("'") && value.endsWith("'"))) {
+        // Handle empty quoted strings (KEY="")
+        if (value === '""' || value === "''") {
+          env[key] = ''
+        } else if ((value.startsWith('"') && value.endsWith('"')) || 
+                   (value.startsWith("'") && value.endsWith("'"))) {
+          // Remove quotes and unescape
           value = value.slice(1, -1)
           // Unescape in correct order: first handle \\, then \"
           // This prevents double-unescaping
           value = value.replace(/\\\\/g, '\u0000TEMP_BACKSLASH\u0000')  // Temporarily replace \\ with placeholder
                       .replace(/\\"/g, '"')                              // Unescape quotes
                       .replace(/\u0000TEMP_BACKSLASH\u0000/g, '\\')     // Restore backslashes
+          env[key] = value
+        } else {
+          // Unquoted value (including empty string without quotes)
+          env[key] = value
         }
-
-        env[key] = value
       }
     } catch (error) {
       console.error('Error reading .env file:', error)
@@ -85,23 +90,43 @@ export class EnvFileManager {
     for (const key of sortedKeys) {
       const value = env[key]
       
-      // Skip null/undefined values
+      // Skip null/undefined values (but allow empty strings)
       if (value === null || value === undefined) {
         continue
       }
 
-      // Convert value to string
+      // Convert value to string (empty strings are valid and should be written)
       let valueStr = String(value)
       
-      // Check if value is a JSON object (starts with { and ends with })
+      // Check if value is a valid JSON object string (starts with { and ends with })
       const isJsonObject = valueStr.trim().startsWith('{') && valueStr.trim().endsWith('}')
       
-      // Always wrap JSON objects and values with special characters in quotes
-      if (isJsonObject || valueStr.includes(' ') || valueStr.includes('=') || valueStr.includes('#')) {
-        // For JSON objects, we need to escape quotes and backslashes for .env file format
-        // But we need to be careful: if it's already escaped, don't double-escape
-        // Escape: " becomes \", \ becomes \\
-        // Do this carefully to avoid double-escaping
+      // Check if it's already a valid JSON string (can be parsed)
+      let isValidJson = false
+      if (isJsonObject) {
+        try {
+          JSON.parse(valueStr)
+          isValidJson = true
+        } catch {
+          // Not valid JSON, treat as regular string
+        }
+      }
+      
+      // Handle different value types
+      if (valueStr === '') {
+        // Empty string should be written as KEY=""
+        valueStr = '""'
+      } else if (isValidJson) {
+        // For valid JSON strings, ensure it's on a single line and escape for .env format
+        // Remove any existing line breaks in the JSON string
+        valueStr = valueStr.replace(/\n/g, '').replace(/\r/g, '')
+        // Escape backslashes and quotes for .env file format
+        valueStr = valueStr
+          .replace(/\\/g, '\\\\')  // Escape backslashes first (if any)
+          .replace(/"/g, '\\"')    // Escape quotes
+        valueStr = `"${valueStr}"`  // Wrap in quotes for .env file
+      } else if (isJsonObject || valueStr.includes(' ') || valueStr.includes('=') || valueStr.includes('#')) {
+        // For non-JSON strings with special characters, escape quotes and backslashes
         valueStr = valueStr
           .replace(/\\/g, '\\\\')  // Escape backslashes first
           .replace(/"/g, '\\"')    // Then escape quotes

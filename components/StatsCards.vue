@@ -3,7 +3,8 @@
     <Card 
       v-for="(stat, index) in stats" 
       :key="stat.title"
-      class="relative overflow-hidden group hover:shadow-lg transition-all duration-300 hover:-translate-y-1"
+      @click="handleCardClick(stat)"
+      class="relative overflow-hidden group hover:shadow-lg transition-all duration-300 hover:-translate-y-1 cursor-pointer"
       :style="{ animationDelay: `${index * 100}ms` }"
     >
       <!-- Animated gradient border on hover -->
@@ -66,6 +67,8 @@ import { useProcessingStatus } from '~/composables/useProcessingStatus'
 import Card from '~/components/ui/Card.vue'
 import AnimatedNumber from '~/components/AnimatedNumber.vue'
 
+const router = useRouter()
+
 interface StatCard {
   title: string
   value: string | number
@@ -77,6 +80,18 @@ interface StatCard {
   bgColor: string
   iconColor: string
   gradientColors: string
+  filterStatus?: string
+}
+
+const handleCardClick = (stat: StatCard) => {
+  if (stat.filterStatus !== undefined) {
+    router.push({
+      path: '/processed-media',
+      query: { status: stat.filterStatus }
+    })
+  } else {
+    router.push('/processed-media')
+  }
 }
 
 const { logsData, pending, error } = useDashboardData()
@@ -148,7 +163,8 @@ const stats = computed<StatCard[]>(() => {
       icon: 'lucide:film',
       bgColor: 'bg-primary/10',
       iconColor: 'text-primary',
-      gradientColors: 'from-primary via-primary/80 to-accent'
+      gradientColors: 'from-primary via-primary/80 to-accent',
+      filterStatus: undefined
     },
     {
       title: 'Successfully Completed',
@@ -159,7 +175,8 @@ const stats = computed<StatCard[]>(() => {
       icon: 'lucide:check-circle-2',
       bgColor: 'bg-success/10',
       iconColor: 'text-success',
-      gradientColors: 'from-success via-emerald-500 to-green-500'
+      gradientColors: 'from-success via-emerald-500 to-green-500',
+      filterStatus: 'completed'
     },
     {
       title: 'Currently Processing',
@@ -170,7 +187,8 @@ const stats = computed<StatCard[]>(() => {
       icon: 'lucide:loader-2',
       bgColor: 'bg-info/10',
       iconColor: 'text-info',
-      gradientColors: 'from-info via-blue-500 to-cyan-500'
+      gradientColors: 'from-info via-blue-500 to-cyan-500',
+      filterStatus: 'processing'
     },
     {
       title: 'Failed Items',
@@ -181,7 +199,8 @@ const stats = computed<StatCard[]>(() => {
       icon: 'lucide:alert-circle',
       bgColor: 'bg-destructive/10',
       iconColor: 'text-destructive',
-      gradientColors: 'from-destructive via-red-500 to-rose-500'
+      gradientColors: 'from-destructive via-red-500 to-rose-500',
+      filterStatus: 'failed'
     }
   ]
 })
