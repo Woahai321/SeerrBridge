@@ -2,6 +2,11 @@ import { readFile } from 'fs/promises'
 import { join } from 'path'
 import { existsSync } from 'fs'
 
+/**
+ * @deprecated This endpoint is deprecated. Collections now use TMDB images via Overseerr.
+ * Kept for backward compatibility with movies that still have local_images.
+ * The data/images/movies/ folder can be removed once all movies have TMDB IDs.
+ */
 export default defineEventHandler(async (event) => {
   try {
     const query = getQuery(event)

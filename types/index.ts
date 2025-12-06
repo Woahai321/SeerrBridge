@@ -128,3 +128,46 @@ export interface Settings {
     retentionDays: number
   }
 }
+
+// Seerr Collections Types
+export interface SeerrMovie {
+  id: number // TMDB ID
+  title: string
+  original_title: string
+  rating: number
+  voteCount: number
+  releaseDate: string
+  poster_path: string | null
+  backdrop_path: string | null
+  overview?: string
+  tagline?: string
+  runtime?: number
+  genres?: string[]
+  imdb_id?: string
+  popularity?: number
+  budget?: number
+  revenue?: number
+  status?: string
+  original_language?: string
+  production_countries?: string[]
+  spoken_languages?: string[]
+}
+
+export interface SeerrCollection {
+  franchise: string // Maps to franchise_name
+  popularityScore: number
+  averageRating: number
+  totalMovies: number
+  totalVotes: number
+  highestRatedMovie: {
+    id: number
+    title: string
+    rating: number
+  }
+  lowestRatedMovie: {
+    id: number
+    title: string
+    rating: number
+  }
+  movieRatings: SeerrMovie[]
+}

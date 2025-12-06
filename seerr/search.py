@@ -3633,10 +3633,48 @@ def search_on_debrid(imdb_id, movie_title, media_type, driver, extra_data=None, 
                             return "cancelled"
                         
                         try:
-                            # Extract the title from the result box
-                            title_element = result_box.find_element(By.XPATH, ".//h2")
-                            title_text = title_element.text.strip()
-                            logger.info(f"Box {i} title: {title_text}")
+                            # Extract the title from the result box with stale element handling
+                            title_text = None
+                            max_recovery_attempts = 3
+                            recovery_successful = False
+                            
+                            for recovery_attempt in range(max_recovery_attempts):
+                                try:
+                                    title_element = result_box.find_element(By.XPATH, ".//h2")
+                                    title_text = title_element.text.strip()
+                                    logger.info(f"Box {i} title: {title_text}")
+                                    recovery_successful = True
+                                    break
+                                except StaleElementReferenceException:
+                                    if recovery_attempt < max_recovery_attempts - 1:
+                                        logger.warning(f"Stale element reference for box {i} title (attempt {recovery_attempt + 1}). Re-locating result boxes...")
+                                        try:
+                                            # Re-locate result boxes and try again
+                                            result_boxes = WebDriverWait(driver, 3).until(
+                                                EC.presence_of_all_elements_located((By.XPATH, "//div[contains(@class, 'border-black')]"))
+                                            )
+                                            if i <= len(result_boxes):
+                                                result_box = result_boxes[i-1]
+                                                time.sleep(0.5)  # Brief wait for DOM to stabilize
+                                                continue
+                                            else:
+                                                logger.warning(f"Could not re-locate box {i} (box index out of range). Skipping.")
+                                                break
+                                        except Exception as recovery_error:
+                                            logger.warning(f"Failed to re-locate result boxes (attempt {recovery_attempt + 1}): {str(recovery_error)}")
+                                            if recovery_attempt < max_recovery_attempts - 1:
+                                                time.sleep(1)  # Wait before retry
+                                                continue
+                                            else:
+                                                break
+                                    else:
+                                        # Last attempt failed
+                                        logger.warning(f"Stale element reference for box {i} title after {max_recovery_attempts} attempts. Could not recover.")
+                                        break
+                            
+                            if not recovery_successful or title_text is None:
+                                logger.warning(f"Could not extract title from box {i} after recovery attempts. Continuing to next box.")
+                                continue
 
                             # Check if the result box contains "with extras" and skip if it does
                             try:
@@ -3814,8 +3852,12 @@ def search_on_debrid(imdb_id, movie_title, media_type, driver, extra_data=None, 
                                     # Only continue to next box if we've confirmed the status
                                     if rd_status_confirmed:
                                         continue
-                            except StaleElementReferenceException:
-                                logger.warning(f"Stale element reference in prioritize_buttons_in_box for box {i}. Continuing to next box.")
+                            except StaleElementReferenceException as e:
+                                # Suppress verbose stack trace, just log the message
+                                error_msg = str(e).split('\n')[0] if '\n' in str(e) else str(e)
+                                if 'Message:' in error_msg:
+                                    error_msg = error_msg.split('Message:')[-1].strip()
+                                logger.warning(f"Stale element reference in prioritize_buttons_in_box for box {i}: {error_msg}. Continuing to next box.")
                                 continue
 
                             else:
@@ -3826,7 +3868,59 @@ def search_on_debrid(imdb_id, movie_title, media_type, driver, extra_data=None, 
                         except TimeoutException as e:
                             logger.warning(f"Timeout when processing box {i}: {e}")
                         except StaleElementReferenceException as e:
-                            logger.warning(f"Stale element reference when processing box {i}: {e}. Continuing to next box.")
+                            # Attempt to recover by re-locating the box before giving up
+                            # Extract just the error message without stack trace
+                            error_msg = str(e).split('\n')[0] if '\n' in str(e) else str(e)
+                            # Remove common prefixes to make message cleaner
+                            if 'Message:' in error_msg:
+                                error_msg = error_msg.split('Message:')[-1].strip()
+                            logger.warning(f"Stale element reference when processing box {i}: {error_msg}. Attempting recovery...")
+                            
+                            max_recovery_attempts = 2
+                            recovery_successful = False
+                            
+                            for recovery_attempt in range(max_recovery_attempts):
+                                try:
+                                    # Re-locate result boxes
+                                    result_boxes = WebDriverWait(driver, 3).until(
+                                        EC.presence_of_all_elements_located((By.XPATH, "//div[contains(@class, 'border-black')]"))
+                                    )
+                                    
+                                    if i <= len(result_boxes):
+                                        result_box = result_boxes[i-1]
+                                        time.sleep(0.5)  # Brief wait for DOM to stabilize
+                                        
+                                        # Try to extract title to verify the box is accessible
+                                        try:
+                                            title_element = result_box.find_element(By.XPATH, ".//h2")
+                                            title_text = title_element.text.strip()
+                                            logger.info(f"Successfully recovered box {i}. Title: {title_text}. Box is accessible but processing will continue to next box.")
+                                            recovery_successful = True
+                                            break
+                                        except StaleElementReferenceException:
+                                            if recovery_attempt < max_recovery_attempts - 1:
+                                                logger.warning(f"Box {i} still stale after re-location (attempt {recovery_attempt + 1}). Retrying...")
+                                                time.sleep(1)
+                                                continue
+                                            else:
+                                                logger.warning(f"Could not recover box {i} after {max_recovery_attempts} attempts.")
+                                                break
+                                    else:
+                                        logger.warning(f"Box {i} index out of range after re-location. Available boxes: {len(result_boxes)}")
+                                        break
+                                        
+                                except (TimeoutException, Exception) as recovery_error:
+                                    recovery_error_msg = str(recovery_error).split('\n')[0] if '\n' in str(recovery_error) else str(recovery_error)
+                                    if recovery_attempt < max_recovery_attempts - 1:
+                                        logger.warning(f"Recovery attempt {recovery_attempt + 1} failed: {recovery_error_msg}. Retrying...")
+                                        time.sleep(1)
+                                        continue
+                                    else:
+                                        logger.warning(f"Could not recover box {i} after {max_recovery_attempts} attempts: {recovery_error_msg}")
+                                        break
+                            
+                            if not recovery_successful:
+                                logger.warning(f"Could not recover box {i}. Continuing to next box.")
                             continue
                         except Exception as e:
                             logger.error(f"Unexpected error when processing box {i}: {e}. Continuing to next box.")

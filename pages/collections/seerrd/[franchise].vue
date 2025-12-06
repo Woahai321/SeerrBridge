@@ -72,17 +72,6 @@
                 {{ getRequestableCountText }}
               </span>
             </Button>
-            
-            <a
-              v-if="collection.franchise_url"
-              :href="collection.franchise_url"
-              target="_blank"
-              rel="noopener noreferrer"
-              class="inline-flex items-center justify-center gap-1.5 sm:gap-2 text-xs sm:text-sm text-primary hover:underline px-3 py-2 sm:py-0"
-            >
-              <AppIcon icon="lucide:external-link" size="12" class="sm:w-3.5 sm:h-3.5" />
-              View on Source
-            </a>
           </div>
         </div>
       </div>
@@ -127,7 +116,7 @@
     <div v-else-if="collection && collection.movies.length > 0" class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 2xl:grid-cols-7 gap-2 sm:gap-3">
       <div
         v-for="(movie, index) in collection.movies"
-        :key="`${movie.title}-${movie.year}-${index}`"
+        :key="`${movie.id}-${index}`"
         :style="{ animationDelay: `${index * 50}ms` }"
         @click="openMovieModal(movie)"
         class="group relative glass-card-enhanced rounded-2xl overflow-hidden cursor-pointer transition-all duration-500 animate-fade-in-up will-change-transform h-full flex flex-col"
@@ -140,8 +129,8 @@
         <!-- Movie Poster -->
         <div class="relative flex-1 bg-gradient-to-br from-muted via-muted/80 to-muted/60 overflow-hidden rounded-t-2xl">
           <img
-            v-if="getPosterUrl(movie)"
-            :src="getPosterUrl(movie)"
+            v-if="getMoviePosterUrl(movie)"
+            :src="getMoviePosterUrl(movie)"
             :alt="movie.title"
             class="w-full h-full object-cover transition-all duration-700 group-hover:scale-110 group-hover:brightness-110"
             @error="handleImageError"
@@ -161,15 +150,15 @@
           <!-- Year Badge -->
           <div class="absolute top-3 left-3 z-20">
             <div class="bg-black/60 backdrop-blur-sm text-white px-2 py-1 rounded-md text-[10px] sm:text-xs font-semibold">
-              {{ movie.year }}
+              {{ getMovieYear(movie) }}
             </div>
           </div>
           
           <!-- Rating Badge -->
-          <div v-if="movie.trakt?.rating" class="absolute top-3 right-3 z-20">
+          <div v-if="movie.rating" class="absolute top-3 right-3 z-20">
             <div class="flex items-center gap-1 text-[10px] sm:text-xs bg-amber-500/20 px-2 py-0.5 rounded-full border border-amber-500/30 backdrop-blur-sm">
               <AppIcon icon="lucide:star" size="10" class="sm:w-3 sm:h-3 text-amber-400 fill-amber-400" />
-              <span class="font-bold text-amber-400">{{ movie.trakt.rating.toFixed(1) }}</span>
+              <span class="font-bold text-amber-400">{{ movie.rating.toFixed(1) }}</span>
             </div>
           </div>
           
@@ -179,8 +168,8 @@
               <h3 class="text-white font-bold text-xs sm:text-sm mb-1 line-clamp-2">
                 {{ movie.title }}
               </h3>
-              <p v-if="movie.trakt?.overview" class="text-white/90 text-[10px] sm:text-xs line-clamp-2 mb-1.5 sm:mb-2">
-                {{ movie.trakt.overview }}
+              <p v-if="movie.overview" class="text-white/90 text-[10px] sm:text-xs line-clamp-2 mb-1.5 sm:mb-2">
+                {{ movie.overview }}
               </p>
               <!-- Availability Badge -->
               <div v-if="isMovieAvailableInOverseerr(movie)" class="mb-1.5 sm:mb-2">
@@ -280,11 +269,11 @@
           <!-- Year and Runtime Row -->
           <div class="flex items-center justify-between gap-2">
             <p class="text-[10px] sm:text-xs text-muted-foreground font-medium">
-              {{ movie.year }}
+              {{ getMovieYear(movie) }}
             </p>
-            <span v-if="movie.trakt?.runtime" class="flex items-center gap-1 text-[10px] sm:text-xs text-muted-foreground">
+            <span v-if="movie.runtime" class="flex items-center gap-1 text-[10px] sm:text-xs text-muted-foreground">
               <AppIcon icon="lucide:clock" size="10" class="sm:w-3 sm:h-3" />
-              {{ movie.trakt.runtime }}m
+              {{ movie.runtime }}m
             </span>
           </div>
         </div>
@@ -358,44 +347,18 @@
 import Button from '~/components/ui/Button.vue'
 import Input from '~/components/ui/Input.vue'
 import MovieDetailsModal from '~/components/MovieDetailsModal.vue'
-
-interface Movie {
-  title: string
-  title_original: string
-  year: number
-  release_date?: string
-  local_images?: {
-    poster?: string
-    fanart?: string
-    logo?: string
-    clearart?: string
-    banner?: string
-  }
-  trakt?: {
-    trakt_id: number
-    title: string
-    year: number
-    ids?: {
-      trakt?: number
-      slug?: string
-      imdb?: string
-      tmdb?: number
-    }
-    rating?: number
-    votes?: number
-    genres?: string[]
-    runtime?: number
-    overview?: string
-  }
-}
+import type { SeerrMovie, SeerrCollection } from '~/types'
 
 interface Collection {
   franchise_name: string
   franchise_url?: string
-  movies: Movie[]
+  movies: SeerrMovie[]
   total_movies: number
   years: number[]
   genres: string[]
+  popularityScore?: number
+  averageRating?: number
+  totalVotes?: number
 }
 
 interface PaginationInfo {
@@ -409,7 +372,7 @@ interface PaginationInfo {
 
 const route = useRoute()
 const router = useRouter()
-const { getCollection, getAllMoviesInCollection, getPosterUrl } = useCollections()
+const { getCollection, getAllMoviesInCollection, getSeerrPosterUrl } = useSeerrCollections()
 const { toast } = useToast()
 
 const collection = ref<Collection | null>(null)
@@ -419,7 +382,7 @@ const currentPage = ref(1)
 const itemsPerPage = ref(30)
 const searchQuery = ref('')
 const showMovieModal = ref(false)
-const selectedMovie = ref<Movie | null>(null)
+const selectedMovie = ref<SeerrMovie | null>(null)
 
 // Track movies in database and requested movies
 const moviesInDatabase = ref<Set<string>>(new Set())
@@ -430,7 +393,6 @@ const checkingMoviesInDatabase = ref(false)
 
 // Track Overseerr availability status
 const moviesAvailableInOverseerr = ref<Set<string>>(new Set())
-// Track movies that are requested (status 2 or 3) vs available (status 1 or 5)
 const moviesRequestedInOverseerr = ref<Set<string>>(new Set())
 const checkingOverseerrStatus = ref(false)
 
@@ -446,45 +408,19 @@ const franchiseName = computed(() => {
   return decodeURIComponent((route.params.franchise as string) || '')
 })
 
-// Calculate how many movies can actually be requested
-const calculateRequestableCount = async () => {
-  if (!collection.value || calculatingRequestableCount.value) return
-  
-  calculatingRequestableCount.value = true
-  
-  try {
-    // Fetch all movies in the collection
-    const allMovies = await getAllMoviesInCollection(collection.value.franchise_name)
-    
-    if (!allMovies || allMovies.length === 0) {
-      requestableMovieCount.value = 0
-      return
-    }
-    
-    // Always check Overseerr status for ALL movies in the collection
-    // (The Sets might only contain paginated movies, so we need to check everything)
-    // Force a full check even if one is in progress
-    if (allMovies.some(m => m.trakt?.ids?.tmdb)) {
-      await checkOverseerrStatus(allMovies, true)
-    }
-    
-    // Filter movies that can be requested
-    const count = allMovies.filter(movie => {
-      if (!movie.trakt?.ids?.tmdb) return false
-      const movieId = getMovieId(movie)
-      // Exclude if in database, available, or already requested in Overseerr
-      return !moviesInDatabase.value.has(movieId) 
-        && !moviesAvailableInOverseerr.value.has(movieId)
-        && !moviesRequestedInOverseerr.value.has(movieId)
-    }).length
-    
-    requestableMovieCount.value = count
-  } catch (error) {
-    console.error('Error calculating requestable count:', error)
-    requestableMovieCount.value = null
-  } finally {
-    calculatingRequestableCount.value = false
+const getMovieYear = (movie: SeerrMovie): number => {
+  if (movie.releaseDate) {
+    return new Date(movie.releaseDate).getFullYear()
   }
+  return 0
+}
+
+const getMovieId = (movie: SeerrMovie): string => {
+  return `tmdb_${movie.id}`
+}
+
+const getMoviePosterUrl = (movie: SeerrMovie): string | null => {
+  return getSeerrPosterUrl(movie)
 }
 
 const visiblePages = computed(() => {
@@ -494,11 +430,9 @@ const visiblePages = computed(() => {
   const current = pagination.value.page
   const pages: number[] = []
   
-  // Show max 7 pages around current page
   let start = Math.max(1, current - 3)
   let end = Math.min(total, current + 3)
   
-  // Adjust if near boundaries
   if (end - start < 6) {
     if (start === 1) {
       end = Math.min(total, 7)
@@ -519,8 +453,9 @@ const handleImageError = (event: Event) => {
   img.style.display = 'none'
 }
 
-const openMovieModal = (movie: Movie) => {
-  selectedMovie.value = movie
+const openMovieModal = (movie: SeerrMovie) => {
+  // Convert SeerrMovie to format expected by MovieDetailsModal
+  selectedMovie.value = movie as any
   showMovieModal.value = true
 }
 
@@ -529,34 +464,21 @@ const closeMovieModal = () => {
   selectedMovie.value = null
 }
 
-// Get unique ID for movie (using TMDB ID or IMDB ID)
-const getMovieId = (movie: Movie): string => {
-  if (movie.trakt?.ids?.tmdb) {
-    return `tmdb_${movie.trakt.ids.tmdb}`
-  }
-  if (movie.trakt?.ids?.imdb) {
-    return `imdb_${movie.trakt.ids.imdb}`
-  }
-  return `${movie.title}-${movie.year}`
-}
-
-// Check if movie is in database
-const checkMoviesInDatabase = async (movies: Movie[]) => {
+const checkMoviesInDatabase = async (movies: SeerrMovie[]) => {
   if (checkingMoviesInDatabase.value) return
   
   checkingMoviesInDatabase.value = true
   
   try {
-    // Check each movie in parallel
     const checks = movies
-      .filter(movie => movie.trakt?.ids?.tmdb || movie.trakt?.ids?.imdb)
+      .filter(movie => movie.id || movie.imdb_id)
       .map(async (movie) => {
         try {
           const params = new URLSearchParams()
-          if (movie.trakt?.ids?.imdb) {
-            params.append('imdb_id', movie.trakt.ids.imdb)
-          } else if (movie.trakt?.ids?.tmdb) {
-            params.append('tmdb_id', String(movie.trakt.ids.tmdb))
+          if (movie.imdb_id) {
+            params.append('imdb_id', movie.imdb_id)
+          } else if (movie.id) {
+            params.append('tmdb_id', String(movie.id))
           } else {
             return
           }
@@ -587,10 +509,8 @@ const checkMoviesInDatabase = async (movies: Movie[]) => {
   }
 }
 
-// Check Overseerr availability status for movies
-const checkOverseerrStatus = async (movies: Movie[], force: boolean = false) => {
+const checkOverseerrStatus = async (movies: SeerrMovie[], force: boolean = false) => {
   if (!force && checkingOverseerrStatus.value) {
-    // Wait for current check to complete
     while (checkingOverseerrStatus.value) {
       await new Promise(resolve => setTimeout(resolve, 100))
     }
@@ -600,10 +520,8 @@ const checkOverseerrStatus = async (movies: Movie[], force: boolean = false) => 
   checkingOverseerrStatus.value = true
   
   try {
-    // Check each movie in batches to avoid overwhelming the system
-    const moviesToCheck = movies.filter(movie => movie.trakt?.ids?.tmdb)
+    const moviesToCheck = movies.filter(movie => movie.id)
     
-    // Process in batches of 5
     const BATCH_SIZE = 5
     for (let i = 0; i < moviesToCheck.length; i += BATCH_SIZE) {
       const batch = moviesToCheck.slice(i, i + BATCH_SIZE)
@@ -617,31 +535,27 @@ const checkOverseerrStatus = async (movies: Movie[], force: boolean = false) => 
               requested?: boolean
             }
             error?: string
-          }>(`/api/overseerr-movie-status?tmdb_id=${movie.trakt!.ids!.tmdb}`, {
-            timeout: 10000 // 10 second timeout per request
+          }>(`/api/overseerr-movie-status?tmdb_id=${movie.id}`, {
+            timeout: 10000
           })
           
-          // Mark as available or requested (status 2 or 3 means already requested)
           if (response.success && response.data) {
             const movieId = getMovieId(movie)
             if (response.data.available) {
-              // Status 1 or 5 - fully available
               moviesAvailableInOverseerr.value.add(movieId)
-              moviesRequestedInOverseerr.value.delete(movieId) // Remove if it was previously requested
+              moviesRequestedInOverseerr.value.delete(movieId)
             } else if (response.data.requested) {
-              // Status 2 or 3 - already requested but not fully available
               moviesRequestedInOverseerr.value.add(movieId)
-              moviesAvailableInOverseerr.value.delete(movieId) // Don't mark as available
+              moviesAvailableInOverseerr.value.delete(movieId)
             }
           }
         } catch (error) {
-          // Silently handle errors - treat as not available
+          // Silently handle errors
         }
       })
       
       await Promise.all(batchChecks)
       
-      // Small delay between batches
       if (i + BATCH_SIZE < moviesToCheck.length) {
         await new Promise(resolve => setTimeout(resolve, 100))
       }
@@ -651,28 +565,23 @@ const checkOverseerrStatus = async (movies: Movie[], force: boolean = false) => 
   }
 }
 
-// Check if movie is available in Overseerr (status 1 or 5)
-const isMovieAvailableInOverseerr = (movie: Movie): boolean => {
+const isMovieAvailableInOverseerr = (movie: SeerrMovie): boolean => {
   return moviesAvailableInOverseerr.value.has(getMovieId(movie))
 }
 
-// Check if movie is already requested in Overseerr (status 2 or 3)
-const isMovieRequestedInOverseerr = (movie: Movie): boolean => {
+const isMovieRequestedInOverseerr = (movie: SeerrMovie): boolean => {
   return moviesRequestedInOverseerr.value.has(getMovieId(movie))
 }
 
-// Check if movie is in database
-const isMovieInDatabase = (movie: Movie): boolean => {
+const isMovieInDatabase = (movie: SeerrMovie): boolean => {
   return moviesInDatabase.value.has(getMovieId(movie))
 }
 
-// Check if movie has been requested
-const isMovieRequested = (movie: Movie): boolean => {
+const isMovieRequested = (movie: SeerrMovie): boolean => {
   return requestedMovies.value.has(getMovieId(movie))
 }
 
-// View movie in database
-const viewMovieInDatabase = (movie: Movie) => {
+const viewMovieInDatabase = (movie: SeerrMovie) => {
   const movieId = getMovieId(movie)
   const databaseId = movieDatabaseIds.value.get(movieId)
   if (databaseId) {
@@ -680,9 +589,8 @@ const viewMovieInDatabase = (movie: Movie) => {
   }
 }
 
-// Handle request
-const handleRequest = async (movie: Movie) => {
-  if (!movie.trakt?.ids?.tmdb) {
+const handleRequest = async (movie: SeerrMovie) => {
+  if (!movie.id) {
     toast.error('Movie does not have a TMDB ID', 'Cannot Request')
     return
   }
@@ -694,19 +602,15 @@ const handleRequest = async (movie: Movie) => {
     const response = await $fetch('/api/overseerr-request', {
       method: 'POST',
       body: {
-        mediaId: movie.trakt.ids.tmdb,
+        mediaId: movie.id,
         mediaType: 'movie',
         is4k: false
       }
     })
     
     if (response.success) {
-      // Mark as requested
       requestedMovies.value.add(movieId)
-      
-      // Also mark as in database since it will be added
       moviesInDatabase.value.add(movieId)
-      
       toast.success(
         `"${movie.title}" request submitted successfully`,
         'Request Submitted'
@@ -728,34 +632,40 @@ const handleRequest = async (movie: Movie) => {
   }
 }
 
-// Watch for collection changes to check movies in database and Overseerr status
-watch(() => collection.value?.movies, (movies) => {
-  if (movies && movies.length > 0) {
-    checkMoviesInDatabase(movies)
-    checkOverseerrStatus(movies)
-  }
-}, { immediate: true })
-
-// Watch for collection changes to calculate requestable count
-watch(() => collection.value, async (newCollection) => {
-  if (newCollection) {
-    // Wait a bit for status checks to complete, then calculate count
-    setTimeout(() => {
-      calculateRequestableCount()
-    }, 1000)
-  } else {
+const calculateRequestableCount = async () => {
+  if (!collection.value || calculatingRequestableCount.value) return
+  
+  calculatingRequestableCount.value = true
+  
+  try {
+    const allMovies = await getAllMoviesInCollection(collection.value.franchise_name)
+    
+    if (!allMovies || allMovies.length === 0) {
+      requestableMovieCount.value = 0
+      return
+    }
+    
+    if (allMovies.some(m => m.id)) {
+      await checkOverseerrStatus(allMovies, true)
+    }
+    
+    const count = allMovies.filter(movie => {
+      if (!movie.id) return false
+      const movieId = getMovieId(movie)
+      return !moviesInDatabase.value.has(movieId) 
+        && !moviesAvailableInOverseerr.value.has(movieId)
+        && !moviesRequestedInOverseerr.value.has(movieId)
+    }).length
+    
+    requestableMovieCount.value = count
+  } catch (error) {
+    console.error('Error calculating requestable count:', error)
     requestableMovieCount.value = null
+  } finally {
+    calculatingRequestableCount.value = false
   }
-}, { immediate: true })
+}
 
-// Recalculate when Overseerr status or database status changes
-watch([moviesAvailableInOverseerr, moviesRequestedInOverseerr, moviesInDatabase], () => {
-  if (collection.value) {
-    calculateRequestableCount()
-  }
-})
-
-// Get progress text for collection request
 const getCollectionProgressText = (): string => {
   if (collectionRequestProgress.value) {
     return `Requesting ${collectionRequestProgress.value.current}/${collectionRequestProgress.value.total}`
@@ -763,7 +673,6 @@ const getCollectionProgressText = (): string => {
   return 'Requesting...'
 }
 
-// Get requestable count text
 const getRequestableCountText = computed(() => {
   if (requestableMovieCount.value === null) {
     return calculatingRequestableCount.value ? 'Calculating...' : 'Request Entire Collection'
@@ -774,7 +683,6 @@ const getRequestableCountText = computed(() => {
   return `Request Entire Collection (${requestableMovieCount.value})`
 })
 
-// Request entire collection
 const handleRequestCollection = async () => {
   if (!collection.value || requestingCollection.value) {
     return
@@ -783,7 +691,6 @@ const handleRequestCollection = async () => {
   requestingCollection.value = true
   
   try {
-    // Fetch all movies in the collection
     const allMovies = await getAllMoviesInCollection(collection.value.franchise_name)
     
     if (!allMovies || allMovies.length === 0) {
@@ -792,14 +699,11 @@ const handleRequestCollection = async () => {
       return
     }
     
-    // Check Overseerr status for all movies first
     await checkOverseerrStatus(allMovies)
     
-    // Filter movies that have TMDB IDs and are not already available or requested in Overseerr
     const moviesToRequest = allMovies.filter(movie => {
-      if (!movie.trakt?.ids?.tmdb) return false
+      if (!movie.id) return false
       const movieId = getMovieId(movie)
-      // Exclude if available or already requested
       return !moviesAvailableInOverseerr.value.has(movieId) && !moviesRequestedInOverseerr.value.has(movieId)
     })
     
@@ -809,7 +713,6 @@ const handleRequestCollection = async () => {
       const totalCount = availableCount + requestedCount
       
       if (totalCount > 0) {
-        // Some or all movies are already available or requested
         const message = availableCount > 0 && requestedCount === 0
           ? `All ${totalCount} ${totalCount === 1 ? 'movie is' : 'movies are'} already available in Overseerr`
           : requestedCount > 0 && availableCount === 0
@@ -823,25 +726,21 @@ const handleRequestCollection = async () => {
       return
     }
     
-    // Initialize progress
     collectionRequestProgress.value = { current: 0, total: moviesToRequest.length }
     
     let successCount = 0
     let errorCount = 0
     
-    // Request movies one by one sequentially
     for (let i = 0; i < moviesToRequest.length; i++) {
       const movie = moviesToRequest[i]
       
       try {
-        // Update progress
         collectionRequestProgress.value = { current: i + 1, total: moviesToRequest.length }
         
-        // Make request
         const response = await $fetch('/api/overseerr-request', {
           method: 'POST',
           body: {
-            mediaId: movie.trakt!.ids!.tmdb!,
+            mediaId: movie.id,
             mediaType: 'movie',
             is4k: false
           }
@@ -854,7 +753,6 @@ const handleRequestCollection = async () => {
           console.error(`Failed to request ${movie.title}:`, response.error)
         }
         
-        // Small delay between requests to avoid overwhelming the API
         if (i < moviesToRequest.length - 1) {
           await new Promise(resolve => setTimeout(resolve, 500))
         }
@@ -866,7 +764,6 @@ const handleRequestCollection = async () => {
     
     const skippedCount = allMovies.length - moviesToRequest.length
     
-    // Show completion message
     if (successCount > 0) {
       let message = `Successfully requested ${successCount} ${successCount === 1 ? 'movie' : 'movies'} from "${collection.value.franchise_name}"`
       if (skippedCount > 0) {
@@ -900,20 +797,15 @@ const handleRequestCollection = async () => {
 }
 
 const applySearch = async () => {
-  // Reset to page 1 when searching
   currentPage.value = 1
   
-  // Update URL with search query (don't await - do it in parallel)
   const query: Record<string, string> = {}
   if (searchQuery.value.trim()) {
     query.search = searchQuery.value.trim()
   }
   
-  router.replace({ query }).catch(() => {
-    // Ignore navigation errors
-  })
+  router.replace({ query }).catch(() => {})
   
-  // Immediately fetch with current search value
   await loadCollection()
 }
 
@@ -923,7 +815,6 @@ const clearSearch = async () => {
   searchQuery.value = ''
   currentPage.value = 1
   
-  // Clear search from URL
   const query: Record<string, string> = {}
   await router.replace({ query })
   
@@ -937,7 +828,6 @@ const goToPage = async (page: number) => {
   
   currentPage.value = page
   
-  // Update URL without navigation
   const query: Record<string, string> = { page: String(page) }
   if (searchQuery.value) {
     query.search = searchQuery.value
@@ -954,24 +844,17 @@ const loadCollection = async () => {
   
   loading.value = true
   try {
-    // Use current search query value directly (most up-to-date)
     const searchTerm = searchQuery.value.trim()
-    
-    // Get page from query params or use current
     const pageFromQuery = parseInt(route.query.page as string) || currentPage.value
     currentPage.value = pageFromQuery
-    
-    console.log('Fetching collection with search:', searchTerm, 'page:', currentPage.value)
     
     const data = await getCollection(franchiseName.value, currentPage.value, itemsPerPage.value, searchTerm)
     if (data) {
       collection.value = data.collection
       pagination.value = data.pagination
-      console.log('Collection loaded:', data.collection.movies.length, 'total:', data.pagination.total)
     }
   } catch (error) {
-    console.error('Error loading collection:', error)
-    const toast = useToast()
+    console.error('Error loading Seerr collection:', error)
     toast.add({
       title: 'Error',
       description: 'Failed to load collection',
@@ -982,14 +865,35 @@ const loadCollection = async () => {
   }
 }
 
-// Load collection when route changes
+watch(() => collection.value?.movies, async (movies) => {
+  if (movies && movies.length > 0) {
+    checkMoviesInDatabase(movies)
+    checkOverseerrStatus(movies)
+  }
+}, { immediate: true })
+
+watch(() => collection.value, async (newCollection) => {
+  if (newCollection) {
+    setTimeout(() => {
+      calculateRequestableCount()
+    }, 1000)
+  } else {
+    requestableMovieCount.value = null
+  }
+}, { immediate: true })
+
+watch([moviesAvailableInOverseerr, moviesRequestedInOverseerr, moviesInDatabase], () => {
+  if (collection.value) {
+    calculateRequestableCount()
+  }
+})
+
 watch(() => route.params.franchise, () => {
   currentPage.value = 1
   searchQuery.value = ''
   loadCollection()
 }, { immediate: true })
 
-// Watch for query param changes
 watch(() => route.query.page, (newPage) => {
   if (newPage) {
     const page = parseInt(newPage as string)
@@ -1000,7 +904,6 @@ watch(() => route.query.page, (newPage) => {
   }
 })
 
-// Watch searchQuery for live updates with debounce
 let searchTimeout: NodeJS.Timeout | null = null
 watch(searchQuery, () => {
   if (searchTimeout) {
@@ -1011,7 +914,6 @@ watch(searchQuery, () => {
   }, 300)
 })
 
-// Watch URL query param changes
 watch(() => route.query.search, (newSearch) => {
   const searchVal = (newSearch as string) || ''
   if (searchVal !== searchQuery.value) {
@@ -1019,9 +921,8 @@ watch(() => route.query.search, (newSearch) => {
   }
 })
 
-// Page head
 useHead({
-  title: () => collection.value ? `${collection.value.franchise_name} - Collections` : 'Collection'
+  title: () => collection.value ? `${collection.value.franchise_name} - Seerr Collections` : 'Seerr Collection'
 })
 </script>
 

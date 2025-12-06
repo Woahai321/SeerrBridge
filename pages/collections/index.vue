@@ -12,19 +12,32 @@
         
         <div class="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4">
           <div class="text-xs sm:text-sm text-muted-foreground">
-            <span v-if="pagination" class="block sm:inline">
-              Showing {{ (pagination.page - 1) * pagination.limit + 1 }} - {{ Math.min(pagination.page * pagination.limit, pagination.total) }} of {{ pagination.total }} collections
+            <span v-if="activeTab === 'seerr'">
+              <span v-if="seerrPagination" class="block sm:inline">
+                Showing {{ (seerrPagination.page - 1) * seerrPagination.limit + 1 }} - {{ Math.min(seerrPagination.page * seerrPagination.limit, seerrPagination.total) }} of {{ seerrPagination.total }} collections
+              </span>
+              <span v-else-if="seerrCollections.length > 0" class="block sm:inline">
+                {{ seerrCollections.length }} collections
+              </span>
+              <span v-if="seerrTotalMovies > 0" class="block sm:inline sm:ml-2">
+                • {{ seerrTotalMovies }} movies total
+              </span>
             </span>
-            <span v-else-if="collections.length > 0" class="block sm:inline">
-              {{ collections.length }} collections
-            </span>
-            <span v-if="totalMovies > 0" class="block sm:inline sm:ml-2">
-              • {{ totalMovies }} movies total
+            <span v-else>
+              <span v-if="pagination" class="block sm:inline">
+                Showing {{ (pagination.page - 1) * pagination.limit + 1 }} - {{ Math.min(pagination.page * pagination.limit, pagination.total) }} of {{ pagination.total }} collections
+              </span>
+              <span v-else-if="collections.length > 0" class="block sm:inline">
+                {{ collections.length }} collections
+              </span>
+              <span v-if="totalMovies > 0" class="block sm:inline sm:ml-2">
+                • {{ totalMovies }} movies total
+              </span>
             </span>
           </div>
           <Button 
-            @click="refreshCollections"
-            :disabled="loading"
+            @click="activeTab === 'seerr' ? refreshSeerrCollections() : refreshCollections()"
+            :disabled="activeTab === 'seerr' ? seerrLoading : loading"
             variant="outline"
             size="sm"
             class="w-full sm:w-auto"
@@ -33,11 +46,38 @@
               icon="lucide:refresh-cw" 
               size="16" 
               class="mr-2"
-              :class="{ 'animate-spin': loading }"
+              :class="{ 'animate-spin': activeTab === 'seerr' ? seerrLoading : loading }"
             />
             Refresh
           </Button>
         </div>
+      </div>
+      
+      <!-- Tabs -->
+      <div class="flex items-center gap-1 border-b border-border">
+        <button
+          @click="activeTab = 'seerr'"
+          :class="[
+            'px-4 py-2 text-sm font-medium transition-colors border-b-2 -mb-px',
+            activeTab === 'seerr'
+              ? 'border-primary text-primary'
+              : 'border-transparent text-muted-foreground hover:text-foreground hover:border-muted-foreground'
+          ]"
+        >
+          Seerr Collections
+        </button>
+        <button
+          @click="activeTab = 'other'"
+          :class="[
+            'px-4 py-2 text-sm font-medium transition-colors border-b-2 -mb-px',
+            activeTab === 'other'
+              ? 'border-primary text-primary'
+              : 'border-transparent text-muted-foreground hover:text-foreground hover:border-muted-foreground'
+          ]"
+        >
+          Other Collections
+          <span v-if="activeTab === 'other'" class="ml-1 text-xs text-muted-foreground">(may contain duplicates)</span>
+        </button>
       </div>
       
       <!-- Search Box -->
@@ -64,6 +104,478 @@
       </div>
     </div>
 
+    <!-- Seerr Collections Content -->
+    <template v-if="activeTab === 'seerr'">
+      <!-- Random Collections Badges Section -->
+      <div v-if="seerrRandomCollections.length > 0 && !searchQuery" class="space-y-3 sm:space-y-4">
+        <div class="flex items-center justify-between gap-2 sm:gap-3">
+          <div class="flex items-center gap-2">
+            <AppIcon icon="lucide:shuffle" size="20" class="sm:w-6 sm:h-6 text-primary" />
+            <h2 class="text-xl sm:text-2xl font-bold text-foreground">Discover Collections</h2>
+          </div>
+          <Button
+            @click="loadSeerrRandomCollections"
+            variant="ghost"
+            size="sm"
+            class="text-xs flex-shrink-0"
+            :disabled="loadingSeerrRandomCollections"
+          >
+            <AppIcon 
+              icon="lucide:refresh-cw" 
+              size="14" 
+              class="mr-1"
+              :class="{ 'animate-spin': loadingSeerrRandomCollections }"
+            />
+            <span class="hidden sm:inline">Shuffle</span>
+          </Button>
+        </div>
+        <p class="text-xs sm:text-sm text-muted-foreground mb-3 sm:mb-4">
+          <span class="hidden sm:inline">50 randomly selected collections</span>
+          <span class="sm:hidden">10 randomly selected collections</span>
+          • Click to explore
+        </p>
+        
+        <div class="grid grid-cols-2 sm:flex sm:flex-wrap gap-1.5 sm:gap-2">
+          <Button
+            v-for="collection in displayedSeerrRandomCollections"
+            :key="collection.franchise_name"
+            @click="viewCollection(collection, 'seerr')"
+            variant="outline"
+            size="sm"
+            class="text-xs sm:text-sm font-medium hover:bg-primary hover:text-primary-foreground hover:border-primary transition-colors w-full sm:w-auto justify-start sm:justify-center"
+          >
+            <span class="truncate text-left sm:text-center">{{ collection.franchise_name }}</span>
+            <span v-if="collection.total_movies > 0" class="ml-1 sm:ml-2 text-[10px] sm:text-xs text-muted-foreground flex-shrink-0">
+              ({{ collection.total_movies }})
+            </span>
+          </Button>
+        </div>
+      </div>
+
+      <!-- Loading State -->
+      <div v-if="seerrLoading && seerrCollections.length === 0" class="flex items-center justify-center py-24">
+        <div class="text-center">
+          <AppIcon 
+            icon="lucide:loader-2" 
+            size="48" 
+            class="mx-auto text-primary animate-spin mb-4"
+          />
+          <p class="text-muted-foreground">Loading Seerr collections...</p>
+        </div>
+      </div>
+
+      <!-- Seerr Collections View Toggle -->
+      <div v-if="seerrCollections.length > 0" class="flex items-center justify-between gap-2 sm:gap-3 mb-3 sm:mb-4">
+        <div class="flex items-center gap-2">
+          <AppIcon icon="lucide:folder" size="20" class="sm:w-6 sm:h-6 text-muted-foreground" />
+          <h2 class="text-xl sm:text-2xl font-bold text-foreground">All Seerr Collections</h2>
+        </div>
+        <!-- View Toggle -->
+        <div class="flex items-center gap-1 p-1 bg-muted rounded-lg flex-shrink-0">
+          <button
+            @click="seerrViewMode = 'grid'"
+            :class="[
+              'p-1.5 rounded transition-colors',
+              seerrViewMode === 'grid' 
+                ? 'bg-background text-primary shadow-sm' 
+                : 'text-muted-foreground hover:text-foreground'
+            ]"
+            title="Grid View"
+          >
+            <AppIcon icon="lucide:grid-3x3" size="16" class="sm:w-4.5 sm:h-4.5" />
+          </button>
+          <button
+            @click="seerrViewMode = 'list'"
+            :class="[
+              'p-1.5 rounded transition-colors',
+              seerrViewMode === 'list' 
+                ? 'bg-background text-primary shadow-sm' 
+                : 'text-muted-foreground hover:text-foreground'
+            ]"
+            title="List View"
+          >
+            <AppIcon icon="lucide:list" size="16" class="sm:w-4.5 sm:h-4.5" />
+          </button>
+        </div>
+      </div>
+
+      <!-- Seerr Collections Grid View -->
+      <div v-if="seerrCollections.length > 0 && seerrViewMode === 'grid'" class="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-2 sm:gap-3">
+        <div
+          v-for="(collection, index) in seerrCollections"
+          :key="collection.franchise_name"
+          :style="{ animationDelay: `${index * 50}ms` }"
+          @click="viewCollection(collection, 'seerr')"
+          class="group relative glass-card-enhanced rounded-2xl cursor-pointer transition-all duration-500 animate-fade-in-up will-change-transform h-full flex flex-col overflow-hidden"
+        >
+          <!-- Glow Effect on Hover -->
+          <div class="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none z-0">
+            <div class="absolute inset-0 bg-gradient-to-br from-primary/20 via-primary/10 to-transparent blur-2xl rounded-3xl"></div>
+          </div>
+          
+          <!-- Collection Card with Stacked Posters -->
+          <div class="relative flex-1 aspect-[2/3] bg-gradient-to-br from-muted via-muted/80 to-muted/60 overflow-hidden rounded-t-2xl">
+            <!-- Stacked Poster Cards (up to 3) - Book/Collection Style -->
+            <div class="absolute inset-0 flex items-center justify-center" style="padding: 0.75rem;">
+              <template v-if="hasSeerrAnyPoster(collection)">
+                <template v-for="(movie, index) in getSeerrMoviesWithPosters(collection)" :key="`${movie.id}-${index}`">
+                  <!-- Third Poster (back, if 3 movies) -->
+                  <div
+                    v-if="index === 2"
+                    class="absolute transform"
+                    :style="{
+                      transform: isMobile ? 'translateX(-16px) translateY(-3px) rotate(8deg) scale(0.85)' : 'translateX(-32px) translateY(-6px) rotate(10deg) scale(0.88)',
+                      zIndex: 1,
+                      filter: 'brightness(0.7) contrast(0.95)'
+                    }"
+                  >
+                    <div class="w-32 h-48 sm:w-40 sm:h-60 md:w-56 md:h-80 lg:w-64 lg:h-96 rounded-lg overflow-hidden shadow-[0_20px_60px_-12px_rgba(0,0,0,0.5)] border-2 border-black/20 bg-card">
+                      <img
+                        v-if="getSeerrPosterUrl(movie)"
+                        :src="getSeerrPosterUrl(movie)"
+                        :alt="movie.title"
+                        class="w-full h-full object-cover"
+                        @error="handleImageError"
+                      />
+                    </div>
+                  </div>
+                  
+                  <!-- Second Poster (middle, if 2+ movies) -->
+                  <div
+                    v-if="index === 1"
+                    class="absolute transform"
+                    :style="{
+                      transform: isMobile ? 'translateX(-8px) translateY(-1.5px) rotate(-6deg) scale(0.90)' : 'translateX(-16px) translateY(-3px) rotate(-8deg) scale(0.94)',
+                      zIndex: 2,
+                      filter: 'brightness(0.8) contrast(0.98)'
+                    }"
+                  >
+                    <div class="w-32 h-48 sm:w-40 sm:h-60 md:w-56 md:h-80 lg:w-64 lg:h-96 rounded-lg overflow-hidden shadow-[0_20px_60px_-12px_rgba(0,0,0,0.5)] border-2 border-black/30 bg-card">
+                      <img
+                        v-if="getSeerrPosterUrl(movie)"
+                        :src="getSeerrPosterUrl(movie)"
+                        :alt="movie.title"
+                        class="w-full h-full object-cover"
+                        @error="handleImageError"
+                      />
+                    </div>
+                  </div>
+                  
+                  <!-- First Poster (front, main) -->
+                  <div
+                    v-if="index === 0"
+                    class="absolute transform transition-all duration-300"
+                    :class="!isMobile && 'group-hover:scale-105 group-hover:rotate-0'"
+                    :style="{
+                      transform: isMobile ? 'translateX(0px) translateY(0px) rotate(2deg) scale(1)' : 'translateX(0px) translateY(0px) rotate(3deg) scale(1)',
+                      zIndex: 3
+                    }"
+                  >
+                    <div class="w-32 h-48 sm:w-40 sm:h-60 md:w-56 md:h-80 lg:w-64 lg:h-96 rounded-lg overflow-hidden shadow-[0_25px_70px_-12px_rgba(0,0,0,0.6)] border-2 sm:border-4 border-black/40 bg-card">
+                      <img
+                        v-if="getSeerrPosterUrl(movie)"
+                        :src="getSeerrPosterUrl(movie)"
+                        :alt="movie.title"
+                        class="w-full h-full object-cover"
+                        @error="handleImageError"
+                      />
+                    </div>
+                  </div>
+                </template>
+              </template>
+              
+              <!-- Fallback if no movies with posters -->
+              <div
+                v-else
+                class="flex flex-col items-center justify-center space-y-3 w-full h-full"
+              >
+                <div class="w-20 h-20 rounded-2xl bg-primary/10 flex items-center justify-center">
+                  <AppIcon icon="lucide:folder" size="40" class="text-primary" />
+                </div>
+                <p class="text-sm font-medium text-muted-foreground text-center px-4 line-clamp-2">
+                  {{ collection.franchise_name }}
+                </p>
+              </div>
+            </div>
+            
+            <!-- Movie Count Badge -->
+            <div class="absolute top-1.5 right-1.5 sm:top-3 sm:right-3 z-20">
+              <div class="bg-primary/90 backdrop-blur-sm text-primary-foreground px-2 sm:px-3 py-0.5 sm:py-1 rounded-full text-[10px] sm:text-xs font-semibold shadow-lg">
+                {{ collection.total_movies }}
+              </div>
+            </div>
+            
+            <!-- Collection Info Overlay -->
+            <div class="absolute inset-0 bg-gradient-to-t from-black/80 via-black/40 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex items-end z-10">
+              <div class="p-2 sm:p-3 lg:p-4 w-full">
+                <h3 class="text-white font-bold text-xs sm:text-sm lg:text-lg mb-0.5 sm:mb-1 line-clamp-1">
+                  {{ collection.franchise_name }}
+                </h3>
+                <p class="text-white/80 text-[10px] sm:text-xs lg:text-sm">
+                  {{ collection.total_movies }} {{ collection.total_movies === 1 ? 'movie' : 'movies' }}
+                </p>
+                <div v-if="collection.years.length > 0" class="text-white/70 text-[9px] sm:text-[10px] lg:text-xs mt-0.5 sm:mt-1">
+                  {{ collection.years[0] }} - {{ collection.years[collection.years.length - 1] }}
+                </div>
+              </div>
+            </div>
+          </div>
+          
+          <!-- Card Footer -->
+          <div class="relative p-3 sm:p-4 space-y-2 bg-gradient-to-b from-card/95 via-card/90 to-card backdrop-blur-sm flex-shrink-0 rounded-b-2xl">
+            <h3 class="text-xs sm:text-sm font-bold text-foreground line-clamp-1 transition-all duration-300 group-hover:text-primary">
+              {{ collection.franchise_name }}
+            </h3>
+            <div class="flex items-center justify-between text-[10px] sm:text-xs text-muted-foreground">
+              <span>{{ collection.total_movies }} {{ collection.total_movies === 1 ? 'movie' : 'movies' }}</span>
+              <span v-if="collection.years.length > 0">
+                {{ collection.years[0] }}-{{ collection.years[collection.years.length - 1] }}
+              </span>
+            </div>
+            <!-- Request Entire Collection Button -->
+            <Button
+              @click.stop="handleRequestSeerrCollection(collection)"
+              :disabled="requestingSeerrCollections.has(collection.franchise_name)"
+              size="sm"
+              variant="outline"
+              class="w-full text-xs sm:text-sm mt-2"
+            >
+              <AppIcon 
+                v-if="requestingSeerrCollections.has(collection.franchise_name)"
+                icon="lucide:loader-2" 
+                size="12" 
+                class="sm:w-3.5 sm:h-3.5 mr-1.5 sm:mr-2 animate-spin"
+              />
+              <AppIcon 
+                v-else
+                icon="lucide:plus-circle" 
+                size="12" 
+                class="sm:w-3.5 sm:h-3.5 mr-1.5 sm:mr-2"
+              />
+              <span v-if="requestingSeerrCollections.has(collection.franchise_name)" class="truncate">
+                {{ getSeerrCollectionProgressText(collection.franchise_name) }}
+              </span>
+              <span v-else class="truncate">Request Entire Collection</span>
+            </Button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Seerr Collections List View -->
+      <div v-else-if="seerrCollections.length > 0 && seerrViewMode === 'list'" class="space-y-2 sm:space-y-3 lg:space-y-4">
+        <div
+          v-for="collection in seerrCollections"
+          :key="collection.franchise_name"
+          @click="viewCollection(collection, 'seerr')"
+          class="group relative bg-card rounded-lg sm:rounded-xl lg:rounded-2xl cursor-pointer transition-all duration-300 hover:shadow-lg hover:border-primary border border-border overflow-hidden"
+        >
+          <div class="flex flex-row gap-2 sm:gap-3 lg:gap-4">
+            <!-- Poster Thumbnail -->
+            <div class="flex-shrink-0 w-16 h-24 sm:w-20 sm:h-30 md:w-24 md:h-36 lg:w-28 lg:h-42 bg-gradient-to-br from-muted to-muted/50 rounded-l-lg sm:rounded-l-xl lg:rounded-l-2xl overflow-hidden">
+              <template v-if="hasSeerrAnyPoster(collection)">
+                <img
+                  v-if="getSeerrPosterUrl(getSeerrMoviesWithPosters(collection)[0])"
+                  :src="getSeerrPosterUrl(getSeerrMoviesWithPosters(collection)[0])"
+                  :alt="collection.franchise_name"
+                  class="w-full h-full object-cover"
+                  @error="handleImageError"
+                />
+              </template>
+              <div v-else class="w-full h-full flex items-center justify-center">
+                <div class="w-8 h-8 sm:w-10 sm:h-10 rounded-lg bg-primary/10 flex items-center justify-center">
+                  <AppIcon icon="lucide:folder" size="16" class="sm:w-5 sm:h-5 text-primary" />
+                </div>
+              </div>
+            </div>
+            
+            <!-- Collection Info -->
+            <div class="flex-1 min-w-0 flex flex-col justify-between py-2 sm:py-3 pr-2 sm:pr-3 lg:pr-4 lg:py-4">
+              <div class="min-w-0">
+                <div class="flex items-start justify-between gap-2 mb-1 sm:mb-2">
+                  <h3 class="text-sm sm:text-base lg:text-lg font-semibold text-foreground line-clamp-1 group-hover:text-primary transition-colors flex-1 min-w-0">
+                    {{ collection.franchise_name }}
+                  </h3>
+                  <div class="flex items-center gap-1.5 sm:gap-2 flex-shrink-0">
+                    <div class="bg-primary/90 backdrop-blur-sm text-primary-foreground px-1.5 sm:px-2 py-0.5 rounded-full text-[10px] sm:text-xs font-semibold whitespace-nowrap">
+                      {{ collection.total_movies }} {{ collection.total_movies === 1 ? 'movie' : 'movies' }}
+                    </div>
+                  </div>
+                </div>
+                
+                <div class="flex flex-wrap items-center gap-1.5 sm:gap-2 text-[10px] sm:text-xs text-muted-foreground mb-1.5 sm:mb-2">
+                  <span v-if="collection.years.length > 0" class="flex items-center gap-0.5 sm:gap-1">
+                    <AppIcon icon="lucide:calendar" size="10" class="sm:w-3 sm:h-3" />
+                    {{ collection.years[0] }}-{{ collection.years[collection.years.length - 1] }}
+                  </span>
+                  <span v-if="collection.genres && collection.genres.length > 0" class="flex items-center gap-0.5 sm:gap-1">
+                    <AppIcon icon="lucide:tag" size="10" class="sm:w-3 sm:h-3" />
+                    <span class="line-clamp-1">{{ collection.genres.slice(0, 2).join(', ') }}</span>
+                  </span>
+                </div>
+              </div>
+              
+              <!-- Action Button -->
+              <div class="flex items-center gap-1.5 sm:gap-2">
+                <Button
+                  @click.stop="handleRequestSeerrCollection(collection)"
+                  :disabled="requestingSeerrCollections.has(collection.franchise_name)"
+                  size="sm"
+                  variant="outline"
+                  class="text-[10px] sm:text-xs h-7 sm:h-8 px-2 sm:px-3 flex-1 sm:flex-initial"
+                >
+                  <AppIcon 
+                    v-if="requestingSeerrCollections.has(collection.franchise_name)"
+                    icon="lucide:loader-2" 
+                    size="10" 
+                    class="sm:w-3 sm:h-3 mr-1 sm:mr-1.5 animate-spin"
+                  />
+                  <AppIcon 
+                    v-else
+                    icon="lucide:plus-circle" 
+                    size="10" 
+                    class="sm:w-3 sm:h-3 mr-1 sm:mr-1.5"
+                  />
+                  <span v-if="requestingSeerrCollections.has(collection.franchise_name)" class="truncate text-[10px] sm:text-xs">
+                    {{ getSeerrCollectionProgressText(collection.franchise_name) }}
+                  </span>
+                  <span v-else class="truncate text-[10px] sm:text-xs">Request Collection</span>
+                </Button>
+                <Button
+                  @click.stop="viewCollection(collection, 'seerr')"
+                  size="sm"
+                  variant="ghost"
+                  class="text-[10px] sm:text-xs h-7 sm:h-8 px-2 sm:px-3 flex-shrink-0"
+                >
+                  <AppIcon icon="lucide:arrow-right" size="10" class="sm:w-3 sm:h-3" />
+                </Button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Empty State -->
+      <div v-else-if="seerrCollections.length === 0 && !seerrLoading" class="flex flex-col items-center justify-center py-24 text-center">
+        <div class="w-24 h-24 rounded-full bg-muted flex items-center justify-center mb-6">
+          <AppIcon icon="lucide:folder-x" size="48" class="text-muted-foreground" />
+        </div>
+        <h3 class="text-xl font-semibold text-foreground mb-2">No Seerr collections found</h3>
+        <p class="text-muted-foreground max-w-md">
+          Seerr collections will appear here once you have the seerr-collections.json file.
+        </p>
+      </div>
+
+      <!-- Seerr Pagination Controls -->
+      <div v-if="seerrPagination && seerrPagination.total_pages > 1" class="space-y-3 sm:space-y-4 pt-4 sm:pt-6">
+        <!-- Main Pagination -->
+        <div class="flex flex-wrap items-center justify-center gap-1.5 sm:gap-2">
+          <!-- First Page -->
+          <Button
+            @click="goToSeerrPage(1)"
+            :disabled="seerrPagination.page === 1 || seerrLoading"
+            variant="outline"
+            size="sm"
+            class="gap-1 p-1.5 sm:px-3 sm:py-2"
+          >
+            <AppIcon icon="lucide:chevrons-left" size="14" class="sm:w-4 sm:h-4" />
+            <span class="hidden sm:inline">First</span>
+          </Button>
+          
+          <!-- Previous Page -->
+          <Button
+            @click="goToSeerrPage(seerrPagination.page - 1)"
+            :disabled="!seerrPagination.has_prev || seerrLoading"
+            variant="outline"
+            size="sm"
+            class="gap-1 p-1.5 sm:px-3 sm:py-2"
+          >
+            <AppIcon icon="lucide:chevron-left" size="14" class="sm:w-4 sm:h-4" />
+            <span class="hidden sm:inline">Previous</span>
+          </Button>
+          
+          <!-- Page Numbers -->
+          <div class="flex items-center gap-0.5 sm:gap-1 flex-wrap justify-center">
+            <template v-if="seerrPagination.total_pages <= 20">
+              <Button
+                v-for="pageNum in Array.from({ length: seerrPagination.total_pages }, (_, i) => i + 1)"
+                :key="pageNum"
+                @click="goToSeerrPage(pageNum)"
+                :disabled="seerrLoading"
+                :variant="pageNum === seerrPagination.page ? 'default' : 'outline'"
+                size="sm"
+                class="min-w-[32px] sm:min-w-[40px] p-1.5 sm:px-3 sm:py-2 text-xs sm:text-sm"
+              >
+                {{ pageNum }}
+              </Button>
+            </template>
+            <template v-else>
+              <Button
+                @click="goToSeerrPage(1)"
+                :disabled="seerrLoading"
+                :variant="seerrPagination.page === 1 ? 'default' : 'outline'"
+                size="sm"
+                class="min-w-[32px] sm:min-w-[40px] p-1.5 sm:px-3 sm:py-2 text-xs sm:text-sm"
+              >
+                1
+              </Button>
+              
+              <span v-if="seerrPagination.page > 4" class="px-1 sm:px-2 text-xs sm:text-sm text-muted-foreground">...</span>
+              
+              <Button
+                v-for="pageNum in seerrVisiblePages"
+                :key="pageNum"
+                @click="goToSeerrPage(pageNum)"
+                :disabled="seerrLoading"
+                :variant="pageNum === seerrPagination.page ? 'default' : 'outline'"
+                size="sm"
+                class="min-w-[32px] sm:min-w-[40px] p-1.5 sm:px-3 sm:py-2 text-xs sm:text-sm"
+              >
+                {{ pageNum }}
+              </Button>
+              
+              <span v-if="seerrPagination.page < seerrPagination.total_pages - 3" class="px-1 sm:px-2 text-xs sm:text-sm text-muted-foreground">...</span>
+              
+              <Button
+                @click="goToSeerrPage(seerrPagination.total_pages)"
+                :disabled="seerrLoading"
+                :variant="seerrPagination.page === seerrPagination.total_pages ? 'default' : 'outline'"
+                size="sm"
+                class="min-w-[32px] sm:min-w-[40px] p-1.5 sm:px-3 sm:py-2 text-xs sm:text-sm"
+              >
+                {{ seerrPagination.total_pages }}
+              </Button>
+            </template>
+          </div>
+          
+          <!-- Next Page -->
+          <Button
+            @click="goToSeerrPage(seerrPagination.page + 1)"
+            :disabled="!seerrPagination.has_next || seerrLoading"
+            variant="outline"
+            size="sm"
+            class="gap-1 p-1.5 sm:px-3 sm:py-2"
+          >
+            <span class="hidden sm:inline">Next</span>
+            <AppIcon icon="lucide:chevron-right" size="14" class="sm:w-4 sm:h-4" />
+          </Button>
+          
+          <!-- Last Page -->
+          <Button
+            @click="goToSeerrPage(seerrPagination.total_pages)"
+            :disabled="seerrPagination.page === seerrPagination.total_pages || seerrLoading"
+            variant="outline"
+            size="sm"
+            class="gap-1 p-1.5 sm:px-3 sm:py-2"
+          >
+            <span class="hidden sm:inline">Last</span>
+            <AppIcon icon="lucide:chevrons-right" size="14" class="sm:w-4 sm:h-4" />
+          </Button>
+        </div>
+      </div>
+    </template>
+
+    <!-- Other Collections Content -->
+    <template v-else>
     <!-- Random Collections Badges Section -->
     <div v-if="randomCollections.length > 0 && !searchQuery" class="space-y-3 sm:space-y-4">
       <div class="flex items-center justify-between gap-2 sm:gap-3">
@@ -179,8 +691,8 @@
                   >
                     <div class="w-32 h-48 sm:w-40 sm:h-60 md:w-56 md:h-80 lg:w-64 lg:h-96 rounded-lg overflow-hidden shadow-[0_20px_60px_-12px_rgba(0,0,0,0.5)] border-2 border-black/20 bg-card">
                       <img
-                        v-if="getPosterUrl(movie)"
-                        :src="getPosterUrl(movie)"
+                        v-if="getMoviePosterUrl(movie)"
+                        :src="getMoviePosterUrl(movie)"
                         :alt="movie.title"
                         class="w-full h-full object-cover"
                         @error="handleImageError"
@@ -200,8 +712,8 @@
                   >
                     <div class="w-32 h-48 sm:w-40 sm:h-60 md:w-56 md:h-80 lg:w-64 lg:h-96 rounded-lg overflow-hidden shadow-[0_20px_60px_-12px_rgba(0,0,0,0.5)] border-2 border-black/30 bg-card">
                       <img
-                        v-if="getPosterUrl(movie)"
-                        :src="getPosterUrl(movie)"
+                        v-if="getMoviePosterUrl(movie)"
+                        :src="getMoviePosterUrl(movie)"
                         :alt="movie.title"
                         class="w-full h-full object-cover"
                         @error="handleImageError"
@@ -221,8 +733,8 @@
                   >
                     <div class="w-32 h-48 sm:w-40 sm:h-60 md:w-56 md:h-80 lg:w-64 lg:h-96 rounded-lg overflow-hidden shadow-[0_25px_70px_-12px_rgba(0,0,0,0.6)] border-2 sm:border-4 border-black/40 bg-card">
                       <img
-                        v-if="getPosterUrl(movie)"
-                        :src="getPosterUrl(movie)"
+                        v-if="getMoviePosterUrl(movie)"
+                        :src="getMoviePosterUrl(movie)"
                         :alt="movie.title"
                         class="w-full h-full object-cover"
                         @error="handleImageError"
@@ -337,8 +849,8 @@
             <div class="flex-shrink-0 w-16 h-24 sm:w-20 sm:h-30 md:w-24 md:h-36 lg:w-28 lg:h-42 bg-gradient-to-br from-primary/10 to-primary/5 rounded-l-lg sm:rounded-l-xl lg:rounded-l-2xl overflow-hidden relative">
               <template v-if="hasAnyPoster(collection)">
                 <img
-                  v-if="getPosterUrl(getMoviesWithPosters(collection)[0])"
-                  :src="getPosterUrl(getMoviesWithPosters(collection)[0])"
+                  v-if="getMoviePosterUrl(getMoviesWithPosters(collection)[0])"
+                  :src="getMoviePosterUrl(getMoviesWithPosters(collection)[0])"
                   :alt="collection.franchise_name"
                   class="w-full h-full object-cover"
                   @error="handleImageError"
@@ -730,16 +1242,16 @@
       </div>
     </div>
 
-    <!-- Empty State -->
-    <div v-else-if="collections.length === 0 && !loading" class="flex flex-col items-center justify-center py-24 text-center">
-      <div class="w-24 h-24 rounded-full bg-muted flex items-center justify-center mb-6">
-        <AppIcon icon="lucide:folder-x" size="48" class="text-muted-foreground" />
+      <!-- Empty State -->
+      <div v-else-if="collections.length === 0 && !loading" class="flex flex-col items-center justify-center py-24 text-center">
+        <div class="w-24 h-24 rounded-full bg-muted flex items-center justify-center mb-6">
+          <AppIcon icon="lucide:folder-x" size="48" class="text-muted-foreground" />
+        </div>
+        <h3 class="text-xl font-semibold text-foreground mb-2">No collections found</h3>
+        <p class="text-muted-foreground max-w-md">
+          Collections will appear here once you have movies grouped by franchise in your unified.json file.
+        </p>
       </div>
-      <h3 class="text-xl font-semibold text-foreground mb-2">No collections found</h3>
-      <p class="text-muted-foreground max-w-md">
-        Collections will appear here once you have movies grouped by franchise in your unified.json file.
-      </p>
-    </div>
 
     <!-- Pagination Controls -->
     <div v-if="pagination && pagination.total_pages > 1" class="space-y-3 sm:space-y-4 pt-4 sm:pt-6">
@@ -881,6 +1393,7 @@
         </span>
       </div>
     </div>
+    </template>
   </div>
 </template>
 
@@ -925,10 +1438,14 @@ interface PaginationInfo {
   has_prev: boolean
 }
 
-const { getCollections, getCollection, getBulkCollectionMetadata, getAllMoviesInCollection, getPosterUrl } = useCollections()
+const { getCollections, getCollection, getBulkCollectionMetadata, getAllMoviesInCollection, getPosterUrl, fetchAndCachePosterUrl, posterUrlCache } = useCollections()
+const { getCollections: getSeerrCollections, getCollection: getSeerrCollection, getBulkCollectionMetadata: getBulkSeerrCollectionMetadata, getAllMoviesInCollection: getAllMoviesInSeerrCollection, getSeerrPosterUrl } = useSeerrCollections()
 const router = useRouter()
 const route = useRoute()
 const { toast } = useToast()
+
+// Active tab state
+const activeTab = ref<'seerr' | 'other'>('seerr')
 
 // Hardcoded list of favorite collections for "Vardarr's Choice"
 const VARDARR_CHOICE_FRANCHISES = [
@@ -955,6 +1472,19 @@ const currentPage = ref(1)
 const itemsPerPage = ref(20)
 const searchQuery = ref('')
 
+// Seerr Collections state
+const seerrCollections = ref<any[]>([])
+const seerrRandomCollections = ref<any[]>([])
+const seerrPagination = ref<PaginationInfo | null>(null)
+const seerrTotalMovies = ref(0)
+const seerrLoading = ref(false)
+const loadingSeerrRandomCollections = ref(false)
+const seerrCurrentPage = ref(1)
+const seerrItemsPerPage = ref(20)
+const seerrViewMode = ref<'grid' | 'list'>('grid')
+const requestingSeerrCollections = ref<Set<string>>(new Set())
+const seerrCollectionRequestProgress = ref<Map<string, { current: number, total: number }>>(new Map())
+
 // View mode (grid/list)
 const viewMode = ref<'grid' | 'list'>('grid')
 
@@ -963,11 +1493,18 @@ if (process.client) {
   const savedViewMode = localStorage.getItem('collections-view-mode')
   if (savedViewMode === 'grid' || savedViewMode === 'list') {
     viewMode.value = savedViewMode
+    seerrViewMode.value = savedViewMode
   }
 }
 
 // Save view mode to localStorage
 watch(viewMode, (newMode) => {
+  if (process.client) {
+    localStorage.setItem('collections-view-mode', newMode)
+  }
+})
+
+watch(seerrViewMode, (newMode) => {
   if (process.client) {
     localStorage.setItem('collections-view-mode', newMode)
   }
@@ -991,6 +1528,13 @@ const displayedRandomCollections = computed(() => {
   return randomCollections.value
 })
 
+const displayedSeerrRandomCollections = computed(() => {
+  if (isMobile.value) {
+    return seerrRandomCollections.value.slice(0, 10)
+  }
+  return seerrRandomCollections.value
+})
+
 // Track collections being requested
 const requestingCollections = ref<Set<string>>(new Set())
 const collectionRequestProgress = ref<Map<string, { current: number, total: number }>>(new Map())
@@ -999,14 +1543,65 @@ const collectionRequestProgress = ref<Map<string, { current: number, total: numb
 const collectionRequestableCounts = ref<Map<string, number>>(new Map())
 const calculatingCollectionCounts = ref<Set<string>>(new Set())
 
-const hasAnyPoster = (collection: Collection): boolean => {
-  return collection.movies.some(movie => movie.local_images?.poster)
+// Helper function to get poster URL (reactive to cache updates)
+const getMoviePosterUrl = (movie: Movie): string | null => {
+  return getPosterUrl(movie)
 }
 
+// Check if collection has any movies with posters (TMDB ID or local images)
+const hasAnyPoster = (collection: Collection): boolean => {
+  return collection.movies.some(movie => 
+    movie.trakt?.ids?.tmdb || movie.local_images?.poster
+  )
+}
+
+// Get movies with posters (prefer TMDB, fallback to local)
 const getMoviesWithPosters = (collection: Collection): Movie[] => {
   return collection.movies
-    .filter(movie => movie.local_images?.poster)
+    .filter(movie => movie.trakt?.ids?.tmdb || movie.local_images?.poster)
     .slice(0, 3) // Limit to 3 movies for stacking
+}
+
+// Seerr Collections helper functions
+const hasSeerrAnyPoster = (collection: any): boolean => {
+  return collection.movies && collection.movies.some((movie: any) => movie.poster_path)
+}
+
+const getSeerrMoviesWithPosters = (collection: any): any[] => {
+  if (!collection.movies) return []
+  return collection.movies
+    .filter((movie: any) => movie.poster_path)
+    .slice(0, 3) // Limit to 3 movies for stacking
+}
+
+// Fetch poster URLs for collections when they load
+const fetchCollectionPosterUrls = async (collections: Collection[]) => {
+  const moviesToFetch: Movie[] = []
+  
+  // Collect all movies with TMDB IDs from collections
+  for (const collection of collections) {
+    const moviesWithTmdb = collection.movies
+      .filter(m => m.trakt?.ids?.tmdb)
+      .slice(0, 3) // Only fetch for first 3 movies per collection (for stacked display)
+    moviesToFetch.push(...moviesWithTmdb)
+  }
+  
+  // Fetch poster URLs in batches
+  const BATCH_SIZE = 10
+  for (let i = 0; i < moviesToFetch.length; i += BATCH_SIZE) {
+    const batch = moviesToFetch.slice(i, i + BATCH_SIZE)
+    await Promise.all(
+      batch.map(movie => {
+        if (movie.trakt?.ids?.tmdb) {
+          return fetchAndCachePosterUrl(movie.trakt.ids.tmdb)
+        }
+      })
+    )
+    // Small delay between batches
+    if (i + BATCH_SIZE < moviesToFetch.length) {
+      await new Promise(resolve => setTimeout(resolve, 100))
+    }
+  }
 }
 
 const handleImageError = (event: Event) => {
@@ -1153,6 +1748,11 @@ const refreshCollections = async () => {
       totalMovies.value = data.total_movies
       console.log('Collections loaded:', data.collections.length, 'total:', data.pagination.total)
       
+      // Fetch poster URLs for collections (async, won't block)
+      fetchCollectionPosterUrls(data.collections).catch(err => {
+        console.error('Error fetching poster URLs:', err)
+      })
+      
       // Don't auto-calculate - calculate on-demand when user hovers/interacts
     }
   } catch (error) {
@@ -1168,9 +1768,286 @@ const refreshCollections = async () => {
   }
 }
 
-const viewCollection = (collection: Collection) => {
+// Seerr Collections functions
+const refreshSeerrCollections = async () => {
+  seerrLoading.value = true
+  try {
+    const searchTerm = searchQuery.value.trim()
+    const pageFromQuery = parseInt(route.query.seerrPage as string) || seerrCurrentPage.value
+    seerrCurrentPage.value = pageFromQuery
+    
+    console.log('Fetching Seerr collections with search:', searchTerm, 'page:', seerrCurrentPage.value)
+    
+    const data = await getSeerrCollections(seerrCurrentPage.value, seerrItemsPerPage.value, searchTerm)
+    if (data) {
+      seerrCollections.value = data.collections
+      seerrPagination.value = data.pagination
+      seerrTotalMovies.value = data.total_movies
+      console.log('Seerr collections loaded:', data.collections.length, 'total:', data.pagination.total)
+    }
+  } catch (error) {
+    console.error('Error refreshing Seerr collections:', error)
+    toast.add({
+      title: 'Error',
+      description: 'Failed to refresh Seerr collections',
+      color: 'red'
+    })
+  } finally {
+    seerrLoading.value = false
+  }
+}
+
+const goToSeerrPage = async (page: number) => {
+  if (seerrPagination.value && (page < 1 || page > seerrPagination.value.total_pages)) {
+    return
+  }
+  
+  seerrCurrentPage.value = page
+  
+  const query: Record<string, string> = { seerrPage: String(page) }
+  if (searchQuery.value) {
+    query.search = searchQuery.value
+  }
+  await router.replace({ query })
+  
+  await refreshSeerrCollections()
+}
+
+const seerrVisiblePages = computed(() => {
+  if (!seerrPagination.value) return []
+  
+  const total = seerrPagination.value.total_pages
+  const current = seerrPagination.value.page
+  
+  if (total <= 20) return []
+  
+  const pages: number[] = []
+  const range = 2
+  let start = Math.max(2, current - range)
+  let end = Math.min(total - 1, current + range)
+  
+  if (current <= 4) {
+    start = 2
+    end = Math.min(6, total - 1)
+  } else if (current >= total - 3) {
+    start = Math.max(2, total - 5)
+    end = total - 1
+  }
+  
+  for (let i = start; i <= end; i++) {
+    pages.push(i)
+  }
+  
+  return pages
+})
+
+const loadSeerrRandomCollections = async () => {
+  if (loadingSeerrRandomCollections.value) return
+  
+  loadingSeerrRandomCollections.value = true
+  try {
+    const allCollectionNames: string[] = []
+    
+    const pagePromises = []
+    for (let page = 1; page <= 5; page++) {
+      pagePromises.push(
+        getSeerrCollections(page, 100, '').catch(error => {
+          console.warn(`Failed to load page ${page} for random Seerr collections:`, error)
+          return null
+        })
+      )
+    }
+    
+    const pageResults = await Promise.all(pagePromises)
+    
+    for (const data of pageResults) {
+      if (data && data.collections) {
+        for (const collection of data.collections) {
+          allCollectionNames.push(collection.franchise_name)
+        }
+      }
+    }
+    
+    const uniqueNames = [...new Set(allCollectionNames)]
+    const shuffled = [...uniqueNames].sort(() => Math.random() - 0.5)
+    const selectedNames = shuffled.slice(0, Math.min(50, uniqueNames.length))
+    
+    const bulkMetadata = await getBulkSeerrCollectionMetadata(selectedNames)
+    
+    const randomColls = selectedNames.map(name => {
+      const metadata = bulkMetadata?.find(m => m.franchise_name === name)
+      return {
+        franchise_name: name,
+        franchise_url: metadata?.franchise_url,
+        movies: [],
+        total_movies: metadata?.total_movies || 0,
+        years: metadata?.years || [],
+        genres: []
+      }
+    })
+    
+    seerrRandomCollections.value = randomColls
+  } catch (error) {
+    console.error('Error loading random Seerr collections:', error)
+  } finally {
+    loadingSeerrRandomCollections.value = false
+  }
+}
+
+const getSeerrCollectionProgressText = (franchiseName: string): string => {
+  const progress = seerrCollectionRequestProgress.value.get(franchiseName)
+  if (progress) {
+    return `Requesting ${progress.current}/${progress.total}`
+  }
+  return 'Requesting...'
+}
+
+const handleRequestSeerrCollection = async (collection: any) => {
+  const franchiseName = collection.franchise_name
+  
+  if (requestingSeerrCollections.value.has(franchiseName)) {
+    return
+  }
+  
+  requestingSeerrCollections.value.add(franchiseName)
+  
+  try {
+    const allMovies = await getAllMoviesInSeerrCollection(franchiseName)
+    
+    if (!allMovies || allMovies.length === 0) {
+      toast.error('No movies found in collection', 'Request Failed')
+      requestingSeerrCollections.value.delete(franchiseName)
+      return
+    }
+    
+    const moviesToCheck = allMovies.filter((movie: any) => movie.id)
+    
+    const BATCH_SIZE = 5
+    const statusResults: Array<{ movie: any, available: boolean }> = []
+    
+    for (let i = 0; i < moviesToCheck.length; i += BATCH_SIZE) {
+      const batch = moviesToCheck.slice(i, i + BATCH_SIZE)
+      const batchChecks = batch.map(async (movie: any) => {
+        try {
+          const response = await $fetch<{
+            success: boolean
+            data?: {
+              status: number | null
+              available: boolean
+              requested?: boolean
+            }
+            error?: string
+          }>(`/api/overseerr-movie-status?tmdb_id=${movie.id}`, {
+            timeout: 10000
+          })
+          
+          return {
+            movie,
+            available: response.success && (response.data?.available === true || response.data?.requested === true)
+          }
+        } catch (error) {
+          return { movie, available: false }
+        }
+      })
+      
+      const batchResults = await Promise.all(batchChecks)
+      statusResults.push(...batchResults)
+      
+      if (i + BATCH_SIZE < moviesToCheck.length) {
+        await new Promise(resolve => setTimeout(resolve, 100))
+      }
+    }
+    
+    const moviesToRequest = statusResults
+      .filter(result => !result.available)
+      .map(result => result.movie)
+    
+    if (moviesToRequest.length === 0) {
+      const availableCount = statusResults.filter(r => r.available).length
+      const totalChecked = statusResults.length
+      if (availableCount > 0 || totalChecked > 0) {
+        const message = availableCount > 0 && availableCount === totalChecked
+          ? `All ${totalChecked} ${totalChecked === 1 ? 'movie is' : 'movies are'} already available in Overseerr`
+          : totalChecked > 0
+          ? `All ${totalChecked} ${totalChecked === 1 ? 'movie has' : 'movies have'} been requested or are available in Overseerr`
+          : `All ${totalChecked} ${totalChecked === 1 ? 'movie is' : 'movies are'} already available or requested in Overseerr`
+        toast.info(message, 'Collection Already Processed')
+      } else {
+        toast.error('No movies with TMDB IDs found in collection', 'Request Failed')
+      }
+      requestingSeerrCollections.value.delete(franchiseName)
+      return
+    }
+    
+    seerrCollectionRequestProgress.value.set(franchiseName, { current: 0, total: moviesToRequest.length })
+    
+    let successCount = 0
+    let errorCount = 0
+    
+    for (let i = 0; i < moviesToRequest.length; i++) {
+      const movie = moviesToRequest[i]
+      
+      try {
+        seerrCollectionRequestProgress.value.set(franchiseName, { current: i + 1, total: moviesToRequest.length })
+        
+        const response = await $fetch('/api/overseerr-request', {
+          method: 'POST',
+          body: {
+            mediaId: movie.id,
+            mediaType: 'movie',
+            is4k: false
+          }
+        })
+        
+        if (response.success) {
+          successCount++
+        } else {
+          errorCount++
+          console.error(`Failed to request ${movie.title}:`, response.error)
+        }
+        
+        if (i < moviesToRequest.length - 1) {
+          await new Promise(resolve => setTimeout(resolve, 500))
+        }
+      } catch (error) {
+        errorCount++
+        console.error(`Error requesting ${movie.title}:`, error)
+      }
+    }
+    
+    if (successCount > 0) {
+      toast.success(
+        `Successfully requested ${successCount} ${successCount === 1 ? 'movie' : 'movies'} from "${franchiseName}"`,
+        'Collection Request Complete'
+      )
+    }
+    
+    if (errorCount > 0) {
+      toast.warning(
+        `${errorCount} ${errorCount === 1 ? 'movie' : 'movies'} failed to request`,
+        'Some Requests Failed'
+      )
+    }
+    
+  } catch (error) {
+    console.error('Error requesting Seerr collection:', error)
+    toast.error(
+      error instanceof Error ? error.message : 'Failed to request collection',
+      'Request Error'
+    )
+  } finally {
+    requestingSeerrCollections.value.delete(franchiseName)
+    seerrCollectionRequestProgress.value.delete(franchiseName)
+  }
+}
+
+const viewCollection = (collection: Collection | any, source: 'seerr' | 'other' = 'other') => {
   const encodedName = encodeURIComponent(collection.franchise_name)
-  router.push(`/collections/${encodedName}`)
+  if (source === 'seerr') {
+    navigateTo(`/collections/seerrd/${encodedName}`)
+  } else {
+    navigateTo(`/collections/vadarr/${encodedName}`)
+  }
 }
 
 // Calculate requestable count for a collection
@@ -1478,6 +2355,8 @@ const loadRandomCollections = async () => {
     
     randomCollections.value = randomColls
     console.log('Random collections loaded:', randomColls.length, 'collections')
+    
+    // Note: Random collections don't have movies loaded, so no poster URLs to fetch
   } catch (error) {
     console.error('Error loading random collections:', error)
   } finally {
@@ -1511,6 +2390,11 @@ const loadVardarrChoice = async () => {
     vardarrChoice.value = choiceCollections
     console.log('Vardarr\'s Choice loaded:', choiceCollections.length, 'collections')
     
+    // Fetch poster URLs for Vardarr's Choice collections (async, won't block)
+    fetchCollectionPosterUrls(choiceCollections).catch(err => {
+      console.error('Error fetching poster URLs for Vardarr\'s Choice:', err)
+    })
+    
     // Don't auto-calculate - calculate on-demand when user hovers/interacts
   } catch (error) {
     console.error('Error loading Vardarr\'s Choice:', error)
@@ -1518,6 +2402,22 @@ const loadVardarrChoice = async () => {
     loadingVardarrChoice.value = false
   }
 }
+
+// Watch active tab and refresh collections when switching
+watch(activeTab, (newTab) => {
+  if (newTab === 'seerr') {
+    refreshSeerrCollections()
+    if (!searchQuery.value) {
+      loadSeerrRandomCollections()
+    }
+  } else {
+    refreshCollections()
+    if (!searchQuery.value) {
+      loadRandomCollections()
+      loadVardarrChoice()
+    }
+  }
+})
 
 // Load collections on mount
 onMounted(async () => {
@@ -1533,15 +2433,22 @@ onMounted(async () => {
     searchQuery.value = searchFromUrl
   }
   
-  // Load random collections and Vardarr's Choice (only if not searching)
-  if (!searchFromUrl) {
-    await Promise.all([
-      loadRandomCollections(),
-      loadVardarrChoice()
-    ])
+  // Load collections based on active tab
+  if (activeTab.value === 'seerr') {
+    if (!searchFromUrl) {
+      await loadSeerrRandomCollections()
+    }
+    await refreshSeerrCollections()
+  } else {
+    // Load random collections and Vardarr's Choice (only if not searching)
+    if (!searchFromUrl) {
+      await Promise.all([
+        loadRandomCollections(),
+        loadVardarrChoice()
+      ])
+    }
+    await refreshCollections()
   }
-  
-  await refreshCollections()
   
   // Don't calculate requestable counts on initial load - too many requests
   // Calculate them lazily when user interacts with collections
@@ -1574,19 +2481,39 @@ watch(searchQuery, (newVal, oldVal) => {
     clearTimeout(searchTimeout)
   }
   searchTimeout = setTimeout(() => {
-    applySearch()
-    
-    // Reload random collections and Vardarr's Choice when search is cleared
-    if (!newVal && oldVal) {
-      if (randomCollections.value.length === 0) {
-        loadRandomCollections()
+    if (activeTab.value === 'seerr') {
+      applySeerrSearch()
+      if (!newVal && oldVal) {
+        if (seerrRandomCollections.value.length === 0) {
+          loadSeerrRandomCollections()
+        }
       }
-      if (vardarrChoice.value.length === 0) {
-        loadVardarrChoice()
+    } else {
+      applySearch()
+      if (!newVal && oldVal) {
+        if (randomCollections.value.length === 0) {
+          loadRandomCollections()
+        }
+        if (vardarrChoice.value.length === 0) {
+          loadVardarrChoice()
+        }
       }
     }
   }, 300)
 })
+
+const applySeerrSearch = async () => {
+  seerrCurrentPage.value = 1
+  
+  const query: Record<string, string> = {}
+  if (searchQuery.value.trim()) {
+    query.search = searchQuery.value.trim()
+  }
+  
+  router.replace({ query }).catch(() => {})
+  
+  await refreshSeerrCollections()
+}
 
 // Watch URL query param changes
 watch(() => route.query.search, (newSearch) => {

@@ -92,7 +92,34 @@ RUN echo "Verifying logs API routes in build output..." && \
     else \
       echo "✅ Found: logs-statistics.get.mjs"; \
     fi && \
-    echo "✅ All logs API routes verified successfully"
+    echo "✅ All logs API routes verified successfully" && \
+    echo "" && \
+    echo "Verifying collections API routes..." && \
+    if [ ! -f ".output/server/chunks/routes/api/collections.get.mjs" ]; then \
+      echo "❌ Missing route: collections.get.mjs"; \
+      exit 1; \
+    else \
+      echo "✅ Found: collections.get.mjs"; \
+    fi && \
+    if [ ! -d ".output/server/chunks/routes/api/collections" ]; then \
+      echo "❌ ERROR: collections/ directory not found in build output!"; \
+      exit 1; \
+    else \
+      echo "✅ Found: collections/ directory"; \
+    fi && \
+    if [ ! -f ".output/server/chunks/routes/api/seerr-collections.get.mjs" ]; then \
+      echo "❌ Missing route: seerr-collections.get.mjs"; \
+      exit 1; \
+    else \
+      echo "✅ Found: seerr-collections.get.mjs"; \
+    fi && \
+    if [ ! -d ".output/server/chunks/routes/api/seerr-collections" ]; then \
+      echo "❌ ERROR: seerr-collections/ directory not found in build output!"; \
+      exit 1; \
+    else \
+      echo "✅ Found: seerr-collections/ directory"; \
+    fi && \
+    echo "✅ All collections API routes verified successfully"
 
 # ==============================================================================
 # Stage 3: Final Unified Image
@@ -177,31 +204,52 @@ COPY --from=node-builder /app/frontend/node_modules /app/node_modules
 
 WORKDIR /app
 
-# Copy application code
+# Create necessary directories first
+RUN mkdir -p /app/logs /app/data /app/data-default /var/lib/mysql /var/run/mysqld && \
+    chown -R mysql:mysql /var/lib/mysql /var/run/mysqld && \
+    chmod 755 /var/lib/mysql /var/run/mysqld
+
+# Explicitly copy essential data files (JSON only - images are now fetched from TMDB)
+# Copy data directory BEFORE copying the rest of the application to ensure files are in build context
+# These files should be committed to git (use Git LFS if too large)
+# Note: This will fail if data/ directory doesn't exist, which is desired behavior
+COPY data/ /tmp/data/
+
+# Verify and copy critical data files (fail build if missing)
+RUN echo "Verifying essential data files..." && \
+    if [ ! -d "/tmp/data" ]; then \
+      echo "❌ ERROR: data/ directory not found in build context"; \
+      echo "   Ensure data/ directory exists and contains required JSON files"; \
+      exit 1; \
+    fi && \
+    MISSING=0 && \
+    for file in seerr-collections.json unified.json franchises.json regex-presets.json; do \
+      if [ -f "/tmp/data/$file" ]; then \
+        cp "/tmp/data/$file" "/app/data/$file" && \
+        echo "✅ Found: $file ($(du -h /app/data/$file | cut -f1))"; \
+      else \
+        echo "❌ ERROR: Missing critical data file: $file"; \
+        MISSING=1; \
+      fi; \
+    done && \
+    if [ "$MISSING" -eq 1 ]; then \
+      echo "❌ Build failed: Critical data files are missing from build context."; \
+      echo "   Ensure data/*.json files are committed to git and not excluded by .dockerignore"; \
+      exit 1; \
+    fi && \
+    # Copy all other JSON files from data directory if they exist
+    cp /tmp/data/*.json /app/data/ 2>/dev/null || true && \
+    # Copy to data-default as backup
+    cp -r /app/data/*.json /app/data-default/ 2>/dev/null || true && \
+    chmod -R 755 /app/data /app/data-default && \
+    rm -rf /tmp/data && \
+    echo "✅ All essential data files verified successfully"
+
+# Copy application code (after data files are verified)
 COPY . .
 
 # Copy MySQL initialization scripts
 COPY mysql-init /docker-entrypoint-initdb.d/
-
-# Create necessary directories
-RUN mkdir -p /app/logs /app/data /var/lib/mysql /var/run/mysqld && \
-    chown -R mysql:mysql /var/lib/mysql /var/run/mysqld && \
-    chmod 755 /var/lib/mysql /var/run/mysqld
-
-# Explicitly copy essential data files and images if they exist in build context
-# These files should be committed to git (use Git LFS if too large)
-RUN if [ -d "data" ]; then \
-      mkdir -p /app/data /app/data-default /app/data/images /app/data-default/images && \
-      cp -r data/*.json /app/data/ 2>/dev/null || true && \
-      cp -r /app/data/*.json /app/data-default/ 2>/dev/null || true && \
-      if [ -d "data/images" ]; then \
-        cp -r data/images/* /app/data/images/ 2>/dev/null || true && \
-        cp -r /app/data/images/* /app/data-default/images/ 2>/dev/null || true; \
-      fi && \
-      chmod -R 755 /app/data /app/data-default; \
-    else \
-      echo "Warning: data/ directory not found in build context. Essential files should be in git."; \
-    fi
 
 # Copy supervisor configuration
 COPY supervisord.conf /etc/supervisor/conf.d/supervisord.conf

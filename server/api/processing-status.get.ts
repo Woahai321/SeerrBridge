@@ -4,56 +4,15 @@ export default defineEventHandler(async (event) => {
   try {
     const db = await getDatabaseConnection()
     
-    // Get currently processing items (status = 'processing')
-    // Prioritize items with more specific processing stages and recent activity
-    const [processingItems] = await db.execute(`
-      SELECT 
-        id, tmdb_id, imdb_id, trakt_id,
-        media_type, title, year, overview,
-        status, processing_stage, processing_started_at,
-        last_checked_at, updated_at,
-        poster_url, thumb_url, fanart_url, backdrop_url,
-        poster_image_format, thumb_image_format, fanart_image_format, backdrop_image_format,
-        seasons_processing, total_seasons, is_in_queue, queue_added_at
-      FROM unified_media
-      WHERE status = 'processing'
-      ORDER BY 
-        CASE 
-          WHEN processing_stage LIKE 'browser_automation_season_%' THEN 0
-          WHEN processing_stage = 'browser_automation' THEN 1
-          WHEN processing_stage IS NOT NULL THEN 2
-          ELSE 3
-        END,
-        COALESCE(last_checked_at, updated_at, processing_started_at) DESC
-      LIMIT 10
-    `)
-    
-    // Get queued items (is_in_queue = true but not processing)
-    // Only include items that are actually in queue (pending or failed with retry eligibility)
-    const [queuedItems] = await db.execute(`
-      SELECT 
-        id, tmdb_id, imdb_id, trakt_id,
-        media_type, title, year, overview,
-        status, processing_stage, processing_started_at,
-        poster_url, thumb_url, fanart_url, backdrop_url,
-        poster_image_format, thumb_image_format, fanart_image_format, backdrop_image_format,
-        seasons_processing, total_seasons, is_in_queue, queue_added_at
-      FROM unified_media
-      WHERE is_in_queue = TRUE 
-        AND status != 'processing'
-        AND status != 'completed'
-        AND status != 'ignored'
-      ORDER BY queue_added_at ASC
-      LIMIT 50
-    `)
-    
-    // Get queue statistics from queue_status table (for max_size and is_processing)
+    // Get queue statistics from queue_status table FIRST (for max_size and is_processing)
+    // This allows us to use dynamic limits based on configured queue sizes
     let queueStats = {
       movie_queue_size: 0,
       movie_queue_max: 250,
       tv_queue_size: 0,
       tv_queue_max: 250,
       total_queued: 0,
+      total_queue_max: 500,
       is_processing: false
     }
     
@@ -81,10 +40,65 @@ export default defineEventHandler(async (event) => {
         queueStats.tv_queue_max = tvQueueStatus[0]?.max_size || 250
         queueStats.is_processing = queueStats.is_processing || (tvQueueStatus[0]?.is_processing === 1)
       }
+      
+      // Calculate total queue max (sum of movie and TV queue max sizes)
+      queueStats.total_queue_max = queueStats.movie_queue_max + queueStats.tv_queue_max
     } catch (queueStatsError) {
       // If queue_status table doesn't exist, use defaults
       console.warn('Could not fetch queue stats from queue_status table:', queueStatsError)
+      queueStats.total_queue_max = queueStats.movie_queue_max + queueStats.tv_queue_max
     }
+    
+    // Get currently processing items (status = 'processing')
+    // Prioritize items with more specific processing stages and recent activity
+    // Use dynamic limit based on total queue max size
+    // Use string interpolation for LIMIT since it's safe (small integer from config)
+    // and avoids MySQL2 parameter binding issues with LIMIT clauses
+    const processingLimit = parseInt(queueStats.total_queue_max.toString())
+    const [processingItems] = await db.execute(`
+      SELECT 
+        id, tmdb_id, imdb_id, trakt_id,
+        media_type, title, year, overview,
+        status, processing_stage, processing_started_at,
+        last_checked_at, updated_at,
+        poster_url, thumb_url, fanart_url, backdrop_url,
+        poster_image_format, thumb_image_format, fanart_image_format, backdrop_image_format,
+        seasons_processing, total_seasons, is_in_queue, queue_added_at
+      FROM unified_media
+      WHERE status = 'processing'
+      ORDER BY 
+        CASE 
+          WHEN processing_stage LIKE 'browser_automation_season_%' THEN 0
+          WHEN processing_stage = 'browser_automation' THEN 1
+          WHEN processing_stage IS NOT NULL THEN 2
+          ELSE 3
+        END,
+        COALESCE(last_checked_at, updated_at, processing_started_at) DESC
+      LIMIT ${processingLimit}
+    `)
+    
+    // Get queued items (is_in_queue = true but not processing)
+    // Only include items that are actually in queue (pending or failed with retry eligibility)
+    // Use dynamic limit based on total queue max size
+    // Use string interpolation for LIMIT since it's safe (small integer from config)
+    // and avoids MySQL2 parameter binding issues with LIMIT clauses
+    const queuedLimit = parseInt(queueStats.total_queue_max.toString())
+    const [queuedItems] = await db.execute(`
+      SELECT 
+        id, tmdb_id, imdb_id, trakt_id,
+        media_type, title, year, overview,
+        status, processing_stage, processing_started_at,
+        poster_url, thumb_url, fanart_url, backdrop_url,
+        poster_image_format, thumb_image_format, fanart_image_format, backdrop_image_format,
+        seasons_processing, total_seasons, is_in_queue, queue_added_at
+      FROM unified_media
+      WHERE is_in_queue = TRUE 
+        AND status != 'processing'
+        AND status != 'completed'
+        AND status != 'ignored'
+      ORDER BY queue_added_at ASC
+      LIMIT ${queuedLimit}
+    `)
     
     // Note: queue_size values will be calculated from actual queuedItems below
     
@@ -142,6 +156,7 @@ export default defineEventHandler(async (event) => {
     queueStats.movie_queue_size = movieQueueSize
     queueStats.tv_queue_size = tvQueueSize
     queueStats.total_queued = totalQueued
+    // total_queue_max is already set above from queue_status table
     
     // Log discrepancy if queue_status table differs significantly from actual database state
     // This helps detect synchronization issues
@@ -276,6 +291,7 @@ export default defineEventHandler(async (event) => {
           tv_queue_size: 0,
           tv_queue_max: 250,
           total_queued: 0,
+          total_queue_max: 500,
           is_processing: false
         }
       }

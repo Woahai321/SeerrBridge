@@ -27,7 +27,7 @@
               <h2 class="text-xl font-semibold text-foreground">Processing Queue</h2>
               <p class="text-sm text-muted-foreground">
                 <span v-if="queueStats">
-                  {{ queueStats.total_queued }} item{{ queueStats.total_queued !== 1 ? 's' : '' }} in queue
+                  {{ queueStats.total_queued }}/{{ queueStats.total_queue_max }} item{{ queueStats.total_queued !== 1 ? 's' : '' }} in queue
                   <span v-if="queueStats.movie_queue_size > 0 || queueStats.tv_queue_size > 0" class="text-xs">
                     ({{ queueStats.movie_queue_size }} movie{{ queueStats.movie_queue_size !== 1 ? 's' : '' }}, {{ queueStats.tv_queue_size }} TV)
                   </span>

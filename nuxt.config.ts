@@ -148,10 +148,12 @@ export default defineNuxtConfig({
     // Note: scanDirs: ['server'] ensures only server/ is scanned, so ignore patterns
     // here mainly affect other directories. We don't ignore logs/ here to avoid
     // accidentally excluding server/api/logs/ routes.
+    // IMPORTANT: 'seerr/**' only excludes the Python backend directory at root,
+    // NOT pages/collections/seerrd/ which uses Nuxt's file-based routing
     ignore: [
       'data/images/**',
       'data/images/movies/**',
-      'seerr/**',
+      'seerr/**',  // Only root seerr/ directory (Python backend), not pages/collections/seerrd/
       'scripts/**',
       'mysql-init/**'
       // Removed 'logs/**' to ensure server/api/logs/ routes are included
@@ -175,7 +177,7 @@ export default defineNuxtConfig({
     server: {
       watch: {
         // Disable polling in Docker - use native events when possible
-        // Polling causes major slowdowns with 16,670+ image files
+        // Note: Images are now fetched from TMDB, no local image storage needed
         usePolling: process.env.CHOKIDAR_USEPOLLING === 'true',
         interval: process.env.CHOKIDAR_USEPOLLING === 'true' ? 3000 : undefined,
         binaryInterval: process.env.CHOKIDAR_USEPOLLING === 'true' ? 3000 : undefined,
@@ -188,7 +190,7 @@ export default defineNuxtConfig({
           '**/node_modules/**',
           '**/.nuxt/**',
           '**/.output/**',
-          '**/seerr/**',
+          'seerr/**',  // Only ignore root seerr/ directory (Python backend), not pages/collections/seerrd/
           '**/scripts/**',
           '**/mysql-init/**',
           '**/logs/**',
